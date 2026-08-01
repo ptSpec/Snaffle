@@ -1,0 +1,18 @@
+{
+  "name": "esch",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "esch": "dist/src/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/cli.js",
+    "test": "npm run build && node --test dist/test/*.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
