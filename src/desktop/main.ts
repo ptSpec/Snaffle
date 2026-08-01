@@ -31,6 +31,7 @@ const memoryTrace: Trace = {
 
 function start(): void {
   loadDevelopmentEnvironment();
+  if (process.platform === "darwin") app.dock?.setIcon(applicationIcon());
   if (!app.isPackaged) {
     workspace = {
       path: process.cwd(),
@@ -52,6 +53,7 @@ function createWindow(): void {
     height: 860,
     minWidth: 980,
     minHeight: 640,
+    icon: applicationIcon(),
     backgroundColor: "#181818",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
     ...(process.platform === "darwin"
@@ -79,6 +81,11 @@ function createWindow(): void {
   mainWindow.on("closed", () => {
     mainWindow = undefined;
   });
+}
+
+function applicationIcon(): string {
+  const root = app.isPackaged ? process.resourcesPath : process.cwd();
+  return path.join(root, "assets", "logo.png");
 }
 
 function registerIpc(): void {

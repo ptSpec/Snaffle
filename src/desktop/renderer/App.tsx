@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import type { DesktopApi, DesktopState } from "../api.js";
 import { PRODUCT } from "../../identity.js";
 import type { OpenRouterModel } from "../../providers/openrouter.js";
@@ -37,6 +45,10 @@ export function App(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [leftWidth, setLeftWidth] = useState(250);
+  const [rightWidth, setRightWidth] = useState(320);
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
   const taskInput = useRef<HTMLTextAreaElement>(null);
   const timelineView = useRef<HTMLDivElement>(null);
 
@@ -76,6 +88,8 @@ export function App(): JSX.Element {
     () => timeline.find((item) => item.id === selectedItemId) ?? null,
     [selectedItemId, timeline],
   );
+  const visibleLeftWidth = leftCollapsed ? 0 : leftWidth;
+  const visibleRightWidth = rightCollapsed ? 0 : rightWidth;
 
   const runBlocker = !desktopState.workspace
     ? "Open a workspace before sending."
@@ -169,11 +183,59 @@ export function App(): JSX.Element {
     }
   }
 
+  function beginResize(
+    side: "left" | "right",
+    event: ReactPointerEvent<HTMLDivElement>,
+  ): void {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = side === "left" ? leftWidth : rightWidth;
+    const otherWidth = side === "left" ? rightWidth : leftWidth;
+    const minimum = 220;
+
+    function move(pointer: PointerEvent): void {
+      const movement = side === "left" ? pointer.clientX - startX : startX - pointer.clientX;
+      const maximum = Math.max(minimum, Math.min(480, window.innerWidth - otherWidth - 360));
+      const width = Math.min(maximum, Math.max(minimum, startWidth + movement));
+      if (side === "left") setLeftWidth(width);
+      else setRightWidth(width);
+    }
+
+    function stop(): void {
+      window.removeEventListener("pointermove", move);
+      document.body.classList.remove("resizing-columns");
+    }
+
+    document.body.classList.add("resizing-columns");
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop, { once: true });
+  }
+
   return (
-    <main className="app-shell">
-      <section className="workspace-shell">
-        <aside className="left-sidebar" aria-label="Workspaces and threads">
-          <header className="sidebar-brand">{PRODUCT.name}</header>
+    <main className={`app-shell platform-${window.desktop.platform}`}>
+      <section
+        className="workspace-shell"
+        style={{
+          gridTemplateColumns: `${visibleLeftWidth}px minmax(360px, 1fr) ${visibleRightWidth}px`,
+        }}
+      >
+        <aside
+          className={leftCollapsed ? "left-sidebar collapsed" : "left-sidebar"}
+          aria-label="Workspaces and threads"
+          aria-hidden={leftCollapsed}
+        >
+          <header className="sidebar-brand">
+            <span>{PRODUCT.name}</span>
+            <button
+              className="panel-toggle"
+              type="button"
+              onClick={() => setLeftCollapsed(true)}
+              aria-label="Hide workspace sidebar"
+              title="Hide sidebar"
+            >
+              <span className="pane-icon left" aria-hidden="true" />
+            </button>
+          </header>
 
           <nav className="sidebar-navigation">
             <div className="section-heading">
@@ -362,14 +424,68 @@ export function App(): JSX.Element {
           </form>
         </section>
 
-        <aside className="inspector" aria-label="Inspector">
+        <aside
+          className={rightCollapsed ? "inspector collapsed" : "inspector"}
+          aria-label="Inspector"
+          aria-hidden={rightCollapsed}
+        >
           <div className="section-heading">
             <h2>Inspector</h2>
+            <button
+              className="panel-toggle"
+              type="button"
+              onClick={() => setRightCollapsed(true)}
+              aria-label="Hide inspector"
+              title="Hide inspector"
+            >
+              <span className="pane-icon right" aria-hidden="true" />
+            </button>
           </div>
 
           {selectedItem ? <Inspector item={selectedItem} /> : null}
 
         </aside>
+
+        {leftCollapsed ? (
+          <button
+            className="panel-reopen left"
+            type="button"
+            onClick={() => setLeftCollapsed(false)}
+            aria-label="Show workspace sidebar"
+            title="Show sidebar"
+          >
+            <span className="pane-icon left" aria-hidden="true" />
+          </button>
+        ) : (
+          <div
+            className="column-resizer left-resizer"
+            style={{ left: leftWidth }}
+            role="separator"
+            aria-label="Resize workspace sidebar"
+            aria-orientation="vertical"
+            onPointerDown={(event) => beginResize("left", event)}
+          />
+        )}
+        {rightCollapsed ? (
+          <button
+            className="panel-reopen right"
+            type="button"
+            onClick={() => setRightCollapsed(false)}
+            aria-label="Show inspector"
+            title="Show inspector"
+          >
+            <span className="pane-icon right" aria-hidden="true" />
+          </button>
+        ) : (
+          <div
+            className="column-resizer right-resizer"
+            style={{ right: rightWidth }}
+            role="separator"
+            aria-label="Resize inspector"
+            aria-orientation="vertical"
+            onPointerDown={(event) => beginResize("right", event)}
+          />
+        )}
       </section>
     </main>
   );

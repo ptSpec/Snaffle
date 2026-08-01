@@ -21,6 +21,7 @@ export type StartRunInput = {
 };
 
 export interface DesktopApi {
+  platform: string;
   getState(): Promise<DesktopState>;
   chooseWorkspace(): Promise<DesktopWorkspace | null>;
   listOpenRouterModels(): Promise<OpenRouterModel[]>;

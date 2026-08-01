@@ -3,6 +3,7 @@ import type { DesktopApi, StartRunInput } from "./api.js";
 import type { RunEvent } from "../protocol.js";
 
 const api: DesktopApi = {
+  platform: process.platform,
   getState: () => ipcRenderer.invoke("desktop:get-state"),
   chooseWorkspace: () => ipcRenderer.invoke("desktop:choose-workspace"),
   listOpenRouterModels: () => ipcRenderer.invoke("desktop:list-openrouter-models"),
