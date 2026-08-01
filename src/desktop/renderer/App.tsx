@@ -10,6 +10,7 @@ import {
 import type { DesktopApi, DesktopState } from "../api.js";
 import { PRODUCT } from "../../identity.js";
 import type { OpenRouterModel } from "../../providers/openrouter.js";
+import { DEFAULT_THEME, THEMES, themeById, type Theme } from "../themes/index.js";
 import {
   addRunEvent,
   Inspector,
@@ -30,6 +31,7 @@ const initialState: DesktopState = {
   runActive: false,
   defaultModel: null,
   unsafeHostDefault: false,
+  themeId: document.documentElement.dataset.theme ?? DEFAULT_THEME.id,
 };
 
 export function App(): JSX.Element {
@@ -49,6 +51,7 @@ export function App(): JSX.Element {
   const [rightWidth, setRightWidth] = useState(320);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [view, setView] = useState<"conversation" | "settings">("conversation");
   const taskInput = useRef<HTMLTextAreaElement>(null);
   const timelineView = useRef<HTMLDivElement>(null);
 
@@ -63,6 +66,12 @@ export function App(): JSX.Element {
     const view = timelineView.current;
     if (view) view.scrollTop = view.scrollHeight;
   }, [timeline]);
+
+  useEffect(() => {
+    if (!running && view === "conversation") {
+      taskInput.current?.focus({ preventScroll: true });
+    }
+  }, [running, view]);
 
   useEffect(() => {
     void window.desktop
@@ -89,7 +98,7 @@ export function App(): JSX.Element {
     [selectedItemId, timeline],
   );
   const visibleLeftWidth = leftCollapsed ? 0 : leftWidth;
-  const visibleRightWidth = rightCollapsed ? 0 : rightWidth;
+  const visibleRightWidth = view === "settings" || rightCollapsed ? 0 : rightWidth;
 
   const runBlocker = !desktopState.workspace
     ? "Open a workspace before sending."
@@ -111,6 +120,7 @@ export function App(): JSX.Element {
         setTimeline([]);
         setSelectedItemId(null);
       }
+      setView("conversation");
       setDesktopState((state) => ({ ...state, workspace }));
     } catch (cause) {
       setError(errorMessage(cause));
@@ -178,6 +188,21 @@ export function App(): JSX.Element {
       setSelectedItemId(null);
       setTask("");
       setError(null);
+      setView("conversation");
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function selectTheme(themeId: string): Promise<void> {
+    const theme = themeById(themeId);
+    if (!theme) return;
+
+    try {
+      await window.desktop.setTheme(theme.id);
+      applyTheme(theme);
+      setDesktopState((state) => ({ ...state, themeId: theme.id }));
+      setError(null);
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -221,11 +246,11 @@ export function App(): JSX.Element {
       >
         <aside
           className={leftCollapsed ? "left-sidebar collapsed" : "left-sidebar"}
-          aria-label="Workspaces and threads"
+          aria-label={view === "settings" ? "Settings navigation" : "Workspaces and threads"}
           aria-hidden={leftCollapsed}
         >
           <header className="sidebar-brand">
-            <span>{PRODUCT.name}</span>
+            <span>{view === "settings" ? "Settings" : PRODUCT.name}</span>
             <button
               className="panel-toggle"
               type="button"
@@ -237,74 +262,114 @@ export function App(): JSX.Element {
             </button>
           </header>
 
-          <nav className="sidebar-navigation">
-            <div className="section-heading">
-              <h2>Workspaces</h2>
-              <button
-                className="icon-button"
-                type="button"
-                onClick={() => void chooseWorkspace()}
-                disabled={running}
-                aria-label="Open workspace"
-                title="Open workspace"
-              >
-                +
-              </button>
-            </div>
-
-            {desktopState.workspace ? (
+          <nav
+            className={
+              view === "settings"
+                ? "sidebar-navigation settings-navigation view-enter"
+                : "sidebar-navigation view-enter"
+            }
+          >
+            {view === "settings" ? (
               <>
-                <button
-                  className="workspace-item active"
-                  type="button"
-                  onClick={() => void chooseWorkspace()}
-                  disabled={running}
-                  title={desktopState.workspace.path}
-                >
-                  <span className="workspace-icon" aria-hidden="true">▱</span>
-                  <span>{desktopState.workspace.name}</span>
+                <button className="sidebar-action active" type="button">
+                  <span>Appearance</span>
                 </button>
 
-                <div className="threads">
-                  <div className="section-heading">
-                    <h2>Threads</h2>
-                    <button
-                      className="icon-button"
-                      type="button"
-                      onClick={() => void newThread()}
-                      disabled={running}
-                      aria-label="New thread"
-                      title="New thread"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <button className="thread-item active" type="button">
-                    Current thread
-                  </button>
-                </div>
+                {/* Future settings sections belong in this navigation area. */}
+                <div className="settings-navigation-space" aria-hidden="true" />
               </>
             ) : (
-              <button
-                className="workspace-item"
-                type="button"
-                onClick={() => void chooseWorkspace()}
-              >
-                <span className="workspace-icon" aria-hidden="true">+</span>
-                <span>Open workspace</span>
-              </button>
+              <>
+                <div className="section-heading">
+                  <h2>Workspaces</h2>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    onClick={() => void chooseWorkspace()}
+                    disabled={running}
+                    aria-label="Open workspace"
+                    title="Open workspace"
+                  >
+                    +
+                  </button>
+                </div>
+
+                {desktopState.workspace ? (
+                  <>
+                    <button
+                      className="workspace-item active"
+                      type="button"
+                      onClick={() => void chooseWorkspace()}
+                      disabled={running}
+                      title={desktopState.workspace.path}
+                    >
+                      <span className="workspace-icon" aria-hidden="true">▱</span>
+                      <span>{desktopState.workspace.name}</span>
+                    </button>
+
+                    <div className="threads">
+                      <div className="section-heading">
+                        <h2>Threads</h2>
+                        <button
+                          className="icon-button"
+                          type="button"
+                          onClick={() => void newThread()}
+                          disabled={running}
+                          aria-label="New thread"
+                          title="New thread"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <button className="thread-item active" type="button">
+                        Current thread
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <button
+                    className="workspace-item"
+                    type="button"
+                    onClick={() => void chooseWorkspace()}
+                  >
+                    <span className="workspace-icon" aria-hidden="true">+</span>
+                    <span>Open workspace</span>
+                  </button>
+                )}
+              </>
             )}
           </nav>
 
           <footer className="sidebar-footer">
-            <button className="sidebar-action" type="button" disabled title="Settings are coming later">
-              <span aria-hidden="true">⚙</span>
-              <span>Settings</span>
-            </button>
+            {view === "settings" ? (
+              <button className="sidebar-action" type="button" onClick={() => setView("conversation")}>
+                <span aria-hidden="true">←</span>
+                <span>Back to chat</span>
+              </button>
+            ) : (
+              <button
+                className="sidebar-action"
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setView("settings");
+                }}
+              >
+                <span aria-hidden="true">⚙</span>
+                <span>Settings</span>
+              </button>
+            )}
           </footer>
         </aside>
 
-        <section className="conversation" aria-label="Conversation">
+        {view === "settings" ? (
+          <Settings
+            themeId={desktopState.themeId}
+            error={error}
+            onSelectTheme={(themeId) => void selectTheme(themeId)}
+          />
+        ) : (
+          <section className="conversation view-enter" aria-label="Conversation">
           <div ref={timelineView} className="timeline" aria-live="polite">
             {timeline.map((item) => (
               <TimelineEntry
@@ -422,12 +487,13 @@ export function App(): JSX.Element {
               </div>
             ) : null}
           </form>
-        </section>
+          </section>
+        )}
 
         <aside
-          className={rightCollapsed ? "inspector collapsed" : "inspector"}
+          className={view === "settings" || rightCollapsed ? "inspector collapsed" : "inspector"}
           aria-label="Inspector"
-          aria-hidden={rightCollapsed}
+          aria-hidden={view === "settings" || rightCollapsed}
         >
           <div className="section-heading">
             <h2>Inspector</h2>
@@ -442,7 +508,7 @@ export function App(): JSX.Element {
             </button>
           </div>
 
-          {selectedItem ? <Inspector item={selectedItem} /> : null}
+          {view === "conversation" && selectedItem ? <Inspector item={selectedItem} /> : null}
 
         </aside>
 
@@ -466,7 +532,7 @@ export function App(): JSX.Element {
             onPointerDown={(event) => beginResize("left", event)}
           />
         )}
-        {rightCollapsed ? (
+        {view === "settings" ? null : rightCollapsed ? (
           <button
             className="panel-reopen right"
             type="button"
@@ -489,6 +555,58 @@ export function App(): JSX.Element {
       </section>
     </main>
   );
+}
+
+function Settings({
+  themeId,
+  error,
+  onSelectTheme,
+}: {
+  themeId: string;
+  error: string | null;
+  onSelectTheme: (themeId: string) => void;
+}): JSX.Element {
+  return (
+    <section className="settings view-enter" aria-label="Settings">
+      <div className="settings-content">
+        <p className="eyebrow">Settings</p>
+        <h1>Appearance</h1>
+        <p className="settings-description">Choose how Esch looks.</p>
+
+        <div className="theme-list">
+          {THEMES.map((theme) => (
+            <button
+              className={theme.id === themeId ? "theme-option selected" : "theme-option"}
+              type="button"
+              key={theme.id}
+              onClick={() => onSelectTheme(theme.id)}
+              aria-pressed={theme.id === themeId}
+            >
+              <span className="theme-preview" aria-hidden="true">
+                <span style={{ background: theme.colors["sidebar-background"] }} />
+                <span style={{ background: theme.colors["app-background"] }} />
+                <span style={{ background: theme.colors["inspector-background"] }} />
+              </span>
+              <span>{theme.name}</span>
+              <span className="theme-check" aria-hidden="true">
+                {theme.id === themeId ? "✓" : ""}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {error ? <p className="settings-error">{error}</p> : null}
+      </div>
+    </section>
+  );
+}
+
+function applyTheme(theme: Theme): void {
+  document.documentElement.dataset.theme = theme.id;
+  document.documentElement.style.colorScheme = theme.appearance;
+  for (const [name, value] of Object.entries(theme.colors)) {
+    document.documentElement.style.setProperty(`--${name}`, value);
+  }
 }
 
 function errorMessage(cause: unknown): string {

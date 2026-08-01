@@ -12,6 +12,7 @@ export type DesktopState = {
   runActive: boolean;
   defaultModel: string | null;
   unsafeHostDefault: boolean;
+  themeId: string;
 };
 
 export type StartRunInput = {
@@ -28,5 +29,6 @@ export interface DesktopApi {
   startRun(input: StartRunInput): Promise<void>;
   stopRun(): Promise<boolean>;
   resetConversation(): Promise<void>;
+  setTheme(themeId: string): Promise<void>;
   onRunEvent(listener: (event: RunEvent) => void): () => void;
 }

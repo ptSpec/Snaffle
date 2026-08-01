@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import type { OpenDialogOptions } from "electron";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
@@ -12,7 +12,7 @@ import type { Trace } from "../trace.js";
 import { defaultTools } from "../tools/default-tools.js";
 import { LocalWorkspace } from "../workspace.js";
 import type { DesktopState, DesktopWorkspace, StartRunInput } from "./api.js";
-import { DEFAULT_THEME } from "./themes/index.js";
+import { DEFAULT_THEME, themeById, type Theme } from "./themes/index.js";
 
 const desktopDirectory = path.dirname(fileURLToPath(import.meta.url));
 const rendererPath = path.join(desktopDirectory, "../../renderer/index.html");
@@ -22,6 +22,7 @@ let mainWindow: BrowserWindow | undefined;
 let workspace: DesktopWorkspace | null = null;
 let activeRun: { controller: AbortController } | undefined;
 let conversation: Message[] = [];
+let activeTheme: Theme = DEFAULT_THEME;
 const DEVELOPMENT_MODEL = "openai/gpt-5.6-luna";
 
 const memoryTrace: Trace = {
@@ -32,6 +33,7 @@ const memoryTrace: Trace = {
 
 function start(): void {
   loadDevelopmentEnvironment();
+  activeTheme = loadTheme();
   if (process.platform === "darwin") app.dock?.setIcon(applicationIcon());
   if (!app.isPackaged) {
     workspace = {
@@ -55,7 +57,7 @@ function createWindow(): void {
     minWidth: 980,
     minHeight: 640,
     icon: applicationIcon(),
-    backgroundColor: DEFAULT_THEME.colors.canvas,
+    backgroundColor: activeTheme.colors["app-background"],
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
     ...(process.platform === "darwin"
       ? {
@@ -63,8 +65,8 @@ function createWindow(): void {
         }
       : {
           titleBarOverlay: {
-            color: DEFAULT_THEME.colors.canvas,
-            symbolColor: DEFAULT_THEME.colors.text,
+            color: activeTheme.colors["app-background"],
+            symbolColor: activeTheme.colors["text-primary"],
             height: 40,
           },
         }),
@@ -78,7 +80,7 @@ function createWindow(): void {
   });
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  void mainWindow.loadFile(rendererPath);
+  void mainWindow.loadFile(rendererPath, { query: { theme: activeTheme.id } });
   mainWindow.on("closed", () => {
     mainWindow = undefined;
   });
@@ -96,6 +98,7 @@ function registerIpc(): void {
     runActive: activeRun !== undefined,
     defaultModel: app.isPackaged ? null : DEVELOPMENT_MODEL,
     unsafeHostDefault: !app.isPackaged,
+    themeId: activeTheme.id,
   }));
 
   ipcMain.handle("desktop:choose-workspace", async (event): Promise<DesktopWorkspace | null> => {
@@ -168,6 +171,46 @@ function registerIpc(): void {
     if (activeRun) throw new Error("Stop the active run before starting a new thread");
     conversation = [];
   });
+
+  ipcMain.handle("desktop:set-theme", (_event, themeId: unknown): void => {
+    if (typeof themeId !== "string") throw new Error("Theme id must be a string");
+    const theme = themeById(themeId);
+    if (!theme) throw new Error(`Unknown theme: ${themeId}`);
+
+    activeTheme = theme;
+    saveTheme(theme);
+    mainWindow?.setBackgroundColor(theme.colors["app-background"]);
+    if (process.platform !== "darwin") {
+      mainWindow?.setTitleBarOverlay({
+        color: theme.colors["app-background"],
+        symbolColor: theme.colors["text-primary"],
+        height: 40,
+      });
+    }
+  });
+}
+
+function settingsPath(): string {
+  return path.join(app.getPath("userData"), "settings.json");
+}
+
+function loadTheme(): Theme {
+  try {
+    const file = settingsPath();
+    if (!existsSync(file)) return DEFAULT_THEME;
+    const settings = JSON.parse(readFileSync(file, "utf8")) as { themeId?: unknown };
+    return typeof settings.themeId === "string"
+      ? themeById(settings.themeId) ?? DEFAULT_THEME
+      : DEFAULT_THEME;
+  } catch {
+    return DEFAULT_THEME;
+  }
+}
+
+function saveTheme(theme: Theme): void {
+  const file = settingsPath();
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, `${JSON.stringify({ themeId: theme.id }, null, 2)}\n`);
 }
 
 function parseStartRunInput(input: unknown): StartRunInput {

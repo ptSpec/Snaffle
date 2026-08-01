@@ -10,6 +10,7 @@ const api: DesktopApi = {
   startRun: (input: StartRunInput) => ipcRenderer.invoke("desktop:start-run", input),
   stopRun: () => ipcRenderer.invoke("desktop:stop-run"),
   resetConversation: () => ipcRenderer.invoke("desktop:reset-conversation"),
+  setTheme: (themeId: string) => ipcRenderer.invoke("desktop:set-theme", themeId),
   onRunEvent(listener: (event: RunEvent) => void): () => void {
     const receiveEvent = (_event: Electron.IpcRendererEvent, event: RunEvent) => listener(event);
     ipcRenderer.on("desktop:run-event", receiveEvent);
