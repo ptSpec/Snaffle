@@ -2,17 +2,31 @@
   "name": "esch",
   "version": "0.0.0",
   "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "type": "module",
+  "main": "dist/src/desktop/main.js",
   "bin": {
     "esch": "dist/src/cli.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json --noEmit && vite build",
+    "desktop": "npm run build && electron .",
     "start": "node dist/src/cli.js",
     "test": "npm run build && node --test dist/test/*.test.js"
   },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "typescript": "^5.0.0"
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^6.0.5",
+    "electron": "^43.2.0",
+    "typescript": "^5.0.0",
+    "vite": "^8.2.0"
   }
 }

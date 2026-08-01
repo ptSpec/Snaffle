@@ -32,6 +32,9 @@ export const runTool: Tool = {
       .filter(Boolean)
       .join("\n");
 
-    return { content: output.slice(0, 12000) };
+    return {
+      content: output.slice(0, 12000),
+      exitCode: result.exitCode,
+    };
   },
 };

@@ -12,5 +12,6 @@
     "sourceMap": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.cts", "test/**/*.ts"],
+  "exclude": ["src/desktop/renderer/**"]
 }

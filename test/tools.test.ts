@@ -37,7 +37,18 @@ test("the five explicit file and command tools work together", async (t) => {
   });
   assert.match(command.content, /exit code: 0/);
   assert.match(command.content, /ok/);
+  assert.equal(command.exitCode, 0);
   assert.equal(await readFile(path.join(root, "src/example.ts"), "utf8"), "const value = 2;\n");
+});
+
+test("run command reports a nonzero exit separately from tool failure", async (t) => {
+  const { root, workspace } = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const result = await runTool.execute(workspace, { command: "exit 7" });
+
+  assert.equal(result.exitCode, 7);
+  assert.match(result.content, /exit code: 7/);
 });
 
 test("edit rejects ambiguous text", async (t) => {

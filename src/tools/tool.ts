@@ -3,6 +3,7 @@ import type { Workspace } from "../workspace.js";
 
 export type ToolResult = {
   content: string;
+  exitCode?: number | null;
 };
 
 export interface Tool extends ToolSpec {

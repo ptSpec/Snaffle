@@ -39,6 +39,7 @@ export type RunEvent =
       call: ToolCall;
       content: string;
       isError: boolean;
+      exitCode?: number | null;
     }
   | { type: "run.completed"; text: string; steps: number }
   | { type: "run.failed"; message: string };

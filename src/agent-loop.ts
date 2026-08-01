@@ -58,11 +58,14 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         await emit(options, { type: "tool.started", call });
         const tool = toolsByName.get(call.name);
         let content: string;
+        let exitCode: number | null | undefined;
         let isError = false;
 
         try {
           if (!tool) throw new Error(`Unknown tool: ${call.name}`);
-          content = (await tool.execute(options.workspace, call.input)).content;
+          const result = await tool.execute(options.workspace, call.input);
+          content = result.content;
+          exitCode = result.exitCode;
         } catch (error) {
           isError = true;
           content = `Error: ${errorMessage(error)}`;
@@ -70,7 +73,13 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
 
         content = content.slice(0, 12000);
         messages.push({ role: "tool", toolCallId: call.id, content });
-        await emit(options, { type: "tool.completed", call, content, isError });
+        await emit(options, {
+          type: "tool.completed",
+          call,
+          content,
+          isError,
+          ...(exitCode === undefined ? {} : { exitCode }),
+        });
       }
     }
 
