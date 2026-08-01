@@ -1,7 +1,8 @@
 import type { RunEvent, ToolCall } from "../../protocol.js";
 
 export type TimelineItem =
-  | { id: string; kind: "user" | "assistant" | "notice" | "error"; text: string }
+  | { id: string; kind: "user" | "error"; text: string }
+  | { id: string; kind: "assistant"; text: string; streaming: boolean }
   | {
       id: string;
       kind: "tool";
@@ -47,8 +48,13 @@ export function TimelineEntry({
 
   return (
     <article className={`message ${item.kind}`}>
-      <span className="message-label">{labelFor(item.kind)}</span>
-      <p>{item.text}</p>
+      {item.kind === "error" ? <span className="message-label">Run failed</span> : null}
+      <p>
+        {item.text}
+        {item.kind === "assistant" && item.streaming ? (
+          <span className="streaming-cursor" aria-hidden="true" />
+        ) : null}
+      </p>
     </article>
   );
 }
@@ -89,11 +95,40 @@ export function addRunEvent(
   event: RunEvent,
   setTimeline: (update: (items: TimelineItem[]) => TimelineItem[]) => void,
 ): void {
-  if (event.type === "model.completed" && event.response.text.trim()) {
-    setTimeline((items) => [
-      ...items,
-      { id: newTimelineId(), kind: "assistant", text: event.response.text },
-    ]);
+  if (event.type === "model.delta" && event.text) {
+    setTimeline((items) => {
+      const existing = streamingAssistantIndex(items);
+      if (existing === -1) {
+        return [
+          ...items,
+          { id: newTimelineId(), kind: "assistant", text: event.text, streaming: true },
+        ];
+      }
+      return items.map((item, index) =>
+        index === existing && item.kind === "assistant"
+          ? { ...item, text: item.text + event.text }
+          : item,
+      );
+    });
+    return;
+  }
+
+  if (event.type === "model.completed") {
+    setTimeline((items) => {
+      const existing = streamingAssistantIndex(items);
+      if (existing !== -1) {
+        return items.map((item, index) =>
+          index === existing && item.kind === "assistant"
+            ? { ...item, text: event.response.text, streaming: false }
+            : item,
+        );
+      }
+      if (!event.response.text.trim()) return items;
+      return [
+        ...items,
+        { id: newTimelineId(), kind: "assistant", text: event.response.text, streaming: false },
+      ];
+    });
     return;
   }
 
@@ -125,18 +160,26 @@ export function addRunEvent(
 
   if (event.type === "run.failed") {
     setTimeline((items) => [
-      ...items,
+      ...stopStreaming(items),
       { id: newTimelineId(), kind: "error", text: event.message },
     ]);
     return;
   }
 
-  if (event.type === "run.completed") {
-    setTimeline((items) => [
-      ...items,
-      { id: newTimelineId(), kind: "notice", text: `Run completed in ${event.steps} step(s).` },
-    ]);
+}
+
+function streamingAssistantIndex(items: TimelineItem[]): number {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (item?.kind === "assistant" && item.streaming) return index;
   }
+  return -1;
+}
+
+function stopStreaming(items: TimelineItem[]): TimelineItem[] {
+  return items.map((item) =>
+    item.kind === "assistant" && item.streaming ? { ...item, streaming: false } : item,
+  );
 }
 
 export function newTimelineId(): string {
@@ -165,8 +208,7 @@ function toolSummary(item: Extract<TimelineItem, { kind: "tool" }>): string {
 function labelFor(kind: Exclude<TimelineItem["kind"], "tool">): string {
   if (kind === "user") return "You";
   if (kind === "assistant") return "Assistant";
-  if (kind === "error") return "Run failed";
-  return "Run status";
+  return "Run failed";
 }
 
 function compactJson(value: unknown): string {

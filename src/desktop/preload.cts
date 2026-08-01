@@ -8,6 +8,7 @@ const api: DesktopApi = {
   listOpenRouterModels: () => ipcRenderer.invoke("desktop:list-openrouter-models"),
   startRun: (input: StartRunInput) => ipcRenderer.invoke("desktop:start-run", input),
   stopRun: () => ipcRenderer.invoke("desktop:stop-run"),
+  resetConversation: () => ipcRenderer.invoke("desktop:reset-conversation"),
   onRunEvent(listener: (event: RunEvent) => void): () => void {
     const receiveEvent = (_event: Electron.IpcRendererEvent, event: RunEvent) => listener(event);
     ipcRenderer.on("desktop:run-event", receiveEvent);

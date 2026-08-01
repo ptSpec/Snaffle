@@ -48,6 +48,18 @@ class MemoryTrace implements Trace {
   }
 }
 
+class DirectProvider implements ModelProvider {
+  readonly model = "direct-test-model";
+  messages: Message[] = [];
+
+  constructor(private readonly reply: string) {}
+
+  async complete(messages: Message[]): Promise<ModelResponse> {
+    this.messages = [...messages];
+    return { text: this.reply, toolCalls: [] };
+  }
+}
+
 test("agent loop executes a tool and completes naturally", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "agent-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -76,4 +88,36 @@ test("agent loop executes a tool and completes naturally", async (t) => {
       "run.completed",
     ],
   );
+});
+
+test("agent loop carries conversation history into a follow-up", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "agent-history-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const workspace = new LocalWorkspace(root, false);
+  const signal = new AbortController().signal;
+  const first = await runAgent({
+    task: "Write a short paragraph.",
+    provider: new DirectProvider("A short paragraph."),
+    tools: defaultTools(),
+    workspace,
+    trace: new MemoryTrace(),
+    signal,
+  });
+  const provider = new DirectProvider("A longer paragraph.");
+
+  await runAgent({
+    task: "Make it longer.",
+    history: first.messages,
+    provider,
+    tools: defaultTools(),
+    workspace,
+    trace: new MemoryTrace(),
+    signal,
+  });
+
+  assert.deepEqual(provider.messages.slice(-3), [
+    { role: "user", content: "Write a short paragraph." },
+    { role: "assistant", content: "A short paragraph." },
+    { role: "user", content: "Make it longer." },
+  ]);
 });

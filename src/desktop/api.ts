@@ -10,6 +10,8 @@ export type DesktopState = {
   workspace: DesktopWorkspace | null;
   openRouterAvailable: boolean;
   runActive: boolean;
+  defaultModel: string | null;
+  unsafeHostDefault: boolean;
 };
 
 export type StartRunInput = {
@@ -24,5 +26,6 @@ export interface DesktopApi {
   listOpenRouterModels(): Promise<OpenRouterModel[]>;
   startRun(input: StartRunInput): Promise<void>;
   stopRun(): Promise<boolean>;
+  resetConversation(): Promise<void>;
   onRunEvent(listener: (event: RunEvent) => void): () => void;
 }

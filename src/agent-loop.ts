@@ -12,6 +12,7 @@ export type RunAgentOptions = {
   workspace: Workspace;
   trace: Trace;
   signal: AbortSignal;
+  history?: Message[];
   maxSteps?: number;
   onEvent?: (event: RunEvent) => void | Promise<void>;
 };
@@ -24,7 +25,9 @@ export type AgentResult = {
 
 export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
   const maxSteps = options.maxSteps ?? 20;
-  const messages = initialMessages(options.task);
+  const messages = options.history?.length
+    ? [...options.history, { role: "user" as const, content: options.task }]
+    : initialMessages(options.task);
   const toolSpecs = options.tools.map(({ name, description, inputSchema }) => ({
     name,
     description,
@@ -40,7 +43,9 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
 
   try {
     for (let step = 1; step <= maxSteps; step += 1) {
-      const response = await options.provider.complete(messages, toolSpecs, options.signal);
+      const response = await options.provider.complete(messages, toolSpecs, options.signal, (text) =>
+        emit(options, { type: "model.delta", step, text }),
+      );
       await emit(options, { type: "model.completed", step, response });
       messages.push({
         role: "assistant",
@@ -91,7 +96,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
 }
 
 async function emit(options: RunAgentOptions, event: RunEvent): Promise<void> {
-  await options.trace.write(event);
+  if (event.type !== "model.delta") await options.trace.write(event);
   await options.onEvent?.(event);
 }
 

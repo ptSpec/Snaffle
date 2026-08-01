@@ -32,6 +32,7 @@ export type ModelResponse = {
 
 export type RunEvent =
   | { type: "run.started"; task: string; model: string }
+  | { type: "model.delta"; step: number; text: string }
   | { type: "model.completed"; step: number; response: ModelResponse }
   | { type: "tool.started"; call: ToolCall }
   | {

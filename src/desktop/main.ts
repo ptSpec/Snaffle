@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { runAgent } from "../agent-loop.js";
 import { PRODUCT } from "../identity.js";
 import { OpenRouterProvider, listOpenRouterModels } from "../providers/openrouter.js";
-import type { RunEvent } from "../protocol.js";
+import type { Message, RunEvent } from "../protocol.js";
 import type { Trace } from "../trace.js";
 import { defaultTools } from "../tools/default-tools.js";
 import { LocalWorkspace } from "../workspace.js";
@@ -20,6 +20,8 @@ const preloadPath = path.join(desktopDirectory, "preload.cjs");
 let mainWindow: BrowserWindow | undefined;
 let workspace: DesktopWorkspace | null = null;
 let activeRun: { controller: AbortController } | undefined;
+let conversation: Message[] = [];
+const DEVELOPMENT_MODEL = "openai/gpt-5.6-luna";
 
 const memoryTrace: Trace = {
   async write(): Promise<void> {
@@ -29,6 +31,12 @@ const memoryTrace: Trace = {
 
 function start(): void {
   loadDevelopmentEnvironment();
+  if (!app.isPackaged) {
+    workspace = {
+      path: process.cwd(),
+      name: path.basename(process.cwd()) || process.cwd(),
+    };
+  }
   registerIpc();
   createWindow();
 
@@ -44,6 +52,19 @@ function createWindow(): void {
     height: 860,
     minWidth: 980,
     minHeight: 640,
+    backgroundColor: "#181818",
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
+    ...(process.platform === "darwin"
+      ? {
+          trafficLightPosition: { x: 12, y: 14 },
+        }
+      : {
+          titleBarOverlay: {
+            color: "#181818",
+            symbolColor: "#e8e8e8",
+            height: 40,
+          },
+        }),
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
@@ -65,6 +86,8 @@ function registerIpc(): void {
     workspace,
     openRouterAvailable: Boolean(process.env.OPENROUTER_API_KEY),
     runActive: activeRun !== undefined,
+    defaultModel: app.isPackaged ? null : DEVELOPMENT_MODEL,
+    unsafeHostDefault: !app.isPackaged,
   }));
 
   ipcMain.handle("desktop:choose-workspace", async (event): Promise<DesktopWorkspace | null> => {
@@ -82,6 +105,7 @@ function registerIpc(): void {
     const selectedPath = result.filePaths[0];
     if (result.canceled || !selectedPath) return null;
 
+    if (workspace?.path !== selectedPath) conversation = [];
     workspace = {
       path: selectedPath,
       name: path.basename(selectedPath) || selectedPath,
@@ -114,8 +138,12 @@ function registerIpc(): void {
       workspace: new LocalWorkspace(selectedWorkspace.path, true),
       trace: memoryTrace,
       signal: controller.signal,
+      history: conversation,
       onEvent: sendRunEvent,
     })
+      .then((result) => {
+        conversation = result.messages;
+      })
       .catch(() => undefined)
       .finally(() => {
         if (activeRun === run) activeRun = undefined;
@@ -126,6 +154,11 @@ function registerIpc(): void {
     if (!activeRun) return false;
     activeRun.controller.abort();
     return true;
+  });
+
+  ipcMain.handle("desktop:reset-conversation", (): void => {
+    if (activeRun) throw new Error("Stop the active run before starting a new thread");
+    conversation = [];
   });
 }
 

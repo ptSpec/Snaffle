@@ -20,6 +20,8 @@ const initialState: DesktopState = {
   workspace: null,
   openRouterAvailable: false,
   runActive: false,
+  defaultModel: null,
+  unsafeHostDefault: false,
 };
 
 export function App(): JSX.Element {
@@ -36,6 +38,7 @@ export function App(): JSX.Element {
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const taskInput = useRef<HTMLTextAreaElement>(null);
+  const timelineView = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     const input = taskInput.current;
@@ -44,12 +47,19 @@ export function App(): JSX.Element {
     input.style.height = `${Math.min(input.scrollHeight, 220)}px`;
   }, [task]);
 
+  useLayoutEffect(() => {
+    const view = timelineView.current;
+    if (view) view.scrollTop = view.scrollHeight;
+  }, [timeline]);
+
   useEffect(() => {
     void window.desktop
       .getState()
       .then((state) => {
         setDesktopState(state);
         setRunning(state.runActive);
+        setSelectedModel(state.defaultModel ?? "");
+        setUnsafeHostExecution(state.unsafeHostDefault);
         if (state.openRouterAvailable) void loadModels();
       })
       .catch((cause: unknown) => setError(errorMessage(cause)));
@@ -83,6 +93,10 @@ export function App(): JSX.Element {
     try {
       const workspace = await window.desktop.chooseWorkspace();
       if (!workspace) return;
+      if (desktopState.workspace?.path !== workspace.path) {
+        setTimeline([]);
+        setSelectedItemId(null);
+      }
       setDesktopState((state) => ({ ...state, workspace }));
     } catch (cause) {
       setError(errorMessage(cause));
@@ -142,12 +156,17 @@ export function App(): JSX.Element {
     }
   }
 
-  function newThread(): void {
+  async function newThread(): Promise<void> {
     if (running) return;
-    setTimeline([]);
-    setSelectedItemId(null);
-    setTask("");
-    setError(null);
+    try {
+      await window.desktop.resetConversation();
+      setTimeline([]);
+      setSelectedItemId(null);
+      setTask("");
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
   }
 
   return (
@@ -190,7 +209,7 @@ export function App(): JSX.Element {
                     <button
                       className="icon-button"
                       type="button"
-                      onClick={newThread}
+                      onClick={() => void newThread()}
                       disabled={running}
                       aria-label="New thread"
                       title="New thread"
@@ -224,7 +243,7 @@ export function App(): JSX.Element {
         </aside>
 
         <section className="conversation" aria-label="Conversation">
-          <div className="timeline" aria-live="polite">
+          <div ref={timelineView} className="timeline" aria-live="polite">
             {timeline.map((item) => (
               <TimelineEntry
                 key={item.id}

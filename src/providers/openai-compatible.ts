@@ -22,6 +22,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
     messages: Message[],
     tools: ToolSpec[],
     signal: AbortSignal,
+    onText?: (text: string) => void | Promise<void>,
   ): Promise<ModelResponse> {
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: "POST",
@@ -40,6 +41,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
             parameters: tool.inputSchema,
           },
         })),
+        stream: true,
       }),
       signal,
     });
@@ -49,8 +51,81 @@ export class OpenAICompatibleProvider implements ModelProvider {
       throw new Error(`Provider request failed (${response.status}): ${body}`);
     }
 
-    return parseResponse(await response.json());
+    if (!response.headers.get("content-type")?.includes("text/event-stream")) {
+      return parseResponse(await response.json());
+    }
+    if (!response.body) throw new Error("Provider returned an empty stream");
+    return parseStream(response.body, onText);
   }
+}
+
+async function parseStream(
+  body: ReadableStream<Uint8Array>,
+  onText?: (text: string) => void | Promise<void>,
+): Promise<ModelResponse> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  const calls = new Map<number, { id: string; name: string; arguments: string }>();
+  let buffer = "";
+  let text = "";
+  let finishReason: string | undefined;
+  let usage: UsageResponse | undefined;
+  let finished = false;
+
+  while (!finished) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    buffer += decoder.decode(chunk.value, { stream: true });
+
+    let newline = buffer.indexOf("\n");
+    while (newline !== -1) {
+      const line = buffer.slice(0, newline).trimEnd();
+      buffer = buffer.slice(newline + 1);
+      newline = buffer.indexOf("\n");
+      if (!line.startsWith("data:")) continue;
+
+      const data = line.slice(5).trim();
+      if (data === "[DONE]") {
+        finished = true;
+        break;
+      }
+
+      const event = JSON.parse(data) as OpenAIStreamChunk;
+      const choice = event.choices?.[0];
+      const delta = choice?.delta;
+      if (typeof choice?.finish_reason === "string") finishReason = choice.finish_reason;
+      if (event.usage) usage = event.usage;
+
+      if (typeof delta?.content === "string" && delta.content) {
+        text += delta.content;
+        await onText?.(delta.content);
+      }
+
+      for (const call of delta?.tool_calls ?? []) {
+        const current = calls.get(call.index) ?? { id: "", name: "", arguments: "" };
+        if (call.id) current.id = call.id;
+        if (call.function?.name) current.name += call.function.name;
+        if (call.function?.arguments) current.arguments += call.function.arguments;
+        calls.set(call.index, current);
+      }
+    }
+  }
+
+  const toolCalls = [...calls.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([index, call]) =>
+      parseToolCall({
+        id: call.id || `call-${index}`,
+        function: { name: call.name, arguments: call.arguments },
+      }),
+    );
+
+  return {
+    text,
+    toolCalls,
+    ...(finishReason === undefined ? {} : { finishReason }),
+    ...(usage === undefined ? {} : { usage: parseUsage(usage) }),
+  };
 }
 
 function toOpenAIMessage(message: Message): Record<string, unknown> {
@@ -85,23 +160,21 @@ function parseResponse(input: unknown): ModelResponse {
   if (!message) throw new Error("Provider response contained no message");
 
   const toolCalls = (message.tool_calls ?? []).map(parseToolCall);
-  const usage = body.usage
-    ? {
-        ...(body.usage.prompt_tokens === undefined
-          ? {}
-          : { inputTokens: body.usage.prompt_tokens }),
-        ...(body.usage.completion_tokens === undefined
-          ? {}
-          : { outputTokens: body.usage.completion_tokens }),
-        ...(body.usage.total_tokens === undefined ? {} : { totalTokens: body.usage.total_tokens }),
-      }
-    : undefined;
+  const usage = body.usage ? parseUsage(body.usage) : undefined;
 
   return {
     text: typeof message.content === "string" ? message.content : "",
     toolCalls,
     ...(choice.finish_reason === undefined ? {} : { finishReason: choice.finish_reason }),
     ...(usage === undefined ? {} : { usage }),
+  };
+}
+
+function parseUsage(usage: UsageResponse): NonNullable<ModelResponse["usage"]> {
+  return {
+    ...(usage.prompt_tokens === undefined ? {} : { inputTokens: usage.prompt_tokens }),
+    ...(usage.completion_tokens === undefined ? {} : { outputTokens: usage.completion_tokens }),
+    ...(usage.total_tokens === undefined ? {} : { totalTokens: usage.total_tokens }),
   };
 }
 
@@ -125,11 +198,28 @@ type OpenAIResponse = {
       tool_calls?: OpenAIToolCall[];
     };
   }>;
-  usage?: {
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    total_tokens?: number;
-  };
+  usage?: UsageResponse;
+};
+
+type OpenAIStreamChunk = {
+  choices?: Array<{
+    finish_reason?: string | null;
+    delta?: {
+      content?: string | null;
+      tool_calls?: Array<{
+        index: number;
+        id?: string;
+        function?: { name?: string; arguments?: string };
+      }>;
+    };
+  }>;
+  usage?: UsageResponse;
+};
+
+type UsageResponse = {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
 };
 
 type OpenAIToolCall = {
