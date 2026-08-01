@@ -30,5 +30,6 @@ export interface DesktopApi {
   stopRun(): Promise<boolean>;
   resetConversation(): Promise<void>;
   setTheme(themeId: string): Promise<void>;
+  openExternal(url: string): Promise<void>;
   onRunEvent(listener: (event: RunEvent) => void): () => void;
 }

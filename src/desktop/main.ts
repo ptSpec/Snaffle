@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -187,6 +187,15 @@ function registerIpc(): void {
         height: 40,
       });
     }
+  });
+
+  ipcMain.handle("desktop:open-external", async (_event, rawUrl: unknown): Promise<void> => {
+    if (typeof rawUrl !== "string") throw new Error("External URL must be a string");
+    const url = new URL(rawUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error("Only HTTP and HTTPS links can be opened");
+    }
+    await shell.openExternal(url.href);
   });
 }
 

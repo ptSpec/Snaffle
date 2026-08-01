@@ -11,6 +11,7 @@ import type { DesktopApi, DesktopState } from "../api.js";
 import { PRODUCT } from "../../identity.js";
 import type { OpenRouterModel } from "../../providers/openrouter.js";
 import { DEFAULT_THEME, THEMES, themeById, type Theme } from "../themes/index.js";
+import logoSvg from "../../../assets/logo_svg.svg?raw";
 import {
   addRunEvent,
   Inspector,
@@ -250,7 +251,18 @@ export function App(): JSX.Element {
           aria-hidden={leftCollapsed}
         >
           <header className="sidebar-brand">
-            <span>{view === "settings" ? "Settings" : PRODUCT.name}</span>
+            {view === "settings" ? (
+              <span>Settings</span>
+            ) : (
+              <span className="brand-wordmark" aria-label={PRODUCT.name}>
+                <span
+                  className="brand-mark"
+                  aria-hidden="true"
+                  dangerouslySetInnerHTML={{ __html: logoSvg }}
+                />
+                <span className="brand-name">Sch</span>
+              </span>
+            )}
             <button
               className="panel-toggle"
               type="button"

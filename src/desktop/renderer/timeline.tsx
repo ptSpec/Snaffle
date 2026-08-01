@@ -1,3 +1,13 @@
+import {
+  Children,
+  isValidElement,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
+import hljs from "highlight.js/lib/common";
 import type { RunEvent, ToolCall } from "../../protocol.js";
 
 export type TimelineItem =
@@ -46,16 +56,86 @@ export function TimelineEntry({
     );
   }
 
+  if (item.kind === "assistant") {
+    return (
+      <article className="message assistant">
+        <div className={item.streaming ? "markdown-content streaming" : "markdown-content"}>
+          <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} skipHtml>
+            {item.text}
+          </ReactMarkdown>
+          {item.streaming ? <span className="streaming-cursor" aria-hidden="true" /> : null}
+        </div>
+      </article>
+    );
+  }
+
   return (
     <article className={`message ${item.kind}`}>
       {item.kind === "error" ? <span className="message-label">Run failed</span> : null}
-      <p>
-        {item.text}
-        {item.kind === "assistant" && item.streaming ? (
-          <span className="streaming-cursor" aria-hidden="true" />
-        ) : null}
-      </p>
+      <p>{item.text}</p>
     </article>
+  );
+}
+
+const markdownComponents: Components = {
+  a({ href, children }) {
+    const external = href?.startsWith("https://") || href?.startsWith("http://");
+    return (
+      <a
+        href={external ? href : undefined}
+        onClick={(event) => {
+          event.preventDefault();
+          if (external && href) void window.desktop.openExternal(href);
+        }}
+      >
+        {children}
+      </a>
+    );
+  },
+  pre: CodeBlock,
+};
+
+function CodeBlock({ children }: ComponentProps<"pre">): JSX.Element {
+  const [copied, setCopied] = useState(false);
+  const child = Children.toArray(children)[0];
+  if (!isValidElement<{ className?: string; children?: ReactNode }>(child)) {
+    return <pre>{children}</pre>;
+  }
+
+  const code = String(child.props.children).replace(/\n$/, "");
+  const language = /language-([\w-]+)/.exec(child.props.className ?? "")?.[1] ?? "text";
+  const highlighted = hljs.getLanguage(language)
+    ? hljs.highlight(code, { language, ignoreIllegals: true }).value
+    : null;
+
+  async function copyCode(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div className="code-block">
+      <div className="code-block-header">
+        <span>{language}</span>
+        <button type="button" onClick={() => void copyCode()}>
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <pre>
+        {highlighted ? (
+          <code
+            className={child.props.className}
+            dangerouslySetInnerHTML={{ __html: highlighted }}
+          />
+        ) : (
+          <code>{code}</code>
+        )}
+      </pre>
+    </div>
   );
 }
 
