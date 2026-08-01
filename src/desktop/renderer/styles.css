@@ -1,16 +1,6 @@
 :root {
-  --background: #181818;
-  --panel: #222222;
-  --panel-translucent: rgb(34 34 34 / 88%);
-  --surface: #262626;
-  --input: #2d2d2d;
-  --border: #353535;
-  --border-strong: #464646;
-  --text: #e8e8e8;
-  --muted: #a0a0a0;
-
   color: var(--text);
-  background: var(--background);
+  background: var(--canvas);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
@@ -54,7 +44,7 @@ textarea:disabled {
 .workspace-shell {
   position: relative;
   display: grid;
-  background: var(--background);
+  background: var(--canvas);
 }
 
 .workspace-shell::before {
@@ -91,7 +81,7 @@ textarea:disabled {
 
 .column-resizer:hover::after,
 body.resizing-columns .column-resizer::after {
-  background: #686868;
+  background: var(--border-focus);
 }
 
 .right-resizer {
@@ -121,7 +111,7 @@ body.resizing-columns * {
   justify-content: space-between;
   min-height: 40px;
   padding: 8px 18px;
-  color: #f2f2f2;
+  color: var(--text-strong);
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -135,7 +125,7 @@ body.resizing-columns * {
   width: 24px;
   height: 24px;
   padding: 0;
-  color: #8f8f8f;
+  color: var(--text-faint);
   background: transparent;
   border: 0;
   border-radius: 6px;
@@ -145,7 +135,7 @@ body.resizing-columns * {
 .panel-toggle:hover,
 .panel-reopen:hover {
   color: var(--text);
-  background: #303030;
+  background: var(--surface-hover);
 }
 
 .panel-reopen {
@@ -230,7 +220,7 @@ body.resizing-columns * {
 
 .section-heading h2 {
   margin: 0 8px;
-  color: #8f8f8f;
+  color: var(--text-faint);
   font-size: 11px;
   font-weight: 650;
   letter-spacing: 0.06em;
@@ -243,7 +233,7 @@ body.resizing-columns * {
   width: 26px;
   height: 26px;
   padding: 0;
-  color: var(--muted);
+  color: var(--text-muted);
   background: transparent;
   border: 0;
   border-radius: 5px;
@@ -251,7 +241,7 @@ body.resizing-columns * {
 
 .icon-button:hover {
   color: var(--text);
-  background: #303030;
+  background: var(--surface-hover);
 }
 
 .workspace-item,
@@ -262,7 +252,7 @@ body.resizing-columns * {
   width: 100%;
   gap: 8px;
   padding: 8px 10px;
-  color: #c8c8c8;
+  color: var(--text-secondary);
   text-align: left;
   background: transparent;
   border: 0;
@@ -273,7 +263,7 @@ body.resizing-columns * {
 .thread-item:hover,
 .workspace-item.active,
 .thread-item.active {
-  color: #f0f0f0;
+  color: var(--text-strong);
   background: var(--input);
 }
 
@@ -286,7 +276,7 @@ body.resizing-columns * {
 
 .workspace-icon {
   flex: 0 0 auto;
-  color: #8f8f8f;
+  color: var(--text-faint);
 }
 
 .threads {
@@ -303,7 +293,7 @@ body.resizing-columns * {
 }
 
 .sidebar-action {
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .conversation {
@@ -311,7 +301,7 @@ body.resizing-columns * {
   grid-template-rows: minmax(0, 1fr) auto;
   min-width: 0;
   min-height: 0;
-  background: var(--background);
+  background: var(--canvas);
 }
 
 .timeline {
@@ -335,8 +325,8 @@ body.resizing-columns * {
 .message.user {
   max-width: 50%;
   margin-left: auto;
-  color: #f0f0f0;
-  background: #303030;
+  color: var(--text-strong);
+  background: var(--surface-hover);
 }
 
 .message.assistant {
@@ -350,7 +340,7 @@ body.resizing-columns * {
   height: 1em;
   margin-left: 3px;
   vertical-align: -0.14em;
-  background: #ffffff;
+  background: var(--text-strong);
   animation: cursor-blink 800ms steps(1) infinite;
 }
 
@@ -361,14 +351,14 @@ body.resizing-columns * {
 }
 
 .message.error {
-  color: #ffcfcb;
-  background: #3c2020;
+  color: var(--status-danger-text);
+  background: var(--message-danger-surface);
 }
 
 .message-label {
   display: block;
   margin-bottom: 6px;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 11px;
   font-weight: 650;
   text-transform: uppercase;
@@ -383,15 +373,15 @@ body.resizing-columns * {
   padding: 10px;
   color: var(--text);
   text-align: left;
-  background: #222222;
+  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 7px;
 }
 
 .tool-card:hover,
 .tool-card.selected {
-  background: #292929;
-  border-color: #666666;
+  background: var(--surface-selected);
+  border-color: var(--border-focus);
 }
 
 .tool-marker {
@@ -405,26 +395,26 @@ body.resizing-columns * {
 
 .tool-marker.running,
 .inspector-status.running {
-  color: #b8dbff;
-  background: #1e3850;
+  color: var(--status-info-text);
+  background: var(--status-info-surface);
 }
 
 .tool-marker.success,
 .inspector-status.success {
-  color: #9cf0b7;
-  background: #1d4930;
+  color: var(--status-success-text);
+  background: var(--status-success-surface);
 }
 
 .tool-marker.tool-error,
 .inspector-status.tool-error {
-  color: #ffafab;
-  background: #55292a;
+  color: var(--status-danger-text);
+  background: var(--status-danger-surface);
 }
 
 .tool-marker.command-error,
 .inspector-status.command-error {
-  color: #ffd19b;
-  background: #56391c;
+  color: var(--status-warning-text);
+  background: var(--status-warning-surface);
 }
 
 .tool-card-body {
@@ -441,7 +431,7 @@ body.resizing-columns * {
 
 .tool-card-title span,
 .tool-summary {
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 12px;
 }
 
@@ -490,7 +480,7 @@ textarea {
   align-items: center;
   flex: 0 0 auto;
   gap: 7px;
-  color: #8f8f8f;
+  color: var(--text-faint);
   font-size: 11px;
 }
 
@@ -520,13 +510,13 @@ textarea {
 }
 
 .model-choice.empty {
-  color: #ffffff;
+  color: var(--text-strong);
 }
 
 .model-choice:hover,
 .model-search input {
   color: var(--text);
-  background: var(--background);
+  background: var(--canvas);
   border-color: var(--border);
 }
 
@@ -541,12 +531,12 @@ textarea {
 }
 
 .host-toggle:hover {
-  color: #b8b8b8;
-  background: #333333;
+  color: var(--text-secondary);
+  background: var(--surface-hover);
 }
 
 .host-toggle.enabled {
-  color: #bca58f;
+  color: var(--unsafe-text);
 }
 
 .host-toggle input {
@@ -555,17 +545,17 @@ textarea {
   height: 7px;
   margin: 0;
   background: transparent;
-  border: 1px solid #727272;
+  border: 1px solid var(--border-focus);
   border-radius: 50%;
 }
 
 .host-toggle input:checked {
-  background: #d28a4a;
-  border-color: #d28a4a;
+  background: var(--unsafe-indicator);
+  border-color: var(--unsafe-indicator);
 }
 
 .host-toggle input:focus-visible {
-  outline: 2px solid #777777;
+  outline: 2px solid var(--border-focus);
   outline-offset: 3px;
 }
 
@@ -576,8 +566,8 @@ textarea {
   width: 32px;
   height: 32px;
   padding: 0 0 2px;
-  color: #181818;
-  background: #f2f2f2;
+  color: var(--accent-contrast);
+  background: var(--accent);
   border: 0;
   border-radius: 50%;
   font-size: 20px;
@@ -586,14 +576,14 @@ textarea {
 
 .send-button.stop {
   padding: 0;
-  color: #eeeeee;
-  background: #474747;
+  color: var(--text-strong);
+  background: var(--surface-control);
   font-size: 10px;
 }
 
 .composer-error {
   padding: 0 14px 10px;
-  color: #ffb9b4;
+  color: var(--status-danger-text);
   font-size: 12px;
 }
 
@@ -601,7 +591,7 @@ textarea {
   min-width: 0;
   padding: 48px 14px 14px;
   overflow-y: auto;
-  background: #202020;
+  background: var(--surface-subtle);
   border-left: 1px solid var(--border);
 }
 
@@ -620,27 +610,31 @@ textarea {
 }
 
 .platform-darwin .panel-reopen {
-  top: 8px;
+  top: 10px;
 }
 
 .platform-darwin .panel-reopen.left {
   left: 80px;
 }
 
+.platform-darwin .inspector .panel-toggle {
+  transform: translateY(2px);
+}
+
 .inspector-card {
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 13px;
 }
 
 .inspector-card h3 {
   margin: 0;
-  color: #eeeeee;
+  color: var(--text-strong);
   font-size: 16px;
 }
 
 .inspector-card h4 {
   margin: 14px 0 5px;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -653,7 +647,7 @@ textarea {
 
 .eyebrow {
   margin: 0 0 5px;
-  color: #929292;
+  color: var(--text-faint);
   font-size: 11px;
   font-weight: 650;
   letter-spacing: 0.06em;
@@ -673,8 +667,8 @@ pre {
   overflow: auto;
   margin: 0;
   padding: 10px;
-  color: #d8d8d8;
-  background: var(--background);
+  color: var(--code-text);
+  background: var(--code-background);
   border: 1px solid var(--border);
   border-radius: 5px;
   font:

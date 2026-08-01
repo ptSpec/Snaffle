@@ -12,6 +12,7 @@ import type { Trace } from "../trace.js";
 import { defaultTools } from "../tools/default-tools.js";
 import { LocalWorkspace } from "../workspace.js";
 import type { DesktopState, DesktopWorkspace, StartRunInput } from "./api.js";
+import { DEFAULT_THEME } from "./themes/index.js";
 
 const desktopDirectory = path.dirname(fileURLToPath(import.meta.url));
 const rendererPath = path.join(desktopDirectory, "../../renderer/index.html");
@@ -54,7 +55,7 @@ function createWindow(): void {
     minWidth: 980,
     minHeight: 640,
     icon: applicationIcon(),
-    backgroundColor: "#181818",
+    backgroundColor: DEFAULT_THEME.colors.canvas,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
     ...(process.platform === "darwin"
       ? {
@@ -62,8 +63,8 @@ function createWindow(): void {
         }
       : {
           titleBarOverlay: {
-            color: "#181818",
-            symbolColor: "#e8e8e8",
+            color: DEFAULT_THEME.colors.canvas,
+            symbolColor: DEFAULT_THEME.colors.text,
             height: 40,
           },
         }),
