@@ -4,7 +4,8 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Message } from "../protocol.js";
-import type { DesktopThread, DesktopWorkspace } from "./api.js";
+import type { DesktopEntry, DesktopThread, DesktopWorkspace } from "./api.js";
+import { SavedMessageStore } from "./saved-messages-store.js";
 
 export type StoreState = {
   workspaces: DesktopWorkspace[];
@@ -21,7 +22,11 @@ export async function openStore(filename: string): Promise<DesktopStore> {
 }
 
 export class DesktopStore {
-  constructor(private readonly database: Client) {}
+  readonly savedMessages: SavedMessageStore;
+
+  constructor(private readonly database: Client) {
+    this.savedMessages = new SavedMessageStore(database);
+  }
 
   async initialize(): Promise<void> {
     await this.database.batch(
@@ -80,6 +85,7 @@ export class DesktopStore {
       await this.database.execute("ALTER TABLE threads ADD COLUMN draft TEXT NOT NULL DEFAULT ''");
     }
     await this.database.execute("PRAGMA foreign_keys = ON");
+    await this.savedMessages.initialize();
   }
 
   async state(): Promise<StoreState> {
@@ -215,29 +221,53 @@ export class DesktopStore {
   }
 
   async messages(threadId: string | null): Promise<Message[]> {
+    return (await this.entries(threadId)).map((entry) => entry.message);
+  }
+
+  async entries(threadId: string | null): Promise<DesktopEntry[]> {
     if (!threadId) return [];
     const result = await this.database.execute({
-      sql: "SELECT data FROM entries WHERE thread_id = ? ORDER BY sequence",
+      sql: "SELECT id, sequence, data FROM entries WHERE thread_id = ? ORDER BY sequence",
       args: [threadId],
     });
-    return result.rows.map((row) => JSON.parse(rowText(row, "data")) as Message);
+    return result.rows.map((row) => ({
+      id: rowText(row, "id"),
+      sequence: rowNumber(row, "sequence"),
+      message: JSON.parse(rowText(row, "data")) as Message,
+    }));
   }
 
   async saveMessages(threadId: string, messages: Message[]): Promise<void> {
     const now = Date.now();
+    const serialized = messages.map((message) => JSON.stringify(message));
+    const existing = await this.database.execute({
+      sql: "SELECT data FROM entries WHERE thread_id = ? ORDER BY sequence",
+      args: [threadId],
+    });
+    let unchanged = 0;
+    while (
+      unchanged < existing.rows.length &&
+      unchanged < serialized.length &&
+      rowText(existing.rows[unchanged], "data") === serialized[unchanged]
+    ) {
+      unchanged += 1;
+    }
     const firstTask = messages.find((message) => message.role === "user")?.content
       .trim()
       .replace(/\s+/g, " ");
     const title = firstTask && firstTask.length > 48 ? `${firstTask.slice(0, 47)}…` : firstTask;
     const statements: InStatement[] = [
-      { sql: "DELETE FROM entries WHERE thread_id = ?", args: [threadId] },
-      ...messages.map((message, sequence) => ({
+      {
+        sql: "DELETE FROM entries WHERE thread_id = ? AND sequence >= ?",
+        args: [threadId, unchanged],
+      },
+      ...messages.slice(unchanged).map((message, offset) => ({
         sql: `INSERT INTO entries(id, thread_id, sequence, role, text, data, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?)`,
         args: [
           randomUUID(),
           threadId,
-          sequence,
+          unchanged + offset,
           message.role,
           message.content,
           JSON.stringify(message),

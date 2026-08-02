@@ -4,22 +4,30 @@ import type { ModelProvider, ModelStreamEvent } from "./provider.js";
 
 const MAX_STREAM_BUFFER_CHARS = 8 * 1024 * 1024;
 const MAX_STREAM_FIELD_CHARS = 4 * 1024 * 1024;
+export const DEFAULT_PROVIDER_TIMEOUT_MS = 3 * 60 * 1000;
+export const DEFAULT_PROVIDER_RETRIES = 2;
 
 export type OpenAICompatibleOptions = {
   baseUrl: string;
   model: string;
   apiKey?: string;
+  streamIdleTimeoutMs?: number;
+  maxRetries?: number;
 };
 
 export class OpenAICompatibleProvider implements ModelProvider {
   readonly model: string;
   private readonly baseUrl: string;
   private readonly apiKey: string | undefined;
+  private readonly streamIdleTimeoutMs: number;
+  private readonly maxRetries: number;
 
   constructor(options: OpenAICompatibleOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
     this.model = options.model;
     this.apiKey = options.apiKey;
+    this.streamIdleTimeoutMs = options.streamIdleTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
+    this.maxRetries = options.maxRetries ?? DEFAULT_PROVIDER_RETRIES;
   }
 
   async complete(
@@ -28,7 +36,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
     signal: AbortSignal,
     onEvent?: (event: ModelStreamEvent) => void | Promise<void>,
   ): Promise<ModelResponse> {
-    const maxRetries = 2;
+    const maxRetries = this.maxRetries;
     let requestMessages = messages;
 
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
@@ -66,7 +74,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
         }
 
         const result = response.headers.get("content-type")?.includes("text/event-stream")
-          ? await parseStream(requiredBody(response), onEvent)
+          ? await parseStream(requiredBody(response), this.streamIdleTimeoutMs, onEvent)
           : parseResponse(await response.json());
 
         if (result.text.trim() || result.toolCalls.length) return result;
@@ -140,6 +148,7 @@ function retryDelay(milliseconds: number, signal: AbortSignal): Promise<void> {
 
 async function parseStream(
   body: ReadableStream<Uint8Array>,
+  idleTimeoutMs: number,
   onEvent?: (event: ModelStreamEvent) => void | Promise<void>,
 ): Promise<ModelResponse> {
   const reader = body.getReader();
@@ -153,7 +162,7 @@ async function parseStream(
   let finished = false;
 
   while (!finished) {
-    const chunk = await reader.read();
+    const chunk = await readStreamChunk(reader, idleTimeoutMs);
     if (chunk.done) break;
     buffer += decoder.decode(chunk.value, { stream: true });
     if (buffer.length > MAX_STREAM_BUFFER_CHARS) {
@@ -201,6 +210,7 @@ async function parseStream(
       for (const call of delta?.tool_calls ?? []) {
         const current = calls.get(call.index) ?? { id: "", name: "", arguments: "" };
         const previousName = current.name;
+        const previousArgumentChars = current.arguments.length;
         if (call.id) current.id = call.id;
         if (call.function?.name) {
           current.name = appendStreamText(current.name, call.function.name, "tool name");
@@ -213,8 +223,15 @@ async function parseStream(
           );
         }
         calls.set(call.index, current);
-        if (current.name && current.name !== previousName) {
-          await onEvent?.({ type: "tool.delta", index: call.index, name: current.name });
+        const crossedProgressMark =
+          Math.floor(previousArgumentChars / 1024) !== Math.floor(current.arguments.length / 1024);
+        if (current.name && (current.name !== previousName || crossedProgressMark)) {
+          await onEvent?.({
+            type: "tool.delta",
+            index: call.index,
+            name: current.name,
+            argumentChars: current.arguments.length,
+          });
         }
       }
     }
@@ -236,6 +253,28 @@ async function parseStream(
     ...(finishReason === undefined ? {} : { finishReason }),
     ...(usage === undefined ? {} : { usage: parseUsage(usage) }),
   };
+}
+
+function readStreamChunk(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  timeoutMs: number,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      void reader.cancel().catch(() => undefined);
+      reject(new Error(`Provider stream sent no data for ${Math.round(timeoutMs / 1000)} seconds`));
+    }, timeoutMs);
+    reader.read().then(
+      (chunk) => {
+        clearTimeout(timeout);
+        resolve(chunk);
+      },
+      (error: unknown) => {
+        clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
 }
 
 function appendStreamText(current: string, delta: string, label: string): string {

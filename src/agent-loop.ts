@@ -65,7 +65,14 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           return tool ? healToolCall(call, tool.inputSchema) : call;
         }),
       };
-      await emit(options, { type: "model.completed", step, model: options.provider.model, durationMs, response });
+      await emit(options, {
+        type: "model.completed",
+        step,
+        sequence: messages.length,
+        model: options.provider.model,
+        durationMs,
+        response,
+      });
       messages.push({
         role: "assistant",
         content: response.text,
@@ -112,6 +119,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           type: "tool.completed",
           step,
           index,
+          sequence: messages.length - 1,
           call,
           content,
           isError,
@@ -152,6 +160,7 @@ function emitModelEvent(
     step,
     index: event.index,
     name: event.name,
+    argumentChars: event.argumentChars,
   });
 }
 

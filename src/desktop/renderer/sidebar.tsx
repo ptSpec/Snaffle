@@ -8,7 +8,7 @@ import logoSvg from "../../../assets/logo_svg.svg?raw";
 import { PRODUCT } from "../../identity.js";
 import type { DesktopState, DesktopThread } from "../api.js";
 
-export type AppView = "conversation" | "settings";
+export type AppView = "conversation" | "saved" | "settings";
 export type SettingsPage = "appearance" | "agent";
 
 export function Sidebar({
@@ -193,12 +193,18 @@ export function Sidebar({
   return (
     <aside
       className={collapsed ? "left-sidebar collapsed" : "left-sidebar"}
-      aria-label={view === "settings" ? "Settings navigation" : "Workspaces and threads"}
+      aria-label={
+        view === "conversation"
+          ? "Workspaces and threads"
+          : view === "settings"
+            ? "Settings navigation"
+            : "Saved messages"
+      }
       aria-hidden={collapsed}
     >
       <header className="sidebar-brand">
-        {view === "settings" ? (
-          <span>Settings</span>
+        {view !== "conversation" ? (
+          <span>{view === "settings" ? "Settings" : "Saved"}</span>
         ) : (
           <span className="brand-wordmark" aria-label={PRODUCT.name}>
             <span
@@ -222,7 +228,7 @@ export function Sidebar({
 
       <nav
         className={
-          view === "settings"
+          view !== "conversation"
             ? "sidebar-navigation settings-navigation view-enter"
             : "sidebar-navigation view-enter"
         }
@@ -245,19 +251,34 @@ export function Sidebar({
             </button>
             <div className="settings-navigation-space" aria-hidden="true" />
           </>
+        ) : view === "saved" ? (
+          <div className="settings-navigation-space" aria-hidden="true" />
         ) : (
           <div key={state.workspace?.id ?? "empty"} className="workspace-navigation workspace-enter">
-            <div className="section-heading workspace-heading">
-              <h2>Workspace</h2>
+            <div className="workspace-create-actions">
               <button
-                className="icon-button add-workspace"
+                className="workspace-create-button primary"
+                type="button"
+                onClick={() => void newThread()}
+                disabled={!state.workspace}
+              >
+                <PlusIcon />
+                <span>New chat thread</span>
+              </button>
+              <button
+                className="workspace-create-button secondary"
                 type="button"
                 onClick={() => void chooseWorkspace()}
                 aria-label="Open workspace"
                 title="Open workspace"
               >
                 <PlusIcon />
+                <span>New workspace</span>
               </button>
+            </div>
+
+            <div className="section-heading workspace-heading">
+              <h2>Workspace</h2>
             </div>
 
             {state.workspace ? (
@@ -268,6 +289,15 @@ export function Sidebar({
                     <span>{state.workspace.name}</span>
                   </div>
                   <span className="thread-actions">
+                    <button
+                      className="row-action thread-action"
+                      type="button"
+                      onClick={() => void newThread()}
+                      aria-label={`New thread in ${state.workspace.name}`}
+                      title="New thread"
+                    >
+                      <PlusIcon />
+                    </button>
                     <button
                       className={
                         selecting ? "row-action thread-action active" : "row-action thread-action"
@@ -296,16 +326,6 @@ export function Sidebar({
                     ×
                   </button>
                 </div>
-
-                <button
-                  className="new-thread-button"
-                  type="button"
-                  onClick={() => void newThread()}
-                >
-                  <PlusIcon />
-                  <span>New chat thread</span>
-                </button>
-
                 <div
                   ref={threadList}
                   className="threads"
@@ -416,34 +436,42 @@ export function Sidebar({
                   </div>
                 ) : null}
               </>
-            ) : (
-              <button className="workspace-item" type="button" onClick={() => void chooseWorkspace()}>
-                <span className="workspace-icon" aria-hidden="true">+</span>
-                <span>Open workspace</span>
-              </button>
-            )}
+            ) : null}
           </div>
         )}
       </nav>
 
       <footer className="sidebar-footer">
-        {view === "settings" ? (
+        {view !== "conversation" ? (
           <button className="sidebar-action" type="button" onClick={() => onView("conversation")}>
             <span aria-hidden="true">←</span>
             <span>Back to chat</span>
           </button>
         ) : (
-          <button
-            className="sidebar-action"
-            type="button"
-            onClick={() => {
-              onError(null);
-              onView("settings");
-            }}
-          >
-            <span aria-hidden="true">⚙</span>
-            <span>Settings</span>
-          </button>
+          <>
+            <button
+              className="sidebar-action"
+              type="button"
+              onClick={() => {
+                onError(null);
+                onView("saved");
+              }}
+            >
+              <SavedIcon />
+              <span>Saved messages</span>
+            </button>
+            <button
+              className="sidebar-action"
+              type="button"
+              onClick={() => {
+                onError(null);
+                onView("settings");
+              }}
+            >
+              <span aria-hidden="true">⚙</span>
+              <span>Settings</span>
+            </button>
+          </>
         )}
       </footer>
     </aside>
@@ -545,6 +573,14 @@ function ArchiveIcon(): JSX.Element {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M2.5 5h11v8.5h-11zM2 2.5h12V5H2zM6 8h4" />
+    </svg>
+  );
+}
+
+function SavedIcon(): JSX.Element {
+  return (
+    <svg className="sidebar-action-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M4 2.5h8v11l-4-2.5-4 2.5z" />
     </svg>
   );
 }

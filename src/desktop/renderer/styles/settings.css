@@ -79,6 +79,10 @@
   border-bottom: 1px solid var(--border-default);
 }
 
+.setting-field + .setting-field {
+  border-top: 0;
+}
+
 .setting-field span {
   display: grid;
   gap: 4px;

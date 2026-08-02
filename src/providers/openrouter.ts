@@ -11,11 +11,20 @@ export type OpenRouterModel = {
 };
 
 export class OpenRouterProvider extends OpenAICompatibleProvider {
-  constructor(options: { model: string; apiKey: string }) {
+  constructor(options: {
+    model: string;
+    apiKey: string;
+    streamIdleTimeoutMs?: number;
+    maxRetries?: number;
+  }) {
     super({
       baseUrl: OPENROUTER_BASE_URL,
       model: options.model,
       apiKey: options.apiKey,
+      ...(options.streamIdleTimeoutMs === undefined
+        ? {}
+        : { streamIdleTimeoutMs: options.streamIdleTimeoutMs }),
+      ...(options.maxRetries === undefined ? {} : { maxRetries: options.maxRetries }),
     });
   }
 }

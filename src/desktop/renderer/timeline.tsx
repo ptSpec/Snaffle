@@ -11,15 +11,17 @@ import {
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import hljs from "highlight.js/lib/common";
-import type { Message, RunEvent, ToolCall, Usage } from "../../protocol.js";
+import type { RunEvent, ToolCall, Usage } from "../../protocol.js";
+import type { DesktopEntry } from "../api.js";
+import { JsonInspector } from "./json-inspector.js";
 
 export type TimelineItem =
-  | { id: string; kind: "user"; text: string }
+  | { id: string; kind: "user"; text: string; sequence: number; entryId?: string }
   | { id: string; kind: "error"; text: string }
-  | { id: string; kind: "assistant"; text: string; streaming: boolean; intermediate?: boolean; model?: string; usage?: Usage; durationMs?: number }
+  | { id: string; kind: "assistant"; text: string; streaming: boolean; intermediate?: boolean; model?: string; usage?: Usage; durationMs?: number; sequence?: number; entryId?: string }
   | { id: string; kind: "activity-group"; items: TimelineItem[] }
   | { id: string; kind: "reasoning"; step: number; text: string; streaming: boolean; status?: string | undefined }
-  | { id: string; kind: "tool-preparing"; step: number; index: number; name: string }
+  | { id: string; kind: "tool-preparing"; step: number; index: number; name: string; argumentChars: number; startedAt: number }
   | { id: string; kind: "retry"; step: number; attempt: number; maxRetries: number; text: string }
   | {
       id: string;
@@ -29,6 +31,7 @@ export type TimelineItem =
       content?: string;
       isError?: boolean;
       exitCode?: number | null;
+      sequence?: number;
     };
 
 let itemNumber = 0;
@@ -38,11 +41,15 @@ export function TimelineEntry({
   selectedId,
   onSelect,
   onEditUser,
+  savedId,
+  onToggleSaved,
 }: {
   item: TimelineItem;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onEditUser?: (text: string) => void;
+  savedId?: string | undefined;
+  onToggleSaved?: (item: SaveableTimelineItem, savedId?: string) => void;
 }): JSX.Element {
   if (item.kind === "activity-group") {
     return (
@@ -66,12 +73,7 @@ export function TimelineEntry({
   }
 
   if (item.kind === "tool-preparing") {
-    return (
-      <div className="activity-row">
-        <span className="activity-spinner" aria-hidden="true" />
-        <span>{toolGeneratingLabel(item.name)}</span>
-      </div>
-    );
+    return <ToolPreparingEntry item={item} />;
   }
 
   if (item.kind === "tool") {
@@ -94,7 +96,10 @@ export function TimelineEntry({
 
   if (item.kind === "assistant") {
     return (
-      <article className={item.intermediate ? "message assistant intermediate" : "message assistant"}>
+      <article
+        className={item.intermediate ? "message assistant intermediate" : "message assistant"}
+        {...(item.entryId ? { "data-entry-id": item.entryId } : {})}
+      >
         <div className={item.streaming ? "markdown-content streaming" : "markdown-content"}>
           {item.streaming ? (
             <>{item.text}<span className="streaming-cursor" aria-hidden="true" /></>
@@ -103,14 +108,24 @@ export function TimelineEntry({
           )}
         </div>
         {!item.streaming && !item.intermediate ? (
-          <MessageFooter text={item.text} metadata={modelMetadata(item)} />
+          <MessageFooter
+            text={item.text}
+            metadata={modelMetadata(item)}
+            saved={Boolean(savedId)}
+            {...(onToggleSaved ? { onSave: () => onToggleSaved(item, savedId) } : {})}
+          />
         ) : null}
       </article>
     );
   }
 
   if (item.kind === "user") {
-    return <UserMessage item={item} {...(onEditUser ? { onEdit: onEditUser } : {})} />;
+    return (
+      <UserMessage
+        item={item}
+        {...(onEditUser ? { onEdit: onEditUser } : {})}
+      />
+    );
   }
 
   return (
@@ -147,7 +162,7 @@ function ActivityGroup({
   );
 }
 
-const MarkdownContent = memo(function MarkdownContent({ text }: { text: string }): JSX.Element {
+export const MarkdownContent = memo(function MarkdownContent({ text }: { text: string }): JSX.Element {
   return (
     <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} skipHtml>
       {text}
@@ -166,7 +181,7 @@ function UserMessage({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <article className="message user">
+    <article className="message user" {...(item.entryId ? { "data-entry-id": item.entryId } : {})}>
       <div className={collapsible && !expanded ? "message-body collapsed" : "message-body"}>
         <p>{item.text}</p>
       </div>
@@ -191,12 +206,16 @@ function MessageFooter({
   children,
   compact = false,
   onEdit,
+  saved = false,
+  onSave,
 }: {
   text: string;
   metadata?: string;
   children?: ReactNode;
   compact?: boolean;
   onEdit?: () => void;
+  saved?: boolean;
+  onSave?: () => void;
 }): JSX.Element {
   const [copied, setCopied] = useState(false);
 
@@ -215,6 +234,18 @@ function MessageFooter({
       <span className="message-metadata">{metadata}</span>
       <span className={compact ? "message-actions compact" : "message-actions"}>
         {children}
+        {onSave ? (
+          <button
+            className={saved ? "message-save saved" : "message-save"}
+            type="button"
+            onClick={onSave}
+            title={saved ? "Remove saved message" : "Save message"}
+            aria-label={saved ? "Remove saved message" : "Save message"}
+          >
+            <BookmarkIcon filled={saved} />
+            <span className="action-label">{saved ? "Saved" : "Save"}</span>
+          </button>
+        ) : null}
         <button type="button" onClick={() => void copy()} title="Copy message" aria-label="Copy message">
           <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <rect x="5" y="5" width="8" height="8" rx="1.5" />
@@ -378,7 +409,7 @@ export function Inspector({ item }: { item: TimelineItem }): JSX.Element {
         <p className="inspector-repair"><strong>Input healed</strong> · {item.call.inputRepair}</p>
       ) : null}
       <h4>Input</h4>
-      <pre>{formatJson(item.call.input)}</pre>
+      <JsonInspector value={item.call.input} />
       {item.phase === "completed" ? (
         <>
           <h4>Output</h4>
@@ -394,6 +425,31 @@ export function Inspector({ item }: { item: TimelineItem }): JSX.Element {
 function toolGeneratingLabel(name: string): string {
   if (name === "run_command") return "Generating command…";
   return name ? `Generating ${name} call…` : "Generating tool call…";
+}
+
+function ToolPreparingEntry({
+  item,
+}: {
+  item: Extract<TimelineItem, { kind: "tool-preparing" }>;
+}): JSX.Element {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const update = (): void => setElapsed(Math.floor((Date.now() - item.startedAt) / 1000));
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [item.startedAt]);
+
+  const progress = item.argumentChars
+    ? ` · ${item.argumentChars < 1024 ? item.argumentChars : `${(item.argumentChars / 1024).toFixed(1)}k`} chars`
+    : "";
+  return (
+    <div className="activity-row">
+      <span className="activity-spinner" aria-hidden="true" />
+      <span>{toolGeneratingLabel(item.name)}{progress} · {elapsed}s</span>
+    </div>
+  );
 }
 
 export function addRunEvent(
@@ -464,12 +520,14 @@ export function addRunEvent(
             step: event.step,
             index: event.index,
             name: event.name,
+            argumentChars: event.argumentChars,
+            startedAt: Date.now(),
           },
         ];
       }
       return ready.map((item, index) =>
         index === existing && item.kind === "tool-preparing"
-          ? { ...item, name: event.name }
+          ? { ...item, name: event.name, argumentChars: event.argumentChars }
           : item,
       );
     });
@@ -509,13 +567,13 @@ export function addRunEvent(
       if (existing !== -1) {
         completed = completedReasoning.map((item, index) =>
           index === existing && item.kind === "assistant"
-            ? { ...item, text: event.response.text, streaming: false, intermediate, ...metadata }
+            ? { ...item, text: event.response.text, streaming: false, intermediate, sequence: event.sequence, ...metadata }
             : item,
         );
       } else if (event.response.text.trim()) {
         completed = [
           ...completedReasoning,
-          { id: newTimelineId(), kind: "assistant", text: event.response.text, streaming: false, intermediate, ...metadata },
+          { id: newTimelineId(), kind: "assistant", text: event.response.text, streaming: false, intermediate, sequence: event.sequence, ...metadata },
         ];
       }
       return intermediate ? completed : collapseCompletedRuns(completed);
@@ -545,6 +603,7 @@ export function addRunEvent(
         phase: "completed",
         content: event.content,
         isError: event.isError,
+        sequence: event.sequence,
         ...(event.exitCode === undefined ? {} : { exitCode: event.exitCode }),
       };
       const existing = items.findIndex((item) => item.id === event.call.id);
@@ -564,14 +623,14 @@ export function addRunEvent(
 
 }
 
-export function timelineFromMessages(messages: Message[]): TimelineItem[] {
+export function timelineFromEntries(entries: DesktopEntry[]): TimelineItem[] {
   const items: TimelineItem[] = [];
   const calls = new Map<string, ToolCall>();
 
-  messages.forEach((message, index) => {
+  entries.forEach(({ id: entryId, sequence, message }, index) => {
     if (message.role === "system") return;
     if (message.role === "user") {
-      items.push({ id: `history-${index}`, kind: "user", text: message.content });
+      items.push({ id: `entry-${entryId}`, kind: "user", text: message.content, sequence, entryId });
       return;
     }
     if (message.role === "assistant") {
@@ -587,11 +646,13 @@ export function timelineFromMessages(messages: Message[]): TimelineItem[] {
       }
       if (message.content.trim()) {
         items.push({
-          id: `history-${index}`,
+          id: `entry-${entryId}`,
           kind: "assistant",
           text: message.content,
           streaming: false,
           intermediate,
+          sequence,
+          entryId,
           ...(message.model ? { model: message.model } : {}),
           ...(message.usage ? { usage: message.usage } : {}),
           ...(message.durationMs === undefined ? {} : { durationMs: message.durationMs }),
@@ -610,6 +671,7 @@ export function timelineFromMessages(messages: Message[]): TimelineItem[] {
       call,
       phase: "completed",
       content: message.content,
+      sequence,
       ...(message.isError === undefined ? {} : { isError: message.isError }),
       ...(message.exitCode === undefined ? {} : { exitCode: message.exitCode }),
     });
@@ -705,6 +767,16 @@ export function newTimelineId(): string {
   return `event-${itemNumber}`;
 }
 
+export type SaveableTimelineItem = Extract<TimelineItem, { kind: "assistant" }>;
+
+function BookmarkIcon({ filled }: { filled: boolean }): JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" fill={filled ? "currentColor" : "none"} aria-hidden="true">
+      <path d="M4 2.5h8v11l-4-2.5-4 2.5z" />
+    </svg>
+  );
+}
+
 function toolStatus(item: Extract<TimelineItem, { kind: "tool" }>): {
   marker: string;
   label: string;
@@ -726,12 +798,4 @@ function labelFor(kind: Exclude<TimelineItem["kind"], "tool">): string {
   if (kind === "retry") return "Model retry";
   if (kind === "activity-group") return "Work details";
   return "Run failed";
-}
-
-function formatJson(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
 }

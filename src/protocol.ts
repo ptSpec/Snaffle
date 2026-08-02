@@ -52,14 +52,15 @@ export type RunEvent =
   | { type: "model.started"; step: number }
   | { type: "model.delta"; step: number; text: string }
   | { type: "model.reasoning.delta"; step: number; text: string }
-  | { type: "model.tool.delta"; step: number; index: number; name: string }
+  | { type: "model.tool.delta"; step: number; index: number; name: string; argumentChars: number }
   | { type: "model.retry"; step: number; attempt: number; maxRetries: number; message: string }
-  | { type: "model.completed"; step: number; model: string; durationMs: number; response: ModelResponse }
+  | { type: "model.completed"; step: number; sequence: number; model: string; durationMs: number; response: ModelResponse }
   | { type: "tool.started"; step: number; index: number; call: ToolCall }
   | {
       type: "tool.completed";
       step: number;
       index: number;
+      sequence: number;
       call: ToolCall;
       content: string;
       isError: boolean;

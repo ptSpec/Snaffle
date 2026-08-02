@@ -18,17 +18,53 @@ export type DesktopWorkspace = {
   threads: DesktopThread[];
 };
 
+export type DesktopEntry = {
+  id: string;
+  sequence: number;
+  message: Message;
+};
+
+export type SavedMessage = {
+  id: string;
+  sourceEntryId: string | null;
+  sourceThreadId: string;
+  sourceWorkspaceId: string;
+  sourceSequence: number;
+  workspaceName: string;
+  threadTitle: string;
+  role: "assistant";
+  text: string;
+  model: string | null;
+  createdAt: number;
+  sourceAvailable: boolean;
+};
+
+export type SaveMessageInput = {
+  threadId: string;
+  sequence: number;
+  text: string;
+  model?: string;
+};
+
+export type SavedMessageSource = {
+  state: DesktopState;
+  entryId: string;
+};
+
 export type DesktopState = {
   workspace: DesktopWorkspace | null;
   workspaces: DesktopWorkspace[];
   activeThreadId: string | null;
-  conversation: Message[];
+  conversation: DesktopEntry[];
+  savedMessages: SavedMessage[];
   openRouterAvailable: boolean;
   runningThreadIds: string[];
   defaultModel: string | null;
   unsafeHostDefault: boolean;
   themeId: string;
   maxSteps: number;
+  providerTimeoutMinutes: number;
+  providerRetries: number;
 };
 
 export type StartRunInput = {
@@ -59,6 +95,11 @@ export interface DesktopApi {
   stopRun(threadId: string): Promise<boolean>;
   setTheme(themeId: string): Promise<void>;
   setMaxSteps(maxSteps: number): Promise<void>;
+  setProviderTimeoutMinutes(minutes: number): Promise<void>;
+  setProviderRetries(retries: number): Promise<void>;
+  saveMessage(input: SaveMessageInput): Promise<SavedMessage[]>;
+  deleteSavedMessage(id: string): Promise<SavedMessage[]>;
+  openSavedMessage(id: string): Promise<SavedMessageSource | null>;
   openExternal(url: string): Promise<void>;
   onRunEvent(listener: (event: DesktopRunEvent) => void): () => void;
 }

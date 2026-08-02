@@ -1,0 +1,85 @@
+.saved-messages {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--app-background);
+}
+
+.saved-messages-content {
+  width: min(720px, calc(100% - 56px));
+  margin: 0 auto;
+  padding: 68px 0 40px;
+}
+
+.saved-messages h1 {
+  margin: 0 0 24px;
+  color: var(--text-strong);
+  font-size: 28px;
+  letter-spacing: -0.03em;
+}
+
+.saved-empty,
+.saved-message-meta,
+.saved-message-source {
+  color: var(--text-muted);
+}
+
+.saved-message-list {
+  display: grid;
+  gap: 10px;
+}
+
+.saved-message {
+  position: relative;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+}
+
+.saved-message:hover {
+  background: var(--hover-background);
+}
+
+.saved-message-body {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 42px 14px 14px;
+  color: var(--text-primary);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.saved-message-body:not([role="button"]) {
+  cursor: default;
+}
+
+.saved-message-source,
+.saved-message-meta {
+  font-size: 11px;
+}
+
+.saved-message-text {
+  max-height: 180px;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, black calc(100% - 28px), transparent);
+}
+
+.saved-message-delete {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+}
+
+.saved-message-delete:hover {
+  color: var(--text-primary);
+  background: var(--selected-background);
+}

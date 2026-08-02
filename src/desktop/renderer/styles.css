@@ -4,4 +4,6 @@
 @import "./styles/activity.css";
 @import "./styles/composer.css";
 @import "./styles/settings.css";
+@import "./styles/saved-messages.css";
 @import "./styles/inspector.css";
+@import "./styles/json-inspector.css";

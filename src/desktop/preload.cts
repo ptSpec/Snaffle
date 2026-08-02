@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { DesktopApi, DesktopRunEvent, StartRunInput } from "./api.js";
+import type { DesktopApi, DesktopRunEvent, SaveMessageInput, StartRunInput } from "./api.js";
 
 const api: DesktopApi = {
   platform: process.platform,
@@ -23,6 +23,13 @@ const api: DesktopApi = {
   stopRun: (threadId: string) => ipcRenderer.invoke("desktop:stop-run", threadId),
   setTheme: (themeId: string) => ipcRenderer.invoke("desktop:set-theme", themeId),
   setMaxSteps: (maxSteps: number) => ipcRenderer.invoke("desktop:set-max-steps", maxSteps),
+  setProviderTimeoutMinutes: (minutes: number) =>
+    ipcRenderer.invoke("desktop:set-provider-timeout", minutes),
+  setProviderRetries: (retries: number) =>
+    ipcRenderer.invoke("desktop:set-provider-retries", retries),
+  saveMessage: (input: SaveMessageInput) => ipcRenderer.invoke("desktop:save-message", input),
+  deleteSavedMessage: (id: string) => ipcRenderer.invoke("desktop:delete-saved-message", id),
+  openSavedMessage: (id: string) => ipcRenderer.invoke("desktop:open-saved-message", id),
   openExternal: (url: string) => ipcRenderer.invoke("desktop:open-external", url),
   onRunEvent(listener: (event: DesktopRunEvent) => void): () => void {
     const receiveEvent = (_event: Electron.IpcRendererEvent, event: DesktopRunEvent) => listener(event);

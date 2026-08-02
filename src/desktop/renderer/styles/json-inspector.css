@@ -1,0 +1,107 @@
+.json-inspector {
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+}
+
+.json-inspector-mode {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.json-inspector-mode button {
+  padding: 3px 6px;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.json-inspector-mode button:hover,
+.json-inspector-mode button.active {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
+.json-inspector > pre {
+  max-height: 520px;
+  border: 0;
+  border-radius: 0;
+}
+
+.json-empty {
+  display: block;
+  padding: 9px;
+  color: var(--code-text);
+  font: 11px/1.4 var(--font-code);
+}
+
+.json-field + .json-field {
+  border-top: 1px solid var(--border-default);
+}
+
+.json-field.inline,
+.json-field > button {
+  display: grid;
+  grid-template-columns: minmax(70px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  color: var(--text-primary);
+  text-align: left;
+  background: transparent;
+  border: 0;
+}
+
+.json-field > button {
+  grid-template-columns: 10px minmax(70px, auto) minmax(0, 1fr);
+}
+
+.json-field > button:hover {
+  background: var(--hover-background);
+}
+
+.json-field strong {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.json-field code,
+.json-field small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--code-text);
+  font: 11px/1.4 var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.json-field small {
+  color: var(--text-faint);
+}
+
+.json-caret {
+  color: var(--text-faint);
+  font-size: 16px;
+  line-height: 1;
+  transition: transform 120ms ease;
+}
+
+.json-caret.open {
+  transform: rotate(90deg);
+}
+
+.json-field > pre {
+  max-height: 420px;
+  border-width: 1px 0 0;
+  border-radius: 0;
+}

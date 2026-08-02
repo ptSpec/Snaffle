@@ -8,11 +8,15 @@ import { DEFAULT_MAX_STEPS, runAgent } from "../agent-loop.js";
 import { initialMessages } from "../context.js";
 import { PRODUCT } from "../identity.js";
 import { OpenRouterProvider, listOpenRouterModels } from "../providers/openrouter.js";
+import {
+  DEFAULT_PROVIDER_RETRIES,
+  DEFAULT_PROVIDER_TIMEOUT_MS,
+} from "../providers/openai-compatible.js";
 import type { Message, RunEvent } from "../protocol.js";
 import type { Trace } from "../trace.js";
 import { defaultTools } from "../tools/default-tools.js";
 import { LocalWorkspace } from "../workspace.js";
-import type { DesktopState, StartRunInput } from "./api.js";
+import type { DesktopState, SaveMessageInput, StartRunInput } from "./api.js";
 import { openStore, type DesktopStore } from "./store.js";
 import { DEFAULT_THEME, themeById, type Theme } from "./themes/index.js";
 
@@ -28,6 +32,8 @@ const activeRuns = new Map<
 >();
 let activeTheme: Theme = DEFAULT_THEME;
 let maxSteps = DEFAULT_MAX_STEPS;
+let providerTimeoutMinutes = DEFAULT_PROVIDER_TIMEOUT_MS / 60_000;
+let providerRetries = DEFAULT_PROVIDER_RETRIES;
 const DEVELOPMENT_MODEL = "openai/gpt-5.6-luna";
 
 const memoryTrace: Trace = {
@@ -44,6 +50,8 @@ async function start(): Promise<void> {
       ? themeById(settings.themeId) ?? DEFAULT_THEME
       : DEFAULT_THEME;
   maxSteps = validMaxSteps(settings.maxSteps) ?? DEFAULT_MAX_STEPS;
+  providerTimeoutMinutes = validProviderTimeout(settings.providerTimeoutMinutes) ?? providerTimeoutMinutes;
+  providerRetries = validProviderRetries(settings.providerRetries) ?? DEFAULT_PROVIDER_RETRIES;
   store = await openStore(path.join(app.getPath("userData"), `${PRODUCT.slug}.db`));
   if (process.platform === "darwin") app.dock?.setIcon(applicationIcon());
   if (!app.isPackaged && (await store.state()).workspaces.length === 0) {
@@ -206,7 +214,12 @@ function registerIpc(): void {
 
     void runAgent({
       task: input.task,
-      provider: new OpenRouterProvider({ model: input.model, apiKey }),
+      provider: new OpenRouterProvider({
+        model: input.model,
+        apiKey,
+        streamIdleTimeoutMs: providerTimeoutMinutes * 60_000,
+        maxRetries: providerRetries,
+      }),
       tools: defaultTools(),
       workspace: new LocalWorkspace(selectedWorkspace.path, true),
       trace: memoryTrace,
@@ -253,6 +266,35 @@ function registerIpc(): void {
     saveSettings({ maxSteps });
   });
 
+  ipcMain.handle("desktop:set-provider-timeout", (_event, value: unknown): void => {
+    const next = validProviderTimeout(value);
+    if (next === undefined) throw new Error("Provider timeout must be 1 to 30 minutes");
+    providerTimeoutMinutes = next;
+    saveSettings({ providerTimeoutMinutes });
+  });
+
+  ipcMain.handle("desktop:set-provider-retries", (_event, value: unknown): void => {
+    const next = validProviderRetries(value);
+    if (next === undefined) throw new Error("Provider retries must be an integer from 0 to 10");
+    providerRetries = next;
+    saveSettings({ providerRetries });
+  });
+
+  ipcMain.handle("desktop:save-message", async (_event, value: unknown) => {
+    return store.savedMessages.save(parseSaveMessageInput(value));
+  });
+
+  ipcMain.handle("desktop:delete-saved-message", async (_event, value: unknown) => {
+    return store.savedMessages.delete(parseId(value, "Saved message"));
+  });
+
+  ipcMain.handle("desktop:open-saved-message", async (_event, value: unknown) => {
+    const source = await store.savedMessages.source(parseId(value, "Saved message"));
+    if (!source) return null;
+    await store.selectThread(source.threadId);
+    return { state: await desktopState(), entryId: source.entryId };
+  });
+
   ipcMain.handle("desktop:open-external", async (_event, rawUrl: unknown): Promise<void> => {
     if (typeof rawUrl !== "string") throw new Error("External URL must be a string");
     const url = new URL(rawUrl);
@@ -271,13 +313,16 @@ async function desktopState(): Promise<DesktopState> {
     workspace,
     workspaces: state.workspaces,
     activeThreadId: state.activeThreadId,
-    conversation: await store.messages(state.activeThreadId),
+    conversation: await store.entries(state.activeThreadId),
+    savedMessages: await store.savedMessages.list(),
     openRouterAvailable: Boolean(process.env.OPENROUTER_API_KEY),
     runningThreadIds: [...activeRuns.keys()],
     defaultModel: app.isPackaged ? null : DEVELOPMENT_MODEL,
     unsafeHostDefault: !app.isPackaged,
     themeId: activeTheme.id,
     maxSteps,
+    providerTimeoutMinutes,
+    providerRetries,
   };
 }
 
@@ -288,6 +333,8 @@ function settingsPath(): string {
 type SavedSettings = {
   themeId?: unknown;
   maxSteps?: unknown;
+  providerTimeoutMinutes?: unknown;
+  providerRetries?: unknown;
 };
 
 function loadSettings(): SavedSettings {
@@ -303,7 +350,12 @@ function loadSettings(): SavedSettings {
   }
 }
 
-function saveSettings(update: { themeId?: string; maxSteps?: number }): void {
+function saveSettings(update: {
+  themeId?: string;
+  maxSteps?: number;
+  providerTimeoutMinutes?: number;
+  providerRetries?: number;
+}): void {
   const file = settingsPath();
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify({ ...loadSettings(), ...update }, null, 2)}\n`);
@@ -311,6 +363,18 @@ function saveSettings(update: { themeId?: string; maxSteps?: number }): void {
 
 function validMaxSteps(value: unknown): number | undefined {
   return Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 200
+    ? Number(value)
+    : undefined;
+}
+
+function validProviderTimeout(value: unknown): number | undefined {
+  return Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 30
+    ? Number(value)
+    : undefined;
+}
+
+function validProviderRetries(value: unknown): number | undefined {
+  return Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 10
     ? Number(value)
     : undefined;
 }
@@ -334,6 +398,23 @@ function parseStartRunInput(input: unknown): StartRunInput {
   const threadId = typeof value.threadId === "string" ? value.threadId : "";
   if (!threadId) throw new Error("Choose a thread before starting a run");
   return { threadId, task, model, unsafeHostExecution: value.unsafeHostExecution };
+}
+
+function parseSaveMessageInput(input: unknown): SaveMessageInput {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error("Saved message input must be an object");
+  }
+  const value = input as Record<string, unknown>;
+  if (!Number.isInteger(value.sequence) || Number(value.sequence) < 0) {
+    throw new Error("Invalid message sequence");
+  }
+  if (typeof value.text !== "string" || !value.text.trim()) throw new Error("Message is empty");
+  return {
+    threadId: parseId(value.threadId, "Thread"),
+    sequence: Number(value.sequence),
+    text: value.text,
+    ...(typeof value.model === "string" ? { model: value.model } : {}),
+  };
 }
 
 function parseId(value: unknown, label: string): string {

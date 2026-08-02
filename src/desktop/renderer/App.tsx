@@ -7,10 +7,11 @@ import {
   type FormEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import type { DesktopApi, DesktopRunEvent, DesktopState } from "../api.js";
+import type { DesktopApi, DesktopRunEvent, DesktopState, SavedMessage } from "../api.js";
 import type { OpenRouterModel } from "../../providers/openrouter.js";
 import { DEFAULT_THEME, themeById, type Theme } from "../themes/index.js";
 import { Settings } from "./settings.js";
+import { SavedMessages } from "./saved-messages.js";
 import { Sidebar, type AppView, type SettingsPage } from "./sidebar.js";
 import {
   addRunEvent,
@@ -18,7 +19,8 @@ import {
   Inspector,
   newTimelineId,
   TimelineEntry,
-  timelineFromMessages,
+  timelineFromEntries,
+  type SaveableTimelineItem,
   type TimelineItem,
 } from "./timeline.js";
 
@@ -33,12 +35,15 @@ const initialState: DesktopState = {
   workspaces: [],
   activeThreadId: null,
   conversation: [],
+  savedMessages: [],
   openRouterAvailable: false,
   runningThreadIds: [],
   defaultModel: null,
   unsafeHostDefault: false,
   themeId: document.documentElement.dataset.theme ?? DEFAULT_THEME.id,
   maxSteps: 50,
+  providerTimeoutMinutes: 3,
+  providerRetries: 2,
 };
 
 export function App(): JSX.Element {
@@ -134,7 +139,7 @@ export function App(): JSX.Element {
       .then((state) => {
         activeThreadId.current = state.activeThreadId;
         setDesktopState(state);
-        const initialTimeline = timelineFromMessages(state.conversation);
+        const initialTimeline = timelineFromEntries(state.conversation);
         if (state.activeThreadId) threadTimelines.current.set(state.activeThreadId, initialTimeline);
         setTimeline(initialTimeline);
         setTask(activeDraft(state));
@@ -161,7 +166,7 @@ export function App(): JSX.Element {
     [selectedItemId, timeline],
   );
   const visibleLeftWidth = leftCollapsed ? 0 : leftWidth;
-  const visibleRightWidth = view === "settings" || rightCollapsed ? 0 : rightWidth;
+  const visibleRightWidth = view !== "conversation" || rightCollapsed ? 0 : rightWidth;
   const runBlocker = !desktopState.workspace
     ? "Open a workspace before sending."
     : !task.trim()
@@ -204,7 +209,15 @@ export function App(): JSX.Element {
 
     followTimeline.current = true;
     setTimeline((items) => {
-      const next = [...items, { id: newTimelineId(), kind: "user" as const, text: request.task }];
+      const next = [
+        ...items,
+        {
+          id: newTimelineId(),
+          kind: "user" as const,
+          text: request.task,
+          sequence: nextMessageSequence(items),
+        },
+      ];
       threadTimelines.current.set(request.threadId, next);
       return next;
     });
@@ -244,7 +257,7 @@ export function App(): JSX.Element {
     const storedTimeline = state.activeThreadId
       ? threadTimelines.current.get(state.activeThreadId)
       : undefined;
-    const nextTimeline = storedTimeline ?? timelineFromMessages(state.conversation);
+    const nextTimeline = storedTimeline ?? timelineFromEntries(state.conversation);
     if (state.activeThreadId && !storedTimeline) {
       threadTimelines.current.set(state.activeThreadId, nextTimeline);
     }
@@ -258,6 +271,74 @@ export function App(): JSX.Element {
   async function saveDraft(): Promise<void> {
     if (desktopState.activeThreadId) {
       await window.desktop.setThreadDraft(desktopState.activeThreadId, task);
+    }
+  }
+
+  function savedIdFor(item: SaveableTimelineItem): string | undefined {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId || item.sequence === undefined) return undefined;
+    return desktopState.savedMessages.find(
+      (saved) =>
+        (item.entryId ? saved.sourceEntryId === item.entryId : false) ||
+        (saved.sourceThreadId === threadId &&
+          saved.sourceSequence === item.sequence &&
+          saved.text === item.text),
+    )?.id;
+  }
+
+  async function toggleSavedMessage(item: SaveableTimelineItem, savedId?: string): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId || item.sequence === undefined) return;
+    try {
+      const savedMessages = savedId
+        ? await window.desktop.deleteSavedMessage(savedId)
+        : await window.desktop.saveMessage({
+            threadId,
+            sequence: item.sequence,
+            text: item.text,
+            ...(item.kind === "assistant" && item.model ? { model: item.model } : {}),
+          });
+      setDesktopState((state) => ({ ...state, savedMessages }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function openSavedMessage(message: SavedMessage): Promise<void> {
+    if (!message.sourceAvailable) return;
+    try {
+      await saveDraft();
+      const source = await window.desktop.openSavedMessage(message.id);
+      if (!source) {
+        setDesktopState((state) => ({
+          ...state,
+          savedMessages: state.savedMessages.map((saved) =>
+            saved.id === message.id ? { ...saved, sourceAvailable: false } : saved,
+          ),
+        }));
+        return;
+      }
+      if (source.state.activeThreadId) threadTimelines.current.delete(source.state.activeThreadId);
+      showDesktopState(source.state);
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          timelineView.current
+            ?.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(source.entryId)}"]`)
+            ?.scrollIntoView({ block: "center" });
+        });
+      });
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function deleteSavedMessage(id: string): Promise<void> {
+    try {
+      const savedMessages = await window.desktop.deleteSavedMessage(id);
+      setDesktopState((state) => ({ ...state, savedMessages }));
+    } catch (cause) {
+      setError(errorMessage(cause));
     }
   }
 
@@ -279,6 +360,26 @@ export function App(): JSX.Element {
     try {
       await window.desktop.setMaxSteps(maxSteps);
       setDesktopState((state) => ({ ...state, maxSteps }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function setProviderTimeoutMinutes(providerTimeoutMinutes: number): Promise<void> {
+    try {
+      await window.desktop.setProviderTimeoutMinutes(providerTimeoutMinutes);
+      setDesktopState((state) => ({ ...state, providerTimeoutMinutes }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function setProviderRetries(providerRetries: number): Promise<void> {
+    try {
+      await window.desktop.setProviderRetries(providerRetries);
+      setDesktopState((state) => ({ ...state, providerRetries }));
       setError(null);
     } catch (cause) {
       setError(errorMessage(cause));
@@ -344,9 +445,19 @@ export function App(): JSX.Element {
             page={settingsPage}
             themeId={desktopState.themeId}
             maxSteps={desktopState.maxSteps}
+            providerTimeoutMinutes={desktopState.providerTimeoutMinutes}
+            providerRetries={desktopState.providerRetries}
             error={error}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
             onMaxSteps={(maxSteps) => void setMaxSteps(maxSteps)}
+            onProviderTimeoutMinutes={(minutes) => void setProviderTimeoutMinutes(minutes)}
+            onProviderRetries={(retries) => void setProviderRetries(retries)}
+          />
+        ) : view === "saved" ? (
+          <SavedMessages
+            messages={desktopState.savedMessages}
+            onOpen={(message) => void openSavedMessage(message)}
+            onDelete={(id) => void deleteSavedMessage(id)}
           />
         ) : (
           <section className="conversation view-enter" aria-label="Conversation">
@@ -365,6 +476,12 @@ export function App(): JSX.Element {
                 item={item}
                 selectedId={selectedItemId}
                 onSelect={setSelectedItemId}
+                savedId={
+                  item.kind === "assistant"
+                    ? savedIdFor(item)
+                    : undefined
+                }
+                onToggleSaved={(message, savedId) => void toggleSavedMessage(message, savedId)}
                 onEditUser={(text) => {
                   setTask(text);
                   window.requestAnimationFrame(() => {
@@ -487,9 +604,9 @@ export function App(): JSX.Element {
         )}
 
         <aside
-          className={view === "settings" || rightCollapsed ? "inspector collapsed" : "inspector"}
+          className={view !== "conversation" || rightCollapsed ? "inspector collapsed" : "inspector"}
           aria-label="Inspector"
-          aria-hidden={view === "settings" || rightCollapsed}
+          aria-hidden={view !== "conversation" || rightCollapsed}
         >
           <div className="section-heading">
             <h2>Inspector</h2>
@@ -528,7 +645,7 @@ export function App(): JSX.Element {
             onPointerDown={(event) => beginResize("left", event)}
           />
         )}
-        {view === "settings" ? null : rightCollapsed ? (
+        {view !== "conversation" ? null : rightCollapsed ? (
           <button
             className="panel-reopen right"
             type="button"
@@ -571,6 +688,16 @@ function mergeStreamEvent(previous: DesktopRunEvent, next: DesktopRunEvent): boo
     previous.event.text += next.event.text;
     return true;
   }
+  if (
+    previous.event.type === "model.tool.delta" &&
+    next.event.type === "model.tool.delta" &&
+    previous.event.step === next.event.step &&
+    previous.event.index === next.event.index
+  ) {
+    previous.event.name = next.event.name;
+    previous.event.argumentChars = next.event.argumentChars;
+    return true;
+  }
   return false;
 }
 
@@ -588,4 +715,16 @@ function errorMessage(cause: unknown): string {
 
 function activeDraft(state: DesktopState): string {
   return state.workspace?.threads.find((thread) => thread.id === state.activeThreadId)?.draft ?? "";
+}
+
+function nextMessageSequence(items: TimelineItem[]): number {
+  let highest = 0;
+  for (const item of items) {
+    if (item.kind === "activity-group") {
+      highest = Math.max(highest, nextMessageSequence(item.items) - 1);
+    } else if ("sequence" in item && item.sequence !== undefined) {
+      highest = Math.max(highest, item.sequence);
+    }
+  }
+  return highest + 1;
 }

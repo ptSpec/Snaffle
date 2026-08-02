@@ -150,7 +150,7 @@ test("OpenAI-compatible provider streams text and assembles tool calls", async (
 
   assert.deepEqual(events, [
     { type: "text.delta", text: "Discard this partial answer." },
-    { type: "tool.delta", index: 0, name: "run_command" },
+    { type: "tool.delta", index: 0, name: "run_command", argumentChars: 4 },
     {
       type: "retry",
       attempt: 1,
@@ -161,7 +161,7 @@ test("OpenAI-compatible provider streams text and assembles tool calls", async (
     { type: "text.delta", text: "Checking " },
     { type: "reasoning.delta", text: "I should inspect the manifest. " },
     { type: "text.delta", text: "now." },
-    { type: "tool.delta", index: 0, name: "read_file" },
+    { type: "tool.delta", index: 0, name: "read_file", argumentChars: 8 },
   ]);
   assert.equal(result.text, "Checking now.");
   assert.equal(result.reasoning, "I should inspect the manifest. ");

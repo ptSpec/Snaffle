@@ -3,40 +3,66 @@ import { objectInput, stringField, type Tool } from "./tool.js";
 export const editTool: Tool = {
   name: "edit_file",
   description:
-    'Replace one small exact snippet copied from the current file. Example: oldText "count = count + 1", newText "count += 1". Never send the whole file as oldText.',
+    'Apply one or more exact replacements to one file, in order. Example: {"path":"src/app.ts","edits":[{"oldText":"count = count + 1","newText":"count += 1"},{"oldText":"save()","newText":"await save()"}]}. Use one array item for a single edit. If multiple edits fail, retry one item at a time. Never send the whole file as oldText.',
   inputSchema: {
     type: "object",
     properties: {
       path: { type: "string", description: "Required. Workspace-relative file path." },
-      oldText: {
-        type: "string",
-        description: "Required. Small exact snippet copied from a recent read_file result. Whitespace matters and it must occur once.",
+      edits: {
+        type: "array",
+        minItems: 1,
+        description: "Required. One or more exact replacements, applied in array order.",
+        items: {
+          type: "object",
+          properties: {
+            oldText: {
+              type: "string",
+              description: "Required. Small exact snippet copied from read_file. It must occur once.",
+            },
+            newText: {
+              type: "string",
+              description: "Required. Replacement text; an empty string deletes oldText.",
+            },
+          },
+          required: ["oldText", "newText"],
+          additionalProperties: false,
+        },
       },
-      newText: { type: "string", description: "Required. Replacement text; an empty string deletes oldText." },
     },
-    required: ["path", "oldText", "newText"],
+    required: ["path", "edits"],
     additionalProperties: false,
   },
   async execute(workspace, rawInput) {
     const input = objectInput(rawInput);
     const filePath = stringField(input, "path") as string;
-    const oldText = stringField(input, "oldText") as string;
-    const newText = stringField(input, "newText", { allowEmpty: true }) as string;
-    const content = await workspace.read(filePath);
-    const occurrences = countOccurrences(content, oldText);
-
-    if (occurrences === 0) {
-      throw new Error(
-        "oldText was not found. Read the file again and retry with a smaller exact snippet copied from its current contents.",
-      );
+    if (!Array.isArray(input.edits) || input.edits.length === 0) {
+      throw new Error("edits must be a non-empty array");
     }
 
-    if (occurrences > 1) {
-      throw new Error(`oldText found ${occurrences} times. Include more surrounding text so it identifies one location.`);
+    let content = await workspace.read(filePath);
+    for (const [index, rawEdit] of input.edits.entries()) {
+      const edit = objectInput(rawEdit);
+      const oldText = stringField(edit, "oldText") as string;
+      const newText = stringField(edit, "newText", { allowEmpty: true }) as string;
+      const occurrences = countOccurrences(content, oldText);
+
+      if (occurrences === 0) {
+        throw new Error(
+          `Edit ${index + 1}: oldText was not found. Read the file again and retry with a smaller exact snippet. If needed, send one edit in the edits array at a time.`,
+        );
+      }
+
+      if (occurrences > 1) {
+        throw new Error(
+          `Edit ${index + 1}: oldText found ${occurrences} times. Include more surrounding text so it identifies one location. If needed, send one edit in the edits array at a time.`,
+        );
+      }
+
+      content = content.replace(oldText, newText);
     }
 
-    await workspace.write(filePath, content.replace(oldText, newText));
-    return { content: `Updated ${filePath}.` };
+    await workspace.write(filePath, content);
+    return { content: `Updated ${filePath} with ${input.edits.length} edit(s).` };
   },
 };
 

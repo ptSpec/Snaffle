@@ -56,13 +56,7 @@
   background: var(--hover-background);
 }
 
-.icon-button.add-workspace {
-  width: 22px;
-  height: 22px;
-}
-
-.add-workspace svg,
-.new-thread-button svg {
+.workspace-create-button svg {
   width: 13px;
   height: 13px;
   stroke: currentColor;
@@ -158,22 +152,37 @@
   background: var(--selected-background);
 }
 
-.new-thread-button {
+.workspace-create-actions {
   display: flex;
+  align-items: stretch;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 2px 10px;
+}
+
+.workspace-create-button {
+  display: flex;
+  min-width: 0;
   align-items: center;
-  align-self: flex-start;
-  gap: 6px;
-  margin: 5px 0 2px 14px;
-  padding: 5px 7px;
-  color: var(--accent);
+  gap: 4px;
+  padding: 5px 6px;
   background: transparent;
   border: 0;
   border-radius: 5px;
   font-size: 12px;
+  white-space: nowrap;
 }
 
-.new-thread-button:hover {
+.workspace-create-button:hover {
   background: var(--hover-background);
+}
+
+.workspace-create-button.primary {
+  color: var(--text-strong);
+}
+
+.workspace-create-button.secondary {
+  color: var(--text-faint);
 }
 
 .row-action svg {
@@ -238,9 +247,9 @@
 }
 
 .thread-list {
-  margin-left: 14px;
-  padding-left: 7px;
-  border-left: 1px solid var(--border-default);
+  margin-left: 6px;
+  padding-left: 4px;
+  border-left: 1px solid color-mix(in srgb, var(--text-faint) 55%, var(--border-default));
 }
 
 .thread-row {
@@ -258,13 +267,42 @@
   width: 8px;
   height: 1px;
   content: "";
-  background: var(--border-default);
+  background: color-mix(in srgb, var(--text-faint) 55%, var(--border-default));
+}
+
+.thread-row:hover::after {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 0;
+  width: 50px;
+  height: 100%;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--composer-background) 28%);
+  border-radius: 0 6px 6px 0;
 }
 
 .thread-item {
   display: grid;
-  padding: 6px 8px;
-  font-size: 13px;
+  padding: 7px 5px;
+  font-size: 13.5px;
+}
+
+.thread-row > .row-action {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  background: var(--composer-background);
+  transform: translateY(-50%);
+}
+
+.thread-row > .row-action:nth-last-child(2) {
+  right: 23px;
+}
+
+.thread-row > .row-action:last-child {
+  right: 2px;
 }
 
 .thread-item small {
@@ -359,6 +397,14 @@
 
 .sidebar-action {
   color: var(--text-muted);
+}
+
+.sidebar-action-icon {
+  flex: 0 0 12px;
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-linejoin: round;
 }
 
 .sidebar-action:hover,

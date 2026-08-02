@@ -20,14 +20,19 @@ test("the five explicit file and command tools work together", async (t) => {
   const { root, workspace } = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));
 
-  await writeTool.execute(workspace, { path: "src/example.ts", content: "const value = 1;\n" });
+  await writeTool.execute(workspace, {
+    path: "src/example.ts",
+    content: "const value = 1;\nconst ready = false;\n",
+  });
   const read = await readTool.execute(workspace, { path: "src/example.ts" });
   assert.match(read.content, /const value = 1/);
 
   await editTool.execute(workspace, {
     path: "src/example.ts",
-    oldText: "value = 1",
-    newText: "value = 2",
+    edits: [
+      { oldText: "value = 1", newText: "value = 2" },
+      { oldText: "ready = false", newText: "ready = true" },
+    ],
   });
 
   const matches = await searchTool.execute(workspace, { query: "value = 2" });
@@ -47,7 +52,10 @@ test("the five explicit file and command tools work together", async (t) => {
   assert.match(command.content, /exit code: 0/);
   assert.match(command.content, /ok/);
   assert.equal(command.exitCode, 0);
-  assert.equal(await readFile(path.join(root, "src/example.ts"), "utf8"), "const value = 2;\n");
+  assert.equal(
+    await readFile(path.join(root, "src/example.ts"), "utf8"),
+    "const value = 2;\nconst ready = true;\n",
+  );
 });
 
 test("run command reports a nonzero exit separately from tool failure", async (t) => {
@@ -88,16 +96,19 @@ test("tool input healer repairs a quoted object with a malformed integer", () =>
 test("edit rejects ambiguous text", async (t) => {
   const { root, workspace } = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));
-  await writeFile(path.join(root, "duplicate.txt"), "same\nsame\n");
+  await writeFile(path.join(root, "duplicate.txt"), "first\nsame\nsame\n");
 
   await assert.rejects(
     editTool.execute(workspace, {
       path: "duplicate.txt",
-      oldText: "same",
-      newText: "different",
+      edits: [
+        { oldText: "first", newText: "changed" },
+        { oldText: "same", newText: "different" },
+      ],
     }),
-    /found 2/,
+    /Edit 2.*found 2.*one edit/,
   );
+  assert.equal(await readFile(path.join(root, "duplicate.txt"), "utf8"), "first\nsame\nsame\n");
 });
 
 test("workspace rejects paths outside its root", async (t) => {

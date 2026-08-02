@@ -14,6 +14,11 @@ export const writeTool: Tool = {
   },
   async execute(workspace, rawInput) {
     const input = objectInput(rawInput);
+    if (input.path === undefined) {
+      throw new Error(
+        'Required field "path" is missing. Retry write_file with {"path":"workspace-relative/path","content":"..."}.',
+      );
+    }
     const filePath = stringField(input, "path") as string;
     const content = stringField(input, "content", { allowEmpty: true }) as string;
 
