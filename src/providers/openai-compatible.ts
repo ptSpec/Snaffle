@@ -1,5 +1,9 @@
 import type { Message, ModelResponse, ToolCall, ToolSpec } from "../protocol.js";
-import type { ModelProvider } from "./provider.js";
+import { healToolInput } from "../tool-input.js";
+import type { ModelProvider, ModelStreamEvent } from "./provider.js";
+
+const MAX_STREAM_BUFFER_CHARS = 8 * 1024 * 1024;
+const MAX_STREAM_FIELD_CHARS = 4 * 1024 * 1024;
 
 export type OpenAICompatibleOptions = {
   baseUrl: string;
@@ -22,52 +26,128 @@ export class OpenAICompatibleProvider implements ModelProvider {
     messages: Message[],
     tools: ToolSpec[],
     signal: AbortSignal,
-    onText?: (text: string) => void | Promise<void>,
+    onEvent?: (event: ModelStreamEvent) => void | Promise<void>,
   ): Promise<ModelResponse> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        model: this.model,
-        messages: messages.map(toOpenAIMessage),
-        tools: tools.map((tool) => ({
-          type: "function",
-          function: {
-            name: tool.name,
-            description: tool.description,
-            parameters: tool.inputSchema,
+    const maxRetries = 2;
+    let requestMessages = messages;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      let status: number | undefined;
+      let emptyResponse = false;
+
+      try {
+        const response = await fetch(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {}),
           },
-        })),
-        stream: true,
-      }),
-      signal,
-    });
+          body: JSON.stringify({
+            model: this.model,
+            messages: requestMessages.map(toOpenAIMessage),
+            tools: tools.map((tool) => ({
+              type: "function",
+              function: {
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.inputSchema,
+              },
+            })),
+            parallel_tool_calls: false,
+            stream: true,
+          }),
+          signal,
+        });
+        status = response.status;
 
-    if (!response.ok) {
-      const body = (await response.text()).slice(0, 1000);
-      throw new Error(`Provider request failed (${response.status}): ${body}`);
+        if (!response.ok) {
+          const body = (await response.text()).slice(0, 1000);
+          throw new Error(`Provider request failed (${response.status}): ${body}`);
+        }
+
+        const result = response.headers.get("content-type")?.includes("text/event-stream")
+          ? await parseStream(requiredBody(response), onEvent)
+          : parseResponse(await response.json());
+
+        if (result.text.trim() || result.toolCalls.length) return result;
+        emptyResponse = true;
+        throw new Error("Model returned neither a final answer nor a tool call.");
+      } catch (error) {
+        if (signal.aborted || isAuthFailure(status)) throw error;
+        if (attempt === maxRetries) {
+          if (emptyResponse) {
+            throw new Error(`Model returned an empty final response after ${maxRetries + 1} attempts`);
+          }
+          const message = error instanceof Error ? error.message : String(error);
+          throw new Error(`${message} after ${maxRetries + 1} attempts`);
+        }
+
+        const nextAttempt = attempt + 1;
+        const message = error instanceof Error ? error.message : String(error);
+        await onEvent?.({ type: "retry", attempt: nextAttempt, maxRetries, message });
+        requestMessages = addRetryReminder(messages, message);
+        await retryDelay(250 * nextAttempt, signal);
+      }
     }
 
-    if (!response.headers.get("content-type")?.includes("text/event-stream")) {
-      return parseResponse(await response.json());
-    }
-    if (!response.body) throw new Error("Provider returned an empty stream");
-    return parseStream(response.body, onText);
+    throw new Error("Provider retry loop ended unexpectedly");
   }
+}
+
+function requiredBody(response: Response): ReadableStream<Uint8Array> {
+  if (!response.body) throw new Error("Provider returned an empty stream");
+  return response.body;
+}
+
+function isAuthFailure(status: number | undefined): boolean {
+  return status === 401 || status === 402 || status === 403;
+}
+
+function addRetryReminder(messages: Message[], failure: string): Message[] {
+  const notice =
+    `Esch retry notice, not a new user request: The last model generation was rejected before Esch received it. ` +
+    `The original task is unchanged and completed tool calls remain completed; do not repeat them. ` +
+    `Provider error: ${failure.slice(0, 2000)} Generate only the next response again. ` +
+    `If using a tool, call exactly one and send its arguments as one JSON object matching its schema. ` +
+    `Do not mention this retry notice.`;
+  const systemIndex = messages.findIndex((message) => message.role === "system");
+  if (systemIndex === -1) return [{ role: "system", content: notice }, ...messages];
+  return messages.map((message, index) =>
+    index === systemIndex && message.role === "system"
+      ? { ...message, content: `${message.content}\n\n${notice}` }
+      : message,
+  );
+}
+
+function retryDelay(milliseconds: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(done, milliseconds);
+
+    function done(): void {
+      signal.removeEventListener("abort", aborted);
+      resolve();
+    }
+
+    function aborted(): void {
+      clearTimeout(timeout);
+      reject(signal.reason ?? new Error("Aborted"));
+    }
+
+    signal.addEventListener("abort", aborted, { once: true });
+    if (signal.aborted) aborted();
+  });
 }
 
 async function parseStream(
   body: ReadableStream<Uint8Array>,
-  onText?: (text: string) => void | Promise<void>,
+  onEvent?: (event: ModelStreamEvent) => void | Promise<void>,
 ): Promise<ModelResponse> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   const calls = new Map<number, { id: string; name: string; arguments: string }>();
   let buffer = "";
   let text = "";
+  let reasoning = "";
   let finishReason: string | undefined;
   let usage: UsageResponse | undefined;
   let finished = false;
@@ -76,6 +156,9 @@ async function parseStream(
     const chunk = await reader.read();
     if (chunk.done) break;
     buffer += decoder.decode(chunk.value, { stream: true });
+    if (buffer.length > MAX_STREAM_BUFFER_CHARS) {
+      throw new Error("Provider stream contained an oversized event");
+    }
 
     let newline = buffer.indexOf("\n");
     while (newline !== -1) {
@@ -91,22 +174,48 @@ async function parseStream(
       }
 
       const event = JSON.parse(data) as OpenAIStreamChunk;
+      if (event.error) {
+        const code = event.error.code === undefined ? "" : ` (${event.error.code})`;
+        const diagnostics = streamDiagnostics(event.error.metadata, calls);
+        throw new Error(
+          `Provider stream failed${code}: ${event.error.message ?? "Unknown provider error"}` +
+            (diagnostics ? `\nProvider diagnostics: ${diagnostics}` : ""),
+        );
+      }
       const choice = event.choices?.[0];
       const delta = choice?.delta;
       if (typeof choice?.finish_reason === "string") finishReason = choice.finish_reason;
       if (event.usage) usage = event.usage;
 
       if (typeof delta?.content === "string" && delta.content) {
-        text += delta.content;
-        await onText?.(delta.content);
+        text = appendStreamText(text, delta.content, "response text");
+        await onEvent?.({ type: "text.delta", text: delta.content });
+      }
+
+      const reasoningDelta = reasoningText(delta ?? {});
+      if (reasoningDelta) {
+        reasoning = appendStreamText(reasoning, reasoningDelta, "reasoning");
+        await onEvent?.({ type: "reasoning.delta", text: reasoningDelta });
       }
 
       for (const call of delta?.tool_calls ?? []) {
         const current = calls.get(call.index) ?? { id: "", name: "", arguments: "" };
+        const previousName = current.name;
         if (call.id) current.id = call.id;
-        if (call.function?.name) current.name += call.function.name;
-        if (call.function?.arguments) current.arguments += call.function.arguments;
+        if (call.function?.name) {
+          current.name = appendStreamText(current.name, call.function.name, "tool name");
+        }
+        if (call.function?.arguments) {
+          current.arguments = appendStreamText(
+            current.arguments,
+            call.function.arguments,
+            "tool arguments",
+          );
+        }
         calls.set(call.index, current);
+        if (current.name && current.name !== previousName) {
+          await onEvent?.({ type: "tool.delta", index: call.index, name: current.name });
+        }
       }
     }
   }
@@ -122,10 +231,18 @@ async function parseStream(
 
   return {
     text,
+    ...(reasoning ? { reasoning } : {}),
     toolCalls,
     ...(finishReason === undefined ? {} : { finishReason }),
     ...(usage === undefined ? {} : { usage: parseUsage(usage) }),
   };
+}
+
+function appendStreamText(current: string, delta: string, label: string): string {
+  if (current.length + delta.length > MAX_STREAM_FIELD_CHARS) {
+    throw new Error(`Provider stream exceeded the ${MAX_STREAM_FIELD_CHARS}-character ${label} limit`);
+  }
+  return current + delta;
 }
 
 function toOpenAIMessage(message: Message): Record<string, unknown> {
@@ -133,7 +250,9 @@ function toOpenAIMessage(message: Message): Record<string, unknown> {
     return {
       role: "tool",
       tool_call_id: message.toolCallId,
-      content: message.content,
+      content: message.inputRepair
+        ? `${message.content}\n\n[Esch corrected your previous tool input: ${message.inputRepair}. Next time, send the corrected form directly.]`
+        : message.content,
     };
   }
 
@@ -141,6 +260,7 @@ function toOpenAIMessage(message: Message): Record<string, unknown> {
     return {
       role: "assistant",
       content: message.content || null,
+      ...(message.reasoning ? { reasoning: message.reasoning } : {}),
       tool_calls: message.toolCalls.map((call) => ({
         id: call.id,
         type: "function",
@@ -161,9 +281,11 @@ function parseResponse(input: unknown): ModelResponse {
 
   const toolCalls = (message.tool_calls ?? []).map(parseToolCall);
   const usage = body.usage ? parseUsage(body.usage) : undefined;
+  const reasoning = reasoningText(message);
 
   return {
     text: typeof message.content === "string" ? message.content : "",
+    ...(reasoning ? { reasoning } : {}),
     toolCalls,
     ...(choice.finish_reason === undefined ? {} : { finishReason: choice.finish_reason }),
     ...(usage === undefined ? {} : { usage }),
@@ -179,15 +301,13 @@ function parseUsage(usage: UsageResponse): NonNullable<ModelResponse["usage"]> {
 }
 
 function parseToolCall(input: OpenAIToolCall): ToolCall {
-  let parsedInput: unknown = input.function.arguments;
-
-  try {
-    parsedInput = JSON.parse(input.function.arguments);
-  } catch {
-    // The tool validator will return one clear input error to the model.
-  }
-
-  return { id: input.id, name: input.function.name, input: parsedInput };
+  const parsed = healToolInput(input.function.arguments);
+  return {
+    id: input.id,
+    name: input.function.name,
+    input: parsed.input,
+    ...(parsed.repair ? { inputRepair: parsed.repair } : {}),
+  };
 }
 
 type OpenAIResponse = {
@@ -195,6 +315,9 @@ type OpenAIResponse = {
     finish_reason?: string;
     message?: {
       content?: string | null;
+      reasoning?: string | null;
+      reasoning_content?: string | null;
+      reasoning_details?: ReasoningDetail[];
       tool_calls?: OpenAIToolCall[];
     };
   }>;
@@ -202,10 +325,14 @@ type OpenAIResponse = {
 };
 
 type OpenAIStreamChunk = {
+  error?: { code?: string | number; message?: string; metadata?: unknown };
   choices?: Array<{
     finish_reason?: string | null;
     delta?: {
       content?: string | null;
+      reasoning?: string | null;
+      reasoning_content?: string | null;
+      reasoning_details?: ReasoningDetail[];
       tool_calls?: Array<{
         index: number;
         id?: string;
@@ -229,3 +356,45 @@ type OpenAIToolCall = {
     arguments: string;
   };
 };
+
+type ReasoningDetail = {
+  text?: string;
+  summary?: string;
+};
+
+function reasoningText(value: {
+  reasoning?: string | null;
+  reasoning_content?: string | null;
+  reasoning_details?: ReasoningDetail[];
+}): string {
+  const direct = value.reasoning ?? value.reasoning_content;
+  if (direct && direct !== "[REDACTED]") return direct;
+  return (value.reasoning_details ?? [])
+    .map((detail) => detail.text ?? detail.summary ?? "")
+    .filter((text) => text && text !== "[REDACTED]")
+    .join("");
+}
+
+function streamDiagnostics(
+  metadata: unknown,
+  calls: Map<number, { id: string; name: string; arguments: string }>,
+): string {
+  const details: string[] = [];
+  if (metadata !== undefined) details.push(boundedJson(metadata));
+
+  const partialCalls = [...calls.values()]
+    .filter((call) => call.name || call.arguments)
+    .map((call) => ({ name: call.name, arguments: call.arguments }));
+  if (partialCalls.length) details.push(`partial tool call: ${boundedJson(partialCalls)}`);
+  return details.join("; ");
+}
+
+function boundedJson(value: unknown): string {
+  let text: string;
+  try {
+    text = JSON.stringify(value);
+  } catch {
+    text = String(value);
+  }
+  return text.length > 1600 ? `${text.slice(0, 1600)}…` : text;
+}

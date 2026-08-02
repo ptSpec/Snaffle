@@ -6,9 +6,9 @@ export const readTool: Tool = {
   inputSchema: {
     type: "object",
     properties: {
-      path: { type: "string", description: "Workspace-relative file path" },
-      startLine: { type: "integer", minimum: 1 },
-      lineCount: { type: "integer", minimum: 1, maximum: 1000 },
+      path: { type: "string", description: "Required. Workspace-relative file path." },
+      startLine: { type: "integer", description: "Optional. First line to return; defaults to 1.", minimum: 1 },
+      lineCount: { type: "integer", description: "Optional. Maximum lines to return; defaults to 200.", minimum: 1, maximum: 1000 },
     },
     required: ["path"],
     additionalProperties: false,

@@ -1,0 +1,160 @@
+.reasoning-block,
+.activity-group,
+.activity-row,
+.tool-row {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.tool-row {
+  display: flex;
+  align-items: center;
+  width: fit-content;
+  gap: 7px;
+  padding: 2px 3px;
+  color: var(--text-muted);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+}
+
+.tool-row:hover,
+.tool-row.selected {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
+.tool-row strong {
+  color: inherit;
+  font-weight: 550;
+}
+
+.tool-row span {
+  color: var(--text-faint);
+}
+
+.tool-healed {
+  padding: 1px 4px;
+  color: var(--status-success-text) !important;
+  background: color-mix(in srgb, var(--status-success-text) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-success-text) 42%, transparent);
+  border-radius: 4px;
+  box-shadow: 0 0 7px color-mix(in srgb, var(--status-success-text) 18%, transparent);
+  font-size: 10px !important;
+}
+
+.tool-row.tool-error {
+  color: var(--status-danger-text);
+}
+
+.tool-row.command-error {
+  color: var(--status-warning-text);
+}
+
+.tool-row-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  stroke: currentColor;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.reasoning-block summary,
+.activity-group summary,
+.activity-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.retry-row {
+  width: fit-content;
+}
+
+.reasoning-block summary,
+.activity-group summary {
+  width: fit-content;
+  cursor: pointer;
+  list-style: none;
+}
+
+.reasoning-block summary::-webkit-details-marker,
+.activity-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.reasoning-block summary::before,
+.activity-group summary::before {
+  content: "›";
+  transform-origin: center;
+  transition: transform 120ms ease;
+}
+
+.reasoning-block[open] > summary::before,
+.activity-group[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.activity-group-body {
+  margin: 7px 0 4px 15px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border-default);
+}
+
+.activity-group-body .message,
+.activity-group-body .reasoning-block,
+.activity-group-body .activity-row,
+.activity-group-body .tool-row {
+  margin-bottom: 5px;
+}
+
+.reasoning-text {
+  max-height: 260px;
+  margin: 7px 0 0 15px;
+  padding-left: 10px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  border-left: 1px solid var(--border-default);
+  line-height: 1.45;
+}
+
+.activity-spinner {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  background: currentColor;
+  border-radius: 50%;
+  animation: activity-pulse 900ms ease-in-out infinite;
+}
+
+@keyframes activity-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.inspector-status.running {
+  color: var(--status-info-text);
+  background: var(--status-info-background);
+}
+
+.inspector-status.success {
+  color: var(--status-success-text);
+  background: var(--status-success-background);
+}
+
+.inspector-status.tool-error {
+  color: var(--status-danger-text);
+  background: var(--status-danger-background);
+}
+
+.inspector-status.command-error {
+  color: var(--status-warning-text);
+  background: var(--status-warning-background);
+}

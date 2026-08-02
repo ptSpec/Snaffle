@@ -6,10 +6,10 @@ export const searchTool: Tool = {
   inputSchema: {
     type: "object",
     properties: {
-      query: { type: "string", description: "Ripgrep regular expression" },
-      path: { type: "string", description: "Workspace-relative directory or file" },
-      glob: { type: "string", description: "Optional file glob such as *.ts" },
-      maxResults: { type: "integer", minimum: 1, maximum: 200 },
+      query: { type: "string", description: "Required. Ripgrep regular expression." },
+      path: { type: "string", description: "Optional. Workspace-relative directory or file; omit to search the whole workspace." },
+      glob: { type: "string", description: "Optional. File glob such as *.ts." },
+      maxResults: { type: "integer", description: "Optional. Maximum matches; defaults to 50.", minimum: 1, maximum: 200 },
     },
     required: ["query"],
     additionalProperties: false,

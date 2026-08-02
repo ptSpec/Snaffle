@@ -2,6 +2,7 @@ import { exec, execFile } from "node:child_process";
 import { chmod, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { rgPath } from "@vscode/ripgrep";
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -61,7 +62,7 @@ export class LocalWorkspace implements Workspace {
     args.push(query, searchPath || ".");
 
     try {
-      const { stdout } = await execFileAsync("rg", args, {
+      const { stdout } = await execFileAsync(rgPath, args, {
         cwd: this.root,
         maxBuffer: 512 * 1024,
       });

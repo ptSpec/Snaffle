@@ -6,5 +6,5 @@ import type { Tool } from "./tool.js";
 import { writeTool } from "./write.js";
 
 export function defaultTools(): Tool[] {
-  return [readTool, searchTool, editTool, writeTool, runTool];
+  return [runTool, readTool, searchTool, editTool, writeTool];
 }

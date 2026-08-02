@@ -2,13 +2,14 @@ import { integerField, objectInput, stringField, type Tool } from "./tool.js";
 
 export const runTool: Tool = {
   name: "run_command",
-  description: "Run one shell command in the workspace and return bounded output.",
+  description:
+    "Run one shell command in the workspace and return bounded output. For a long multiline program, use write_file to create a script, then run that file with a short command.",
   inputSchema: {
     type: "object",
     properties: {
-      command: { type: "string" },
-      cwd: { type: "string", description: "Workspace-relative working directory" },
-      timeoutMs: { type: "integer", minimum: 1000, maximum: 120000 },
+      command: { type: "string", description: "Required. Shell command to execute." },
+      cwd: { type: "string", description: "Optional. Workspace-relative working directory; omit to use the workspace root. Never send an empty string." },
+      timeoutMs: { type: "integer", description: "Optional. Timeout in milliseconds; defaults to 30000.", minimum: 1000, maximum: 120000 },
     },
     required: ["command"],
     additionalProperties: false,

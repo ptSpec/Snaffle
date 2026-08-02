@@ -7,16 +7,18 @@ import {
   type FormEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import type { DesktopApi, DesktopState } from "../api.js";
-import { PRODUCT } from "../../identity.js";
+import type { DesktopApi, DesktopRunEvent, DesktopState } from "../api.js";
 import type { OpenRouterModel } from "../../providers/openrouter.js";
-import { DEFAULT_THEME, THEMES, themeById, type Theme } from "../themes/index.js";
-import logoSvg from "../../../assets/logo_svg.svg?raw";
+import { DEFAULT_THEME, themeById, type Theme } from "../themes/index.js";
+import { Settings } from "./settings.js";
+import { Sidebar, type AppView, type SettingsPage } from "./sidebar.js";
 import {
   addRunEvent,
+  findTimelineItem,
   Inspector,
   newTimelineId,
   TimelineEntry,
+  timelineFromMessages,
   type TimelineItem,
 } from "./timeline.js";
 
@@ -28,11 +30,15 @@ declare global {
 
 const initialState: DesktopState = {
   workspace: null,
+  workspaces: [],
+  activeThreadId: null,
+  conversation: [],
   openRouterAvailable: false,
-  runActive: false,
+  runningThreadIds: [],
   defaultModel: null,
   unsafeHostDefault: false,
   themeId: document.documentElement.dataset.theme ?? DEFAULT_THEME.id,
+  maxSteps: 50,
 };
 
 export function App(): JSX.Element {
@@ -43,7 +49,6 @@ export function App(): JSX.Element {
   const [choosingModel, setChoosingModel] = useState(false);
   const [task, setTask] = useState("");
   const [unsafeHostExecution, setUnsafeHostExecution] = useState(false);
-  const [running, setRunning] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
@@ -52,9 +57,16 @@ export function App(): JSX.Element {
   const [rightWidth, setRightWidth] = useState(320);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
-  const [view, setView] = useState<"conversation" | "settings">("conversation");
+  const [view, setView] = useState<AppView>("conversation");
+  const [settingsPage, setSettingsPage] = useState<SettingsPage>("appearance");
   const taskInput = useRef<HTMLTextAreaElement>(null);
   const timelineView = useRef<HTMLDivElement>(null);
+  const followTimeline = useRef(true);
+  const activeThreadId = useRef<string | null>(null);
+  const threadTimelines = useRef(new Map<string, TimelineItem[]>());
+  const running = desktopState.activeThreadId
+    ? desktopState.runningThreadIds.includes(desktopState.activeThreadId)
+    : false;
 
   useLayoutEffect(() => {
     const input = taskInput.current;
@@ -65,42 +77,91 @@ export function App(): JSX.Element {
 
   useLayoutEffect(() => {
     const view = timelineView.current;
-    if (view) view.scrollTop = view.scrollHeight;
+    if (view && followTimeline.current) view.scrollTop = view.scrollHeight;
   }, [timeline]);
 
   useEffect(() => {
     if (!running && view === "conversation") {
       taskInput.current?.focus({ preventScroll: true });
     }
-  }, [running, view]);
+  }, [desktopState.activeThreadId, running, view]);
 
   useEffect(() => {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId) return;
+    const timeout = window.setTimeout(() => {
+      void window.desktop.setThreadDraft(threadId, task).catch((cause) => {
+        setError(errorMessage(cause));
+      });
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [desktopState.activeThreadId, task]);
+
+  useEffect(() => {
+    let queuedEvents: DesktopRunEvent[] = [];
+    let flushTimer: number | undefined;
+
+    function applyRunEvent({ threadId, event }: DesktopRunEvent): void {
+      addRunEvent(event, (update) => {
+        const next = update(threadTimelines.current.get(threadId) ?? []);
+        threadTimelines.current.set(threadId, next);
+        if (activeThreadId.current === threadId) setTimeline(next);
+      });
+
+      if (event.type === "run.started") {
+        setDesktopState((state) => ({
+          ...state,
+          runningThreadIds: [...new Set([...state.runningThreadIds, threadId])],
+        }));
+      }
+      if (event.type === "run.completed" || event.type === "run.failed") {
+        setDesktopState((state) => ({
+          ...state,
+          runningThreadIds: state.runningThreadIds.filter((id) => id !== threadId),
+        }));
+      }
+    }
+
+    function flushEvents(): void {
+      flushTimer = undefined;
+      const events = queuedEvents;
+      queuedEvents = [];
+      events.forEach(applyRunEvent);
+    }
+
     void window.desktop
       .getState()
       .then((state) => {
+        activeThreadId.current = state.activeThreadId;
         setDesktopState(state);
-        setRunning(state.runActive);
+        const initialTimeline = timelineFromMessages(state.conversation);
+        if (state.activeThreadId) threadTimelines.current.set(state.activeThreadId, initialTimeline);
+        setTimeline(initialTimeline);
+        setTask(activeDraft(state));
         setSelectedModel(state.defaultModel ?? "");
         setUnsafeHostExecution(state.unsafeHostDefault);
         if (state.openRouterAvailable) void loadModels();
       })
       .catch((cause: unknown) => setError(errorMessage(cause)));
 
-    return window.desktop.onRunEvent((event) => {
-      addRunEvent(event, setTimeline);
-
-      if (event.type === "run.started") setRunning(true);
-      if (event.type === "run.completed" || event.type === "run.failed") setRunning(false);
+    const unsubscribe = window.desktop.onRunEvent((event) => {
+      const previous = queuedEvents.at(-1);
+      if (!previous || !mergeStreamEvent(previous, event)) queuedEvents.push(event);
+      flushTimer ??= window.setTimeout(flushEvents, 16);
     });
+
+    return () => {
+      unsubscribe();
+      if (flushTimer !== undefined) window.clearTimeout(flushTimer);
+    };
   }, []);
 
   const selectedItem = useMemo(
-    () => timeline.find((item) => item.id === selectedItemId) ?? null,
+    () => findTimelineItem(timeline, selectedItemId),
     [selectedItemId, timeline],
   );
   const visibleLeftWidth = leftCollapsed ? 0 : leftWidth;
   const visibleRightWidth = view === "settings" || rightCollapsed ? 0 : rightWidth;
-
   const runBlocker = !desktopState.workspace
     ? "Open a workspace before sending."
     : !task.trim()
@@ -110,23 +171,6 @@ export function App(): JSX.Element {
         : !unsafeHostExecution
           ? "Enable unsafe host execution before sending."
           : null;
-
-  async function chooseWorkspace(): Promise<void> {
-    setError(null);
-
-    try {
-      const workspace = await window.desktop.chooseWorkspace();
-      if (!workspace) return;
-      if (desktopState.workspace?.path !== workspace.path) {
-        setTimeline([]);
-        setSelectedItemId(null);
-      }
-      setView("conversation");
-      setDesktopState((state) => ({ ...state, workspace }));
-    } catch (cause) {
-      setError(errorMessage(cause));
-    }
-  }
 
   async function loadModels(): Promise<void> {
     setError(null);
@@ -144,54 +188,76 @@ export function App(): JSX.Element {
   async function startRun(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setError(null);
+    const threadId = desktopState.activeThreadId;
 
-    if (running || runBlocker) {
+    if (!threadId || running || runBlocker) {
       if (runBlocker) setError(runBlocker);
       return;
     }
 
     const request = {
+      threadId,
       task: task.trim(),
       model: selectedModel,
       unsafeHostExecution,
     };
 
-    setTimeline((items) => [
-      ...items,
-      { id: newTimelineId(), kind: "user", text: request.task },
-    ]);
+    followTimeline.current = true;
+    setTimeline((items) => {
+      const next = [...items, { id: newTimelineId(), kind: "user" as const, text: request.task }];
+      threadTimelines.current.set(request.threadId, next);
+      return next;
+    });
     setTask("");
-    setRunning(true);
+    setDesktopState((state) => ({
+      ...state,
+      runningThreadIds: [...new Set([...state.runningThreadIds, request.threadId])],
+    }));
 
     try {
       await window.desktop.startRun(request);
     } catch (cause) {
-      setRunning(false);
+      setDesktopState((state) => ({
+        ...state,
+        runningThreadIds: state.runningThreadIds.filter((id) => id !== request.threadId),
+      }));
       setError(errorMessage(cause));
     }
   }
 
   async function stopRun(): Promise<void> {
     setError(null);
+    const threadId = desktopState.activeThreadId;
+    if (!threadId) return;
 
     try {
-      await window.desktop.stopRun();
+      await window.desktop.stopRun(threadId);
     } catch (cause) {
       setError(errorMessage(cause));
     }
   }
 
-  async function newThread(): Promise<void> {
-    if (running) return;
-    try {
-      await window.desktop.resetConversation();
-      setTimeline([]);
-      setSelectedItemId(null);
-      setTask("");
-      setError(null);
-      setView("conversation");
-    } catch (cause) {
-      setError(errorMessage(cause));
+  function showDesktopState(state: DesktopState): void {
+    followTimeline.current = true;
+    activeThreadId.current = state.activeThreadId;
+    setDesktopState(state);
+    const storedTimeline = state.activeThreadId
+      ? threadTimelines.current.get(state.activeThreadId)
+      : undefined;
+    const nextTimeline = storedTimeline ?? timelineFromMessages(state.conversation);
+    if (state.activeThreadId && !storedTimeline) {
+      threadTimelines.current.set(state.activeThreadId, nextTimeline);
+    }
+    setTimeline(nextTimeline);
+    setSelectedItemId(null);
+    setTask(activeDraft(state));
+    setError(null);
+    setView("conversation");
+  }
+
+  async function saveDraft(): Promise<void> {
+    if (desktopState.activeThreadId) {
+      await window.desktop.setThreadDraft(desktopState.activeThreadId, task);
     }
   }
 
@@ -203,6 +269,16 @@ export function App(): JSX.Element {
       await window.desktop.setTheme(theme.id);
       applyTheme(theme);
       setDesktopState((state) => ({ ...state, themeId: theme.id }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function setMaxSteps(maxSteps: number): Promise<void> {
+    try {
+      await window.desktop.setMaxSteps(maxSteps);
+      setDesktopState((state) => ({ ...state, maxSteps }));
       setError(null);
     } catch (cause) {
       setError(errorMessage(cause));
@@ -245,150 +321,58 @@ export function App(): JSX.Element {
           gridTemplateColumns: `${visibleLeftWidth}px minmax(360px, 1fr) ${visibleRightWidth}px`,
         }}
       >
-        <aside
-          className={leftCollapsed ? "left-sidebar collapsed" : "left-sidebar"}
-          aria-label={view === "settings" ? "Settings navigation" : "Workspaces and threads"}
-          aria-hidden={leftCollapsed}
-        >
-          <header className="sidebar-brand">
-            {view === "settings" ? (
-              <span>Settings</span>
-            ) : (
-              <span className="brand-wordmark" aria-label={PRODUCT.name}>
-                <span
-                  className="brand-mark"
-                  aria-hidden="true"
-                  dangerouslySetInnerHTML={{ __html: logoSvg }}
-                />
-                <span className="brand-name">Sch</span>
-              </span>
-            )}
-            <button
-              className="panel-toggle"
-              type="button"
-              onClick={() => setLeftCollapsed(true)}
-              aria-label="Hide workspace sidebar"
-              title="Hide sidebar"
-            >
-              <span className="pane-icon left" aria-hidden="true" />
-            </button>
-          </header>
-
-          <nav
-            className={
-              view === "settings"
-                ? "sidebar-navigation settings-navigation view-enter"
-                : "sidebar-navigation view-enter"
-            }
-          >
-            {view === "settings" ? (
-              <>
-                <button className="sidebar-action active" type="button">
-                  <span>Appearance</span>
-                </button>
-
-                {/* Future settings sections belong in this navigation area. */}
-                <div className="settings-navigation-space" aria-hidden="true" />
-              </>
-            ) : (
-              <>
-                <div className="section-heading">
-                  <h2>Workspaces</h2>
-                  <button
-                    className="icon-button"
-                    type="button"
-                    onClick={() => void chooseWorkspace()}
-                    disabled={running}
-                    aria-label="Open workspace"
-                    title="Open workspace"
-                  >
-                    +
-                  </button>
-                </div>
-
-                {desktopState.workspace ? (
-                  <>
-                    <button
-                      className="workspace-item active"
-                      type="button"
-                      onClick={() => void chooseWorkspace()}
-                      disabled={running}
-                      title={desktopState.workspace.path}
-                    >
-                      <span className="workspace-icon" aria-hidden="true">▱</span>
-                      <span>{desktopState.workspace.name}</span>
-                    </button>
-
-                    <div className="threads">
-                      <div className="section-heading">
-                        <h2>Threads</h2>
-                        <button
-                          className="icon-button"
-                          type="button"
-                          onClick={() => void newThread()}
-                          disabled={running}
-                          aria-label="New thread"
-                          title="New thread"
-                        >
-                          +
-                        </button>
-                      </div>
-                      <button className="thread-item active" type="button">
-                        Current thread
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <button
-                    className="workspace-item"
-                    type="button"
-                    onClick={() => void chooseWorkspace()}
-                  >
-                    <span className="workspace-icon" aria-hidden="true">+</span>
-                    <span>Open workspace</span>
-                  </button>
-                )}
-              </>
-            )}
-          </nav>
-
-          <footer className="sidebar-footer">
-            {view === "settings" ? (
-              <button className="sidebar-action" type="button" onClick={() => setView("conversation")}>
-                <span aria-hidden="true">←</span>
-                <span>Back to chat</span>
-              </button>
-            ) : (
-              <button
-                className="sidebar-action"
-                type="button"
-                onClick={() => {
-                  setError(null);
-                  setView("settings");
-                }}
-              >
-                <span aria-hidden="true">⚙</span>
-                <span>Settings</span>
-              </button>
-            )}
-          </footer>
-        </aside>
+        <Sidebar
+          state={desktopState}
+          runningThreadIds={desktopState.runningThreadIds}
+          view={view}
+          settingsPage={settingsPage}
+          collapsed={leftCollapsed}
+          beforeNavigate={saveDraft}
+          onNavigate={showDesktopState}
+          onUpdate={setDesktopState}
+          onError={setError}
+          onView={setView}
+          onSettingsPage={(page) => {
+            setSettingsPage(page);
+            setError(null);
+          }}
+          onCollapse={() => setLeftCollapsed(true)}
+        />
 
         {view === "settings" ? (
           <Settings
+            page={settingsPage}
             themeId={desktopState.themeId}
+            maxSteps={desktopState.maxSteps}
             error={error}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
+            onMaxSteps={(maxSteps) => void setMaxSteps(maxSteps)}
           />
         ) : (
           <section className="conversation view-enter" aria-label="Conversation">
-          <div ref={timelineView} className="timeline" aria-live="polite">
+          <div
+            ref={timelineView}
+            className="timeline"
+            aria-live="polite"
+            onScroll={(event) => {
+              const view = event.currentTarget;
+              followTimeline.current = view.scrollHeight - view.scrollTop - view.clientHeight < 80;
+            }}
+          >
             {timeline.map((item) => (
               <TimelineEntry
                 key={item.id}
                 item={item}
-                selected={item.id === selectedItemId}
+                selectedId={selectedItemId}
                 onSelect={setSelectedItemId}
+                onEditUser={(text) => {
+                  setTask(text);
+                  window.requestAnimationFrame(() => {
+                    const input = taskInput.current;
+                    input?.focus();
+                    input?.setSelectionRange(text.length, text.length);
+                  });
+                }}
               />
             ))}
           </div>
@@ -569,48 +553,25 @@ export function App(): JSX.Element {
   );
 }
 
-function Settings({
-  themeId,
-  error,
-  onSelectTheme,
-}: {
-  themeId: string;
-  error: string | null;
-  onSelectTheme: (themeId: string) => void;
-}): JSX.Element {
-  return (
-    <section className="settings view-enter" aria-label="Settings">
-      <div className="settings-content">
-        <p className="eyebrow">Settings</p>
-        <h1>Appearance</h1>
-        <p className="settings-description">Choose how Esch looks.</p>
-
-        <div className="theme-list">
-          {THEMES.map((theme) => (
-            <button
-              className={theme.id === themeId ? "theme-option selected" : "theme-option"}
-              type="button"
-              key={theme.id}
-              onClick={() => onSelectTheme(theme.id)}
-              aria-pressed={theme.id === themeId}
-            >
-              <span className="theme-preview" aria-hidden="true">
-                <span style={{ background: theme.colors["sidebar-background"] }} />
-                <span style={{ background: theme.colors["app-background"] }} />
-                <span style={{ background: theme.colors["inspector-background"] }} />
-              </span>
-              <span>{theme.name}</span>
-              <span className="theme-check" aria-hidden="true">
-                {theme.id === themeId ? "✓" : ""}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {error ? <p className="settings-error">{error}</p> : null}
-      </div>
-    </section>
-  );
+function mergeStreamEvent(previous: DesktopRunEvent, next: DesktopRunEvent): boolean {
+  if (previous.threadId !== next.threadId) return false;
+  if (
+    previous.event.type === "model.delta" &&
+    next.event.type === "model.delta" &&
+    previous.event.step === next.event.step
+  ) {
+    previous.event.text += next.event.text;
+    return true;
+  }
+  if (
+    previous.event.type === "model.reasoning.delta" &&
+    next.event.type === "model.reasoning.delta" &&
+    previous.event.step === next.event.step
+  ) {
+    previous.event.text += next.event.text;
+    return true;
+  }
+  return false;
 }
 
 function applyTheme(theme: Theme): void {
@@ -623,4 +584,8 @@ function applyTheme(theme: Theme): void {
 
 function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
+}
+
+function activeDraft(state: DesktopState): string {
+  return state.workspace?.threads.find((thread) => thread.id === state.activeThreadId)?.draft ?? "";
 }

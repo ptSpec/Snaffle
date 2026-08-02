@@ -1,0 +1,368 @@
+.sidebar-navigation {
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px 10px;
+}
+
+.workspace-navigation {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.settings-navigation {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.settings-navigation-space {
+  flex: 1;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  margin-bottom: 4px;
+}
+
+.section-heading h2 {
+  margin: 0 8px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+}
+
+.icon-button:hover {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
+.icon-button.add-workspace {
+  width: 22px;
+  height: 22px;
+}
+
+.add-workspace svg,
+.new-thread-button svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.workspace-heading {
+  justify-content: flex-start;
+}
+
+.workspace-heading h2 {
+  margin-right: 0;
+}
+
+.sidebar-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-radius: 6px;
+}
+
+.sidebar-row:hover,
+.sidebar-row.active {
+  background: var(--composer-background);
+}
+
+.sidebar-row .workspace-item,
+.sidebar-row .thread-item {
+  min-width: 0;
+  flex: 1;
+  background: transparent;
+}
+
+.sidebar-row .workspace-item:hover,
+.sidebar-row .thread-item:hover {
+  background: transparent;
+}
+
+.row-action {
+  display: grid;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  place-items: center;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0;
+}
+
+.sidebar-row:hover .row-action,
+.row-action:focus-visible,
+.row-action.active {
+  opacity: 1;
+}
+
+.row-action:hover,
+.row-action.bookmarked,
+.row-action.active {
+  color: var(--text-primary);
+}
+
+.thread-actions {
+  display: flex;
+  flex: 0 0 auto;
+  padding: 2px;
+  background: var(--hover-background);
+  border-radius: 5px;
+}
+
+.workspace-row.active .thread-action {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+.workspace-row.active:hover .thread-action,
+.thread-action.active {
+  opacity: 1;
+}
+
+.thread-action.active {
+  background: var(--selected-background);
+  color: var(--text-strong);
+}
+
+.thread-actions .thread-action:hover {
+  color: var(--text-strong);
+  background: var(--selected-background);
+}
+
+.new-thread-button {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  margin: 5px 0 2px 14px;
+  padding: 5px 7px;
+  color: var(--accent);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+.new-thread-button:hover {
+  background: var(--hover-background);
+}
+
+.row-action svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.workspace-item,
+.thread-item,
+.sidebar-action {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+  padding: 8px 10px;
+  color: var(--text-secondary);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+}
+
+.workspace-item:hover,
+.thread-item:hover,
+.workspace-item.active,
+.thread-item.active {
+  color: var(--text-strong);
+  background: var(--composer-background);
+}
+
+.workspace-item span:last-child,
+.thread-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-icon {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+}
+
+.workspace-icon svg {
+  display: block;
+  width: 16px;
+  height: 14px;
+}
+
+.threads {
+  min-height: 0;
+  flex: 1;
+  padding-top: 4px;
+  overflow-y: auto;
+}
+
+.threads:focus {
+  outline: none;
+}
+
+.thread-list {
+  margin-left: 14px;
+  padding-left: 7px;
+  border-left: 1px solid var(--border-default);
+}
+
+.thread-row {
+  position: relative;
+}
+
+.thread-row.focused {
+  background: var(--hover-background);
+}
+
+.thread-row::before {
+  position: absolute;
+  top: 50%;
+  left: -8px;
+  width: 8px;
+  height: 1px;
+  content: "";
+  background: var(--border-default);
+}
+
+.thread-item {
+  display: grid;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.thread-item small {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thread-running {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+.thread-row > input {
+  flex: 0 0 auto;
+  margin: 0 0 0 8px;
+}
+
+.thread-selection-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-top: 8px;
+}
+
+.thread-selection-actions button {
+  padding: 4px 7px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  font-size: 11px;
+}
+
+.thread-selection-actions button:hover {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
+.bookmarked-threads {
+  flex: 0 0 auto;
+  max-height: 150px;
+  margin-top: 12px;
+  overflow-y: auto;
+}
+
+.bookmarked-threads .section-heading {
+  min-height: 22px;
+  margin-bottom: 2px;
+}
+
+.bookmarked-threads .thread-item {
+  display: grid;
+  gap: 1px;
+  padding: 4px 6px;
+}
+
+.bookmarked-threads .thread-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bookmarked-threads .thread-item small {
+  margin: 0;
+}
+
+.inactive-workspaces {
+  flex: 0 0 auto;
+  margin-top: 10px;
+}
+
+.inactive-workspaces .section-heading {
+  min-height: 22px;
+  margin-bottom: 2px;
+}
+
+.inactive-workspaces .workspace-item {
+  padding: 5px 8px;
+}
+
+.sidebar-footer {
+  padding: 10px;
+  border-top: 1px solid var(--border-default);
+}
+
+.sidebar-action {
+  color: var(--text-muted);
+}
+
+.sidebar-action:hover,
+.sidebar-action.active {
+  color: var(--text-strong);
+  background: var(--hover-background);
+}

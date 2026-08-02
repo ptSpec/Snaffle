@@ -4,14 +4,16 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
-import { runAgent } from "../agent-loop.js";
+import { DEFAULT_MAX_STEPS, runAgent } from "../agent-loop.js";
+import { initialMessages } from "../context.js";
 import { PRODUCT } from "../identity.js";
 import { OpenRouterProvider, listOpenRouterModels } from "../providers/openrouter.js";
 import type { Message, RunEvent } from "../protocol.js";
 import type { Trace } from "../trace.js";
 import { defaultTools } from "../tools/default-tools.js";
 import { LocalWorkspace } from "../workspace.js";
-import type { DesktopState, DesktopWorkspace, StartRunInput } from "./api.js";
+import type { DesktopState, StartRunInput } from "./api.js";
+import { openStore, type DesktopStore } from "./store.js";
 import { DEFAULT_THEME, themeById, type Theme } from "./themes/index.js";
 
 const desktopDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -19,27 +21,33 @@ const rendererPath = path.join(desktopDirectory, "../../renderer/index.html");
 const preloadPath = path.join(desktopDirectory, "preload.cjs");
 
 let mainWindow: BrowserWindow | undefined;
-let workspace: DesktopWorkspace | null = null;
-let activeRun: { controller: AbortController } | undefined;
-let conversation: Message[] = [];
+let store: DesktopStore;
+const activeRuns = new Map<
+  string,
+  { controller: AbortController; threadId: string; workspaceId: string }
+>();
 let activeTheme: Theme = DEFAULT_THEME;
+let maxSteps = DEFAULT_MAX_STEPS;
 const DEVELOPMENT_MODEL = "openai/gpt-5.6-luna";
 
 const memoryTrace: Trace = {
   async write(): Promise<void> {
-    // Persistence is intentionally outside this first desktop slice.
+    // Dedicated run traces arrive with persisted run records.
   },
 };
 
-function start(): void {
+async function start(): Promise<void> {
   loadDevelopmentEnvironment();
-  activeTheme = loadTheme();
+  const settings = loadSettings();
+  activeTheme =
+    typeof settings.themeId === "string"
+      ? themeById(settings.themeId) ?? DEFAULT_THEME
+      : DEFAULT_THEME;
+  maxSteps = validMaxSteps(settings.maxSteps) ?? DEFAULT_MAX_STEPS;
+  store = await openStore(path.join(app.getPath("userData"), `${PRODUCT.slug}.db`));
   if (process.platform === "darwin") app.dock?.setIcon(applicationIcon());
-  if (!app.isPackaged) {
-    workspace = {
-      path: process.cwd(),
-      name: path.basename(process.cwd()) || process.cwd(),
-    };
+  if (!app.isPackaged && (await store.state()).workspaces.length === 0) {
+    await store.addWorkspace(process.cwd(), path.basename(process.cwd()) || process.cwd());
   }
   registerIpc();
   createWindow();
@@ -92,18 +100,9 @@ function applicationIcon(): string {
 }
 
 function registerIpc(): void {
-  ipcMain.handle("desktop:get-state", (): DesktopState => ({
-    workspace,
-    openRouterAvailable: Boolean(process.env.OPENROUTER_API_KEY),
-    runActive: activeRun !== undefined,
-    defaultModel: app.isPackaged ? null : DEVELOPMENT_MODEL,
-    unsafeHostDefault: !app.isPackaged,
-    themeId: activeTheme.id,
-  }));
+  ipcMain.handle("desktop:get-state", (): Promise<DesktopState> => desktopState());
 
-  ipcMain.handle("desktop:choose-workspace", async (event): Promise<DesktopWorkspace | null> => {
-    if (activeRun) throw new Error("Stop the active run before choosing another workspace");
-
+  ipcMain.handle("desktop:choose-workspace", async (event): Promise<DesktopState | null> => {
     const owner = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
     const options: OpenDialogOptions = {
       title: "Choose a workspace",
@@ -116,12 +115,58 @@ function registerIpc(): void {
     const selectedPath = result.filePaths[0];
     if (result.canceled || !selectedPath) return null;
 
-    if (workspace?.path !== selectedPath) conversation = [];
-    workspace = {
-      path: selectedPath,
-      name: path.basename(selectedPath) || selectedPath,
-    };
-    return workspace;
+    await store.addWorkspace(selectedPath, path.basename(selectedPath) || selectedPath);
+    return desktopState();
+  });
+
+  ipcMain.handle("desktop:select-workspace", async (_event, value: unknown): Promise<DesktopState> => {
+    await store.selectWorkspace(parseId(value, "Workspace"));
+    return desktopState();
+  });
+
+  ipcMain.handle("desktop:create-thread", async (_event, value: unknown): Promise<DesktopState> => {
+    await store.createThread(parseId(value, "Workspace"));
+    return desktopState();
+  });
+
+  ipcMain.handle("desktop:select-thread", async (_event, value: unknown): Promise<DesktopState> => {
+    await store.selectThread(parseId(value, "Thread"));
+    return desktopState();
+  });
+
+  ipcMain.handle(
+    "desktop:set-thread-draft",
+    async (_event, threadId: unknown, draft: unknown): Promise<void> => {
+      if (typeof draft !== "string") throw new Error("Draft must be text");
+      await store.setDraft(parseId(threadId, "Thread"), draft);
+    },
+  );
+
+  ipcMain.handle(
+    "desktop:set-thread-bookmarked",
+    async (_event, threadId: unknown, bookmarked: unknown): Promise<DesktopState> => {
+      if (typeof bookmarked !== "boolean") throw new Error("Bookmark value must be a boolean");
+      await store.setBookmarked(parseId(threadId, "Thread"), bookmarked);
+      return desktopState();
+    },
+  );
+
+  ipcMain.handle("desktop:delete-threads", async (_event, value: unknown): Promise<DesktopState> => {
+    const threadIds = parseIds(value);
+    if (threadIds.some((threadId) => activeRuns.has(threadId))) {
+      throw new Error("The running thread cannot be deleted");
+    }
+    await store.deleteThreads(threadIds);
+    return desktopState();
+  });
+
+  ipcMain.handle("desktop:remove-workspace", async (_event, value: unknown): Promise<DesktopState> => {
+    const workspaceId = parseId(value, "Workspace");
+    if ([...activeRuns.values()].some((run) => run.workspaceId === workspaceId)) {
+      throw new Error("A workspace with a running thread cannot be removed");
+    }
+    await store.removeWorkspace(workspaceId);
+    return desktopState();
   });
 
   ipcMain.handle("desktop:list-openrouter-models", async () => {
@@ -130,17 +175,34 @@ function registerIpc(): void {
 
   ipcMain.handle("desktop:start-run", async (_event, rawInput: unknown): Promise<void> => {
     const input = parseStartRunInput(rawInput);
-    if (!workspace) throw new Error("Choose a workspace before starting a run");
+    const state = await store.state();
+    const selectedWorkspace = state.workspaces.find(
+      (workspace) => workspace.threads.some((thread) => thread.id === input.threadId),
+    );
+    if (!selectedWorkspace) throw new Error("The selected thread no longer exists");
     if (!input.unsafeHostExecution) {
       throw new Error("Unsafe host execution must be explicitly enabled before starting a run");
     }
-    if (activeRun) throw new Error("A run is already active");
+    if (activeRuns.has(input.threadId)) throw new Error("This thread is already running");
 
     const apiKey = openRouterApiKey();
     const controller = new AbortController();
-    const run = { controller };
-    const selectedWorkspace = workspace;
-    activeRun = run;
+    const threadId = input.threadId;
+    const run = { controller, threadId, workspaceId: selectedWorkspace.id };
+    activeRuns.set(threadId, run);
+    let conversation: Message[];
+    try {
+      conversation = await store.messages(threadId);
+      await store.saveMessages(
+        threadId,
+        conversation.length
+          ? [...conversation, { role: "user", content: input.task }]
+          : initialMessages(input.task),
+      );
+    } catch (error) {
+      activeRuns.delete(threadId);
+      throw error;
+    }
 
     void runAgent({
       task: input.task,
@@ -150,26 +212,21 @@ function registerIpc(): void {
       trace: memoryTrace,
       signal: controller.signal,
       history: conversation,
-      onEvent: sendRunEvent,
+      maxSteps,
+      onEvent: (event) => sendRunEvent(threadId, event),
     })
-      .then((result) => {
-        conversation = result.messages;
-      })
+      .then((result) => store.saveMessages(threadId, result.messages))
       .catch(() => undefined)
       .finally(() => {
-        if (activeRun === run) activeRun = undefined;
+        if (activeRuns.get(threadId) === run) activeRuns.delete(threadId);
       });
   });
 
-  ipcMain.handle("desktop:stop-run", (): boolean => {
-    if (!activeRun) return false;
-    activeRun.controller.abort();
+  ipcMain.handle("desktop:stop-run", (_event, value: unknown): boolean => {
+    const run = activeRuns.get(parseId(value, "Thread"));
+    if (!run) return false;
+    run.controller.abort();
     return true;
-  });
-
-  ipcMain.handle("desktop:reset-conversation", (): void => {
-    if (activeRun) throw new Error("Stop the active run before starting a new thread");
-    conversation = [];
   });
 
   ipcMain.handle("desktop:set-theme", (_event, themeId: unknown): void => {
@@ -178,7 +235,7 @@ function registerIpc(): void {
     if (!theme) throw new Error(`Unknown theme: ${themeId}`);
 
     activeTheme = theme;
-    saveTheme(theme);
+    saveSettings({ themeId: theme.id });
     mainWindow?.setBackgroundColor(theme.colors["app-background"]);
     if (process.platform !== "darwin") {
       mainWindow?.setTitleBarOverlay({
@@ -187,6 +244,13 @@ function registerIpc(): void {
         height: 40,
       });
     }
+  });
+
+  ipcMain.handle("desktop:set-max-steps", (_event, value: unknown): void => {
+    const next = validMaxSteps(value);
+    if (next === undefined) throw new Error("Maximum turns must be an integer from 1 to 200");
+    maxSteps = next;
+    saveSettings({ maxSteps });
   });
 
   ipcMain.handle("desktop:open-external", async (_event, rawUrl: unknown): Promise<void> => {
@@ -199,27 +263,56 @@ function registerIpc(): void {
   });
 }
 
+async function desktopState(): Promise<DesktopState> {
+  const state = await store.state();
+  const workspace =
+    state.workspaces.find((item) => item.id === state.activeWorkspaceId) ?? null;
+  return {
+    workspace,
+    workspaces: state.workspaces,
+    activeThreadId: state.activeThreadId,
+    conversation: await store.messages(state.activeThreadId),
+    openRouterAvailable: Boolean(process.env.OPENROUTER_API_KEY),
+    runningThreadIds: [...activeRuns.keys()],
+    defaultModel: app.isPackaged ? null : DEVELOPMENT_MODEL,
+    unsafeHostDefault: !app.isPackaged,
+    themeId: activeTheme.id,
+    maxSteps,
+  };
+}
+
 function settingsPath(): string {
   return path.join(app.getPath("userData"), "settings.json");
 }
 
-function loadTheme(): Theme {
+type SavedSettings = {
+  themeId?: unknown;
+  maxSteps?: unknown;
+};
+
+function loadSettings(): SavedSettings {
   try {
     const file = settingsPath();
-    if (!existsSync(file)) return DEFAULT_THEME;
-    const settings = JSON.parse(readFileSync(file, "utf8")) as { themeId?: unknown };
-    return typeof settings.themeId === "string"
-      ? themeById(settings.themeId) ?? DEFAULT_THEME
-      : DEFAULT_THEME;
+    if (!existsSync(file)) return {};
+    const settings = JSON.parse(readFileSync(file, "utf8")) as unknown;
+    return settings && typeof settings === "object" && !Array.isArray(settings)
+      ? settings as SavedSettings
+      : {};
   } catch {
-    return DEFAULT_THEME;
+    return {};
   }
 }
 
-function saveTheme(theme: Theme): void {
+function saveSettings(update: { themeId?: string; maxSteps?: number }): void {
   const file = settingsPath();
   mkdirSync(path.dirname(file), { recursive: true });
-  writeFileSync(file, `${JSON.stringify({ themeId: theme.id }, null, 2)}\n`);
+  writeFileSync(file, `${JSON.stringify({ ...loadSettings(), ...update }, null, 2)}\n`);
+}
+
+function validMaxSteps(value: unknown): number | undefined {
+  return Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 200
+    ? Number(value)
+    : undefined;
 }
 
 function parseStartRunInput(input: unknown): StartRunInput {
@@ -238,7 +331,21 @@ function parseStartRunInput(input: unknown): StartRunInput {
     throw new Error("Unsafe host execution consent is required");
   }
 
-  return { task, model, unsafeHostExecution: value.unsafeHostExecution };
+  const threadId = typeof value.threadId === "string" ? value.threadId : "";
+  if (!threadId) throw new Error("Choose a thread before starting a run");
+  return { threadId, task, model, unsafeHostExecution: value.unsafeHostExecution };
+}
+
+function parseId(value: unknown, label: string): string {
+  if (typeof value !== "string" || !value) throw new Error(`${label} id must be a string`);
+  return value;
+}
+
+function parseIds(value: unknown): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item)) {
+    throw new Error("Thread ids must be an array of strings");
+  }
+  return value;
 }
 
 function openRouterApiKey(): string {
@@ -247,9 +354,9 @@ function openRouterApiKey(): string {
   return apiKey;
 }
 
-function sendRunEvent(event: RunEvent): void {
+function sendRunEvent(threadId: string, event: RunEvent): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send("desktop:run-event", event);
+  mainWindow.webContents.send("desktop:run-event", { threadId, event });
 }
 
 function loadDevelopmentEnvironment(): void {
@@ -264,7 +371,8 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-  activeRun?.controller.abort();
+  for (const run of activeRuns.values()) run.controller.abort();
+  store?.close();
 });
 
 function reportStartupError(error: unknown): void {

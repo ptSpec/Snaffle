@@ -13,7 +13,9 @@ export interface Tool extends ToolSpec {
 
 export function objectInput(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new Error("Tool input must be an object");
+    throw new Error(
+      "Tool input must be a JSON object, not a quoted JSON string. Do not wrap the entire arguments object in quotes.",
+    );
   }
   return input as Record<string, unknown>;
 }

@@ -1,0 +1,94 @@
+.inspector {
+  min-width: 0;
+  padding: 48px 14px 14px;
+  overflow-y: auto;
+  background: var(--inspector-background);
+  border-left: 1px solid var(--border-default);
+}
+
+.inspector > .section-heading {
+  position: relative;
+  z-index: 11;
+  -webkit-app-region: drag;
+}
+
+.platform-darwin .sidebar-brand {
+  padding: 8px 12px 8px 80px;
+}
+
+.platform-darwin .inspector {
+  padding-top: 8px;
+}
+
+.platform-darwin .panel-reopen {
+  top: 10px;
+}
+
+.platform-darwin .panel-reopen.left {
+  left: 80px;
+}
+
+.platform-darwin .inspector .panel-toggle {
+  transform: translateY(2px);
+}
+
+.inspector-card {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.inspector-card h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 16px;
+}
+
+.inspector-card h4 {
+  margin: 14px 0 5px;
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.inspector-card p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.eyebrow {
+  margin: 0 0 5px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.inspector-status {
+  width: fit-content;
+  margin-top: 8px !important;
+  padding: 4px 6px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+.inspector-card .inspector-repair {
+  margin-top: 9px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+pre {
+  max-height: 340px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px;
+  color: var(--code-text);
+  background: var(--code-background);
+  border: 1px solid var(--border-default);
+  border-radius: 5px;
+  font: 11px/1.45 var(--font-code);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { healToolCall, healToolInput } from "../src/tool-input.js";
 import { editTool } from "../src/tools/edit.js";
 import { readTool } from "../src/tools/read.js";
 import { runTool } from "../src/tools/run.js";
@@ -32,9 +33,17 @@ test("the five explicit file and command tools work together", async (t) => {
   const matches = await searchTool.execute(workspace, { query: "value = 2" });
   assert.match(matches.content, /src\/example\.ts:1/);
 
-  const command = await runTool.execute(workspace, {
-    command: "node -e \"process.stdout.write('ok')\"",
-  });
+  const healedCommand = healToolCall(
+    {
+      id: "call-1",
+      name: "run_command",
+      input: { command: "node -e \"process.stdout.write('ok')\"", cwd: "" },
+    },
+    runTool.inputSchema,
+  );
+  assert.deepEqual(healedCommand.input, { command: "node -e \"process.stdout.write('ok')\"" });
+  assert.equal(healedCommand.inputRepair, '"cwd" was empty; omitted it because it is optional');
+  const command = await runTool.execute(workspace, healedCommand.input);
   assert.match(command.content, /exit code: 0/);
   assert.match(command.content, /ok/);
   assert.equal(command.exitCode, 0);
@@ -49,6 +58,31 @@ test("run command reports a nonzero exit separately from tool failure", async (t
 
   assert.equal(result.exitCode, 7);
   assert.match(result.content, /exit code: 7/);
+});
+
+test("tool input healer repairs a quoted object with a malformed integer", () => {
+  const malformed =
+    '{"path": "build/spreadsheet/spreadsheet.py", "startLine": .290, "lineCount": 15}';
+  const providerInput = healToolInput(JSON.stringify(malformed));
+  const healed = healToolCall(
+    {
+      id: "call-1",
+      name: "read_file",
+      input: providerInput.input,
+      ...(providerInput.repair ? { inputRepair: providerInput.repair } : {}),
+    },
+    readTool.inputSchema,
+  );
+
+  assert.deepEqual(healed.input, {
+    path: "build/spreadsheet/spreadsheet.py",
+    startLine: 290,
+    lineCount: 15,
+  });
+  assert.equal(
+    healed.inputRepair,
+    'Arguments were sent as a quoted JSON string; converted them to a JSON object; "startLine" was .290; changed it to 290 because it requires an integer',
+  );
 });
 
 test("edit rejects ambiguous text", async (t) => {

@@ -4,12 +4,28 @@ export type ToolCall = {
   id: string;
   name: string;
   input: unknown;
+  inputRepair?: string;
 };
 
 export type Message =
   | { role: "system" | "user"; content: string }
-  | { role: "assistant"; content: string; toolCalls?: ToolCall[] }
-  | { role: "tool"; toolCallId: string; content: string };
+  | {
+      role: "assistant";
+      content: string;
+      reasoning?: string;
+      toolCalls?: ToolCall[];
+      model?: string;
+      usage?: Usage;
+      durationMs?: number;
+    }
+  | {
+      role: "tool";
+      toolCallId: string;
+      content: string;
+      isError?: boolean;
+      exitCode?: number | null;
+      inputRepair?: string;
+    };
 
 export type ToolSpec = {
   name: string;
@@ -25,6 +41,7 @@ export type Usage = {
 
 export type ModelResponse = {
   text: string;
+  reasoning?: string;
   toolCalls: ToolCall[];
   finishReason?: string;
   usage?: Usage;
@@ -32,11 +49,17 @@ export type ModelResponse = {
 
 export type RunEvent =
   | { type: "run.started"; task: string; model: string }
+  | { type: "model.started"; step: number }
   | { type: "model.delta"; step: number; text: string }
-  | { type: "model.completed"; step: number; response: ModelResponse }
-  | { type: "tool.started"; call: ToolCall }
+  | { type: "model.reasoning.delta"; step: number; text: string }
+  | { type: "model.tool.delta"; step: number; index: number; name: string }
+  | { type: "model.retry"; step: number; attempt: number; maxRetries: number; message: string }
+  | { type: "model.completed"; step: number; model: string; durationMs: number; response: ModelResponse }
+  | { type: "tool.started"; step: number; index: number; call: ToolCall }
   | {
       type: "tool.completed";
+      step: number;
+      index: number;
       call: ToolCall;
       content: string;
       isError: boolean;

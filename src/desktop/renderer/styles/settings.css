@@ -1,0 +1,144 @@
+.settings {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--app-background);
+}
+
+.settings-content {
+  width: min(620px, calc(100% - 56px));
+  margin: 0 auto;
+  padding: 68px 0 40px;
+}
+
+.settings h1 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 28px;
+  letter-spacing: -0.03em;
+}
+
+.settings-description {
+  margin: 8px 0 24px;
+  color: var(--text-muted);
+}
+
+.theme-list {
+  display: grid;
+  gap: 8px;
+}
+
+.theme-option {
+  display: grid;
+  grid-template-columns: 72px 1fr 20px;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 10px;
+  color: var(--text-primary);
+  text-align: left;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 9px;
+}
+
+.theme-option:hover {
+  background: var(--hover-background);
+}
+
+.theme-option.selected {
+  border-color: var(--border-focus);
+}
+
+.theme-preview {
+  display: grid;
+  grid-template-columns: 20px 1fr 20px;
+  height: 42px;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+}
+
+.theme-check {
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.settings-error {
+  color: var(--status-danger-text);
+}
+
+.setting-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 14px 0;
+  color: var(--text-primary);
+  border-top: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.setting-field span {
+  display: grid;
+  gap: 4px;
+}
+
+.setting-field small {
+  color: var(--text-muted);
+}
+
+.setting-field input {
+  width: 84px;
+  padding: 7px 9px;
+  color: var(--text-primary);
+  background: var(--composer-background);
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  outline: none;
+}
+
+.setting-field input:focus {
+  border-color: var(--border-focus);
+}
+
+.view-enter {
+  animation: view-enter 160ms ease-out;
+}
+
+.workspace-enter {
+  animation: workspace-enter 150ms ease-out;
+}
+
+@keyframes view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes workspace-enter {
+  from {
+    opacity: 0;
+    transform: translateX(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-shell {
+    transition: none;
+  }
+
+  .view-enter,
+  .workspace-enter {
+    animation: none;
+  }
+
+  .activity-spinner {
+    animation: none;
+  }
+
+  .reasoning-block summary::before {
+    transition: none;
+  }
+}

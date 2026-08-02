@@ -81,9 +81,11 @@ test("agent loop executes a tool and completes naturally", async (t) => {
     trace.events.map((event) => event.type),
     [
       "run.started",
+      "model.started",
       "model.completed",
       "tool.started",
       "tool.completed",
+      "model.started",
       "model.completed",
       "run.completed",
     ],
@@ -115,7 +117,7 @@ test("agent loop carries conversation history into a follow-up", async (t) => {
     signal,
   });
 
-  assert.deepEqual(provider.messages.slice(-3), [
+  assert.deepEqual(provider.messages.slice(-3).map(({ role, content }) => ({ role, content })), [
     { role: "user", content: "Write a short paragraph." },
     { role: "assistant", content: "A short paragraph." },
     { role: "user", content: "Make it longer." },
