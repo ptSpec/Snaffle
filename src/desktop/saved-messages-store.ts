@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Client, Row } from "@libsql/client";
-import type { SaveMessageInput, SavedMessage } from "./api.js";
+import type { SaveMessageInput, SavedMessage, SavedMessageSummary } from "./api.js";
 
 export class SavedMessageStore {
   constructor(private readonly database: Client) {}
@@ -30,7 +30,7 @@ export class SavedMessageStore {
     );
   }
 
-  async save(input: SaveMessageInput): Promise<SavedMessage[]> {
+  async save(input: SaveMessageInput): Promise<SavedMessageSummary[]> {
     const source = await this.database.execute({
       sql: `SELECT e.id AS entry_id, e.role, e.text, t.workspace_id, t.title, w.name
         FROM threads t
@@ -71,12 +71,22 @@ export class SavedMessageStore {
         Date.now(),
       ],
     });
-    return this.list();
+    return this.summaries();
   }
 
-  async delete(id: string): Promise<SavedMessage[]> {
+  async delete(id: string): Promise<SavedMessageSummary[]> {
     await this.database.execute({ sql: "DELETE FROM saved_messages WHERE id = ?", args: [id] });
-    return this.list();
+    return this.summaries();
+  }
+
+  async summaries(): Promise<SavedMessageSummary[]> {
+    const result = await this.database.execute(`SELECT
+        s.id, s.source_entry_id, s.source_thread_id, s.source_workspace_id,
+        s.source_sequence, s.workspace_name, s.thread_title, s.role, s.model, s.created_at,
+        ${sourceAvailableSql()} AS source_available
+      FROM saved_messages s
+      ORDER BY s.created_at DESC`);
+    return result.rows.map(savedMessageSummaryFromRow);
   }
 
   async list(): Promise<SavedMessage[]> {
@@ -116,6 +126,10 @@ export class SavedMessageStore {
 }
 
 function savedMessageFromRow(row: Row): SavedMessage {
+  return { ...savedMessageSummaryFromRow(row), text: rowText(row, "text") };
+}
+
+function savedMessageSummaryFromRow(row: Row): SavedMessageSummary {
   const role = rowText(row, "role");
   if (role !== "assistant") throw new Error("Invalid saved message role");
   return {
@@ -127,11 +141,23 @@ function savedMessageFromRow(row: Row): SavedMessage {
     workspaceName: rowText(row, "workspace_name"),
     threadTitle: rowText(row, "thread_title"),
     role,
-    text: rowText(row, "text"),
     model: rowTextOrNull(row, "model"),
     createdAt: rowNumber(row, "created_at"),
     sourceAvailable: rowNumber(row, "source_available") === 1,
   };
+}
+
+function sourceAvailableSql(): string {
+  return `EXISTS(
+    SELECT 1 FROM entries e
+    WHERE e.thread_id = s.source_thread_id
+      AND e.role = s.role
+      AND e.text = s.text
+      AND (
+        (s.source_entry_id IS NOT NULL AND e.id = s.source_entry_id)
+        OR (s.source_entry_id IS NULL AND e.sequence = s.source_sequence)
+      )
+  )`;
 }
 
 function rowText(row: Row, key: string): string {

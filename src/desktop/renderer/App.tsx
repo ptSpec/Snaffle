@@ -56,6 +56,7 @@ const initialState: DesktopState = {
 
 export function App(): JSX.Element {
   const [desktopState, setDesktopState] = useState(initialState);
+  const [savedMessages, setSavedMessages] = useState<SavedMessage[] | null>(null);
   const [models, setModels] = useState<OpenRouterModel[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [task, setTask] = useState("");
@@ -177,10 +178,27 @@ export function App(): JSX.Element {
   }, [desktopState.activeThreadId, task]);
 
   useEffect(() => {
+    if (view !== "saved") {
+      setSavedMessages(null);
+      return;
+    }
+    let current = true;
+    void window.desktop.listSavedMessages().then(
+      (messages) => { if (current) setSavedMessages(messages); },
+      (cause: unknown) => { if (current) setError(errorMessage(cause)); },
+    );
+    return () => { current = false; };
+  }, [view]);
+
+  useEffect(() => {
     let queuedEvents: DesktopRunEvent[] = [];
     let flushTimer: number | undefined;
 
     function applyRunEvent({ threadId, event }: DesktopRunEvent): void {
+      if (event.type === "run.persisted" && activeThreadId.current !== threadId) {
+        threadTimelines.current.delete(threadId);
+        return;
+      }
       addRunEvent(event, (update) => {
         const next = update(threadTimelines.current.get(threadId) ?? []);
         threadTimelines.current.set(threadId, next);
@@ -212,8 +230,8 @@ export function App(): JSX.Element {
       .getState()
       .then((state) => {
         activeThreadId.current = state.activeThreadId;
-        setDesktopState(state);
         const initialTimeline = timelineFromEntries(state.conversation);
+        setDesktopState(withoutConversation(state));
         if (state.activeThreadId) threadTimelines.current.set(state.activeThreadId, initialTimeline);
         setTimeline(initialTimeline);
         setTask(activeDraft(state));
@@ -327,7 +345,7 @@ export function App(): JSX.Element {
     if (!threadId) return;
     setError(null);
     try {
-      setDesktopState(await window.desktop.setThreadUnsafe(threadId, unsafe));
+      setDesktopState(withoutConversation(await window.desktop.setThreadUnsafe(threadId, unsafe)));
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -339,7 +357,7 @@ export function App(): JSX.Element {
   ): Promise<void> {
     setError(null);
     try {
-      setDesktopState(await window.desktop.resolveCommandApproval(id, decision));
+      setDesktopState(withoutConversation(await window.desktop.resolveCommandApproval(id, decision)));
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -347,12 +365,13 @@ export function App(): JSX.Element {
 
   function showDesktopState(state: DesktopState): void {
     followTimeline.current = true;
+    trimThreadTimelines(threadTimelines.current, state.activeThreadId, state.runningThreadIds);
     activeThreadId.current = state.activeThreadId;
-    setDesktopState(state);
     const storedTimeline = state.activeThreadId
       ? threadTimelines.current.get(state.activeThreadId)
       : undefined;
     const nextTimeline = storedTimeline ?? timelineFromEntries(state.conversation);
+    setDesktopState(withoutConversation(state));
     if (state.activeThreadId && !storedTimeline) {
       threadTimelines.current.set(state.activeThreadId, nextTimeline);
     }
@@ -376,8 +395,7 @@ export function App(): JSX.Element {
       (saved) =>
         (item.entryId ? saved.sourceEntryId === item.entryId : false) ||
         (saved.sourceThreadId === threadId &&
-          saved.sourceSequence === item.sequence &&
-          saved.text === item.text),
+          saved.sourceSequence === item.sequence),
     )?.id;
   }
 
@@ -412,6 +430,9 @@ export function App(): JSX.Element {
             saved.id === message.id ? { ...saved, sourceAvailable: false } : saved,
           ),
         }));
+        setSavedMessages((messages) => messages?.map((saved) =>
+          saved.id === message.id ? { ...saved, sourceAvailable: false } : saved
+        ) ?? null);
         return;
       }
       if (source.state.activeThreadId) threadTimelines.current.delete(source.state.activeThreadId);
@@ -432,6 +453,7 @@ export function App(): JSX.Element {
     try {
       const savedMessages = await window.desktop.deleteSavedMessage(id);
       setDesktopState((state) => ({ ...state, savedMessages }));
+      setSavedMessages((messages) => messages?.filter((message) => message.id !== id) ?? null);
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -555,7 +577,7 @@ export function App(): JSX.Element {
           collapsed={leftCollapsed}
           beforeNavigate={saveDraft}
           onNavigate={showDesktopState}
-          onUpdate={setDesktopState}
+          onUpdate={(state) => setDesktopState(withoutConversation(state))}
           onError={setError}
           onView={setView}
           onSettingsPage={(page) => {
@@ -589,7 +611,8 @@ export function App(): JSX.Element {
           />
         ) : view === "saved" ? (
           <SavedMessages
-            messages={desktopState.savedMessages}
+            messages={savedMessages ?? []}
+            loading={savedMessages === null}
             onOpen={(message) => void openSavedMessage(message)}
             onDelete={(id) => void deleteSavedMessage(id)}
           />
@@ -838,6 +861,22 @@ function errorMessage(cause: unknown): string {
 
 function activeDraft(state: DesktopState): string {
   return state.workspace?.threads.find((thread) => thread.id === state.activeThreadId)?.draft ?? "";
+}
+
+function withoutConversation(state: DesktopState): DesktopState {
+  return state.conversation.length ? { ...state, conversation: [] } : state;
+}
+
+function trimThreadTimelines(
+  timelines: Map<string, TimelineItem[]>,
+  activeId: string | null,
+  runningIds: string[],
+): void {
+  const retained = new Set(runningIds);
+  if (activeId) retained.add(activeId);
+  for (const threadId of timelines.keys()) {
+    if (!retained.has(threadId)) timelines.delete(threadId);
+  }
 }
 
 function nextMessageSequence(items: TimelineItem[]): number {

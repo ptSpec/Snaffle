@@ -37,6 +37,8 @@ test("chat entry ids stay stable and saved messages survive source deletion", as
     text: "answer",
     model: "test-model",
   });
+  const summaries = await store.savedMessages.summaries();
+  assert.equal("text" in summaries[0]!, false);
   await store.removeWorkspace(workspaceId);
   const saved = await store.savedMessages.list();
   assert.equal(saved.length, 1);

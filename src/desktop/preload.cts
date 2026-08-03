@@ -38,6 +38,7 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:set-provider-retries", retries),
   saveMessage: (input: SaveMessageInput) => ipcRenderer.invoke("desktop:save-message", input),
   deleteSavedMessage: (id: string) => ipcRenderer.invoke("desktop:delete-saved-message", id),
+  listSavedMessages: () => ipcRenderer.invoke("desktop:list-saved-messages"),
   openSavedMessage: (id: string) => ipcRenderer.invoke("desktop:open-saved-message", id),
   getGitChanges: (workspaceId: string) =>
     ipcRenderer.invoke("desktop:get-git-changes", workspaceId),

@@ -71,4 +71,5 @@ export type RunEvent =
       exitCode?: number | null;
     }
   | { type: "run.completed"; text: string; steps: number }
+  | { type: "run.persisted" }
   | { type: "run.failed"; message: string };

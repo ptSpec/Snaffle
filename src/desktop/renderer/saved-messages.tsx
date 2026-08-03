@@ -3,10 +3,12 @@ import { MarkdownContent } from "./timeline.js";
 
 export function SavedMessages({
   messages,
+  loading,
   onOpen,
   onDelete,
 }: {
   messages: SavedMessage[];
+  loading?: boolean;
   onOpen: (message: SavedMessage) => void;
   onDelete: (id: string) => void;
 }): JSX.Element {
@@ -15,7 +17,9 @@ export function SavedMessages({
       <div className="saved-messages-content">
         <p className="eyebrow">Library</p>
         <h1>Saved messages</h1>
-        {messages.length === 0 ? (
+        {loading ? (
+          <p className="saved-empty">Loading saved messages…</p>
+        ) : messages.length === 0 ? (
           <p className="saved-empty">Messages you save from a conversation will appear here.</p>
         ) : (
           <div className="saved-message-list">
