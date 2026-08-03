@@ -77,6 +77,62 @@
   width: fit-content;
 }
 
+.approval-card {
+  width: min(620px, 100%);
+  margin: 4px 0 12px;
+  padding: 12px;
+  color: var(--text-secondary);
+  background: var(--card-background);
+  border: 1px solid var(--status-warning-text);
+  border-radius: 9px;
+  font-size: 12px;
+}
+
+.approval-card > code {
+  display: block;
+  max-height: 110px;
+  margin-top: 8px;
+  padding: 7px;
+  overflow: auto;
+  color: var(--code-text);
+  background: var(--code-background);
+  white-space: pre-wrap;
+}
+
+.approval-card p {
+  margin: 8px 0;
+}
+
+.approval-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.approval-actions button {
+  padding: 5px 8px;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+}
+
+.approval-actions button:hover {
+  background: var(--hover-background);
+}
+
+.approval-result {
+  width: fit-content;
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.approval-result.once,
+.approval-result.thread {
+  color: var(--status-success-text);
+}
+
 .reasoning-block summary,
 .activity-group summary {
   width: fit-content;

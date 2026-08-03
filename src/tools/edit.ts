@@ -11,7 +11,8 @@ export const editTool: Tool = {
       edits: {
         type: "array",
         minItems: 1,
-        description: "Required. One or more exact replacements, applied in array order.",
+        description:
+          'Required. One or more exact replacements, applied in array order. Every item must be an object shaped like {"oldText":"...","newText":"..."}.',
         items: {
           type: "object",
           properties: {

@@ -1,5 +1,5 @@
 import type { OpenRouterModel } from "../providers/openrouter.js";
-import type { Message, RunEvent } from "../protocol.js";
+import type { CommandApprovalDecision, Message, RunEvent } from "../protocol.js";
 
 export type DesktopThread = {
   id: string;
@@ -59,8 +59,10 @@ export type DesktopState = {
   savedMessages: SavedMessage[];
   openRouterAvailable: boolean;
   runningThreadIds: string[];
+  unsafeThreadIds: string[];
   defaultModel: string | null;
-  unsafeHostDefault: boolean;
+  restrictedHostAvailable: boolean;
+  restrictedHostDetail: string;
   themeId: string;
   maxSteps: number;
   providerTimeoutMinutes: number;
@@ -71,7 +73,6 @@ export type StartRunInput = {
   threadId: string;
   task: string;
   model: string;
-  unsafeHostExecution: boolean;
 };
 
 export type DesktopRunEvent = {
@@ -93,6 +94,8 @@ export interface DesktopApi {
   listOpenRouterModels(): Promise<OpenRouterModel[]>;
   startRun(input: StartRunInput): Promise<void>;
   stopRun(threadId: string): Promise<boolean>;
+  setThreadUnsafe(threadId: string, unsafe: boolean): Promise<DesktopState>;
+  resolveCommandApproval(id: string, decision: CommandApprovalDecision): Promise<DesktopState>;
   setTheme(themeId: string): Promise<void>;
   setMaxSteps(maxSteps: number): Promise<void>;
   setProviderTimeoutMinutes(minutes: number): Promise<void>;

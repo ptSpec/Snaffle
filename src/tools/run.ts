@@ -3,7 +3,7 @@ import { integerField, objectInput, stringField, type Tool } from "./tool.js";
 export const runTool: Tool = {
   name: "run_command",
   description:
-    "Run one shell command in the workspace and return bounded output. For a long multiline program, use write_file to create a script, then run that file with a short command.",
+    'Run one shell command in the workspace and return bounded output. Example: {"command":"npm test"}. For a long multiline program, use write_file to create a script, then run that file with a short command.',
   inputSchema: {
     type: "object",
     properties: {
@@ -26,6 +26,11 @@ export const runTool: Tool = {
 
     const result = await workspace.run(command, cwd, timeoutMs);
     const output = [
+      result.approval === "thread"
+        ? "permission: user allowed unrestricted commands for this thread"
+        : result.approval === "once"
+          ? "permission: user allowed this command once"
+          : "",
       `exit code: ${result.exitCode ?? "unknown"}`,
       result.stdout,
       result.stderr ? `[stderr]\n${result.stderr}` : "",

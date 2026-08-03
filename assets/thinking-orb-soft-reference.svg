@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <clipPath id="orb"><circle cx="100" cy="100" r="80"/></clipPath>
+    <filter id="blur" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8.5"/>
+    </filter>
+  </defs>
+  <g clip-path="url(#orb)">
+    <circle cx="100" cy="100" r="80" fill="#202c40"/>
+    <g filter="url(#blur)" style="mix-blend-mode:screen">
+      <ellipse cx="50" cy="40" rx="80" ry="60" fill="#d4e4ff" opacity=".3"/>
+      <ellipse cx="140" cy="100" rx="80" ry="60" fill="#ff465c" opacity=".46"/>
+      <ellipse cx="50" cy="170" rx="90" ry="70" fill="#398cff" opacity=".95"/>
+      <ellipse cx="150" cy="40" rx="80" ry="60" fill="#ffd7dc" opacity=".26"/>
+      <ellipse cx="60" cy="110" rx="80" ry="60" fill="#398cff" opacity=".52"/>
+      <ellipse cx="150" cy="170" rx="90" ry="70" fill="#ff465c" opacity=".88"/>
+    </g>
+  </g>
+  <circle cx="100" cy="100" r="80" fill="none" stroke="#ddd9eb" stroke-width="7" opacity=".55"/>
+</svg>

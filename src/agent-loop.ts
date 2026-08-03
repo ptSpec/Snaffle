@@ -30,7 +30,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
   const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
   const messages = options.history?.length
     ? [...options.history, { role: "user" as const, content: options.task }]
-    : initialMessages(options.task);
+    : initialMessages(options.task, options.workspace.environment);
   const toolSpecs = options.tools.map(({ name, description, inputSchema }) => ({
     name,
     description,

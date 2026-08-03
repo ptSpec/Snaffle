@@ -11,7 +11,7 @@ import {
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import hljs from "highlight.js/lib/common";
-import type { RunEvent, ToolCall, Usage } from "../../protocol.js";
+import type { CommandApprovalDecision, RunEvent, ToolCall, Usage } from "../../protocol.js";
 import type { DesktopEntry } from "../api.js";
 import { JsonInspector } from "./json-inspector.js";
 
@@ -23,6 +23,7 @@ export type TimelineItem =
   | { id: string; kind: "reasoning"; step: number; text: string; streaming: boolean; status?: string | undefined }
   | { id: string; kind: "tool-preparing"; step: number; index: number; name: string; argumentChars: number; startedAt: number }
   | { id: string; kind: "retry"; step: number; attempt: number; maxRetries: number; text: string }
+  | { id: string; kind: "approval"; command: string; cwd: string; reason: string; decision?: CommandApprovalDecision }
   | {
       id: string;
       kind: "tool";
@@ -41,6 +42,7 @@ export function TimelineEntry({
   selectedId,
   onSelect,
   onEditUser,
+  onResolveApproval,
   savedId,
   onToggleSaved,
 }: {
@@ -48,6 +50,7 @@ export function TimelineEntry({
   selectedId: string | null;
   onSelect: (id: string) => void;
   onEditUser?: (text: string) => void;
+  onResolveApproval?: (id: string, decision: CommandApprovalDecision) => void;
   savedId?: string | undefined;
   onToggleSaved?: (item: SaveableTimelineItem, savedId?: string) => void;
 }): JSX.Element {
@@ -57,11 +60,21 @@ export function TimelineEntry({
         item={item}
         selectedId={selectedId}
         onSelect={onSelect}
+        {...(onResolveApproval ? { onResolveApproval } : {})}
       />
     );
   }
 
   if (item.kind === "reasoning") return <ReasoningEntry item={item} />;
+
+  if (item.kind === "approval") {
+    return (
+      <ApprovalEntry
+        item={item}
+        {...(onResolveApproval ? { onResolve: onResolveApproval } : {})}
+      />
+    );
+  }
 
   if (item.kind === "retry") {
     return (
@@ -140,10 +153,12 @@ function ActivityGroup({
   item,
   selectedId,
   onSelect,
+  onResolveApproval,
 }: {
   item: Extract<TimelineItem, { kind: "activity-group" }>;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onResolveApproval?: (id: string, decision: CommandApprovalDecision) => void;
 }): JSX.Element {
   return (
     <details className="activity-group">
@@ -155,10 +170,44 @@ function ActivityGroup({
             item={child}
             selectedId={selectedId}
             onSelect={onSelect}
+            {...(onResolveApproval ? { onResolveApproval } : {})}
           />
         ))}
       </div>
     </details>
+  );
+}
+
+function ApprovalEntry({
+  item,
+  onResolve,
+}: {
+  item: Extract<TimelineItem, { kind: "approval" }>;
+  onResolve?: (id: string, decision: CommandApprovalDecision) => void;
+}): JSX.Element {
+  if (item.decision) {
+    const label = item.decision === "deny"
+      ? "Extra access denied"
+      : item.decision === "once"
+        ? "Extra access allowed once"
+        : "Unrestricted for this thread";
+    return <div className={`approval-result ${item.decision}`}>{label}</div>;
+  }
+
+  return (
+    <section className="approval-card">
+      <strong>Command needs extra access</strong>
+      <code>{item.command}</code>
+      <p>
+        Restricted execution blocked this command in <code>{item.cwd}</code>. Approval reruns it
+        outside the sandbox with your user access.
+      </p>
+      <div className="approval-actions">
+        <button type="button" onClick={() => onResolve?.(item.id, "deny")}>Deny</button>
+        <button type="button" onClick={() => onResolve?.(item.id, "once")}>Allow once</button>
+        <button type="button" onClick={() => onResolve?.(item.id, "thread")}>Allow for this thread</button>
+      </div>
+    </section>
   );
 }
 
@@ -311,8 +360,8 @@ function ReasoningEntry({
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary>
-        {item.streaming ? <span className="activity-spinner" aria-hidden="true" /> : null}
         <span>{item.status ?? (item.streaming ? "Thinking…" : "Thinking")}</span>
+        {item.streaming ? <span className="activity-spinner" aria-hidden="true" /> : null}
       </summary>
       {item.text ? <div ref={textRef} className="reasoning-text">{item.text}</div> : null}
     </details>
@@ -388,6 +437,14 @@ export function Inspector({ item }: { item: TimelineItem }): JSX.Element {
   if (item.kind === "tool-preparing") {
     return <div className="inspector-card">{toolGeneratingLabel(item.name)}</div>;
   }
+  if (item.kind === "approval") {
+    return (
+      <div className="inspector-card">
+        <p className="eyebrow">Command approval</p>
+        <JsonInspector value={{ command: item.command, cwd: item.cwd, reason: item.reason }} />
+      </div>
+    );
+  }
   if (item.kind !== "tool") {
     return (
       <div className="inspector-card">
@@ -456,6 +513,29 @@ export function addRunEvent(
   event: RunEvent,
   setTimeline: (update: (items: TimelineItem[]) => TimelineItem[]) => void,
 ): void {
+  if (event.type === "permission.requested") {
+    setTimeline((items) => [
+      ...items,
+      {
+        id: event.id,
+        kind: "approval",
+        command: event.command,
+        cwd: event.cwd,
+        reason: event.reason,
+      },
+    ]);
+    return;
+  }
+
+  if (event.type === "permission.resolved") {
+    setTimeline((items) => items.map((item) =>
+      item.kind === "approval" && item.id === event.id
+        ? { ...item, decision: event.decision }
+        : item,
+    ));
+    return;
+  }
+
   if (event.type === "model.started") {
     setTimeline((items) => [
       ...items,

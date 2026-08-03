@@ -1,7 +1,7 @@
 .composer {
   display: grid;
   margin: 0 28px 24px;
-  overflow: hidden;
+  overflow: visible;
   background: var(--composer-background);
   border: 0;
   border-radius: 14px;
@@ -32,11 +32,9 @@ textarea {
   padding: 4px 8px 8px 14px;
 }
 
-.host-toggle {
-  display: inline-flex;
-  align-items: center;
+.execution-mode {
+  position: relative;
   flex: 0 0 auto;
-  gap: 7px;
   color: var(--text-faint);
   font-size: 11px;
 }
@@ -81,61 +79,215 @@ textarea {
   appearance: none;
 }
 
+.execution-mode summary,
 .host-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   padding: 6px 7px;
   border-radius: 6px;
   cursor: pointer;
 }
 
+.execution-mode summary {
+  list-style: none;
+}
+
+.execution-mode summary::-webkit-details-marker {
+  display: none;
+}
+
+.execution-dot {
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--border-focus);
+  border-radius: 50%;
+}
+
+.execution-shield {
+  width: 11px;
+  height: 12px;
+  color: var(--status-success-text);
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--status-success-text) 55%, transparent));
+  fill: currentColor;
+}
+
+.execution-mode summary:hover,
+.execution-mode[open] summary,
 .host-toggle:hover {
   color: var(--text-secondary);
   background: var(--hover-background);
 }
 
+.execution-mode.unsafe summary,
 .host-toggle.enabled {
   color: var(--unsafe-text);
 }
 
-.host-toggle input {
-  appearance: none;
-  width: 7px;
-  height: 7px;
-  margin: 0;
-  background: transparent;
-  border: 1px solid var(--border-focus);
-  border-radius: 50%;
-}
-
-.host-toggle input:checked {
+.execution-mode.unsafe .execution-dot {
   background: var(--unsafe-indicator);
   border-color: var(--unsafe-indicator);
 }
 
-.host-toggle input:focus-visible {
+.execution-details {
+  position: absolute;
+  right: 0;
+  bottom: 33px;
+  z-index: 4;
+  width: 270px;
+  padding: 12px;
+  color: var(--text-secondary);
+  background: var(--card-background);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 24%);
+}
+
+.execution-details strong {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.execution-details-close {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.execution-details-close:hover {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
+.execution-details p {
+  margin: 6px 0 4px;
+  line-height: 1.4;
+}
+
+.host-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.host-toggle {
+  width: 100%;
+  margin-top: 2px;
+  padding: 8px 10px;
+  color: var(--text-primary);
+  background: var(--control-background);
+  border: 1px solid var(--border-default);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.host-toggle::after {
+  margin-left: auto;
+  content: "→";
+}
+
+.host-toggle.enabled::after {
+  content: "←";
+}
+
+.host-toggle:hover {
+  border-color: var(--border-focus);
+}
+
+.host-toggle:has(input:focus-visible) {
   outline: 2px solid var(--border-focus);
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
 .send-button {
+  position: relative;
   display: grid;
   place-items: center;
   flex: 0 0 32px;
   width: 32px;
   height: 32px;
   padding: 0 0 2px;
-  color: var(--accent-contrast);
-  background: var(--accent);
+  color: var(--brand-mark-detail);
+  background: transparent;
   border: 0;
   border-radius: 50%;
   font-size: 20px;
   line-height: 1;
+  overflow: visible;
+}
+
+.send-button-orb {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  filter: grayscale(1) contrast(0) brightness(2);
+  transition: filter 1.8s ease-in-out;
+}
+
+.send-button.stop .send-button-orb {
+  filter: grayscale(0) contrast(1) brightness(1);
+  transition-duration: 650ms;
+}
+
+.send-button .thinking-orb {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.send-button:not(.stop) .thinking-orb {
+  filter: none;
+}
+
+.send-button:not(.stop) .thinking-orb-flow-a,
+.send-button:not(.stop) .thinking-orb-flow-b {
+  animation: none;
+}
+
+.send-button-symbol {
+  position: relative;
+  z-index: 1;
 }
 
 .send-button.stop {
   padding: 0;
-  color: var(--text-strong);
-  background: var(--control-background);
-  font-size: 10px;
+  font-size: 16px;
+}
+
+.send-button.stop .thinking-orb {
+  animation: send-orb-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes send-orb-pulse {
+  0%,
+  100% {
+    filter:
+      drop-shadow(0 0 1px color-mix(in srgb, var(--thinking-orb-blue) 16%, transparent))
+      drop-shadow(0 0 2px color-mix(in srgb, var(--thinking-orb-red) 12%, transparent));
+  }
+
+  50% {
+    filter:
+      drop-shadow(0 0 3px color-mix(in srgb, var(--thinking-orb-blue) 38%, transparent))
+      drop-shadow(0 0 4px color-mix(in srgb, var(--thinking-orb-red) 28%, transparent));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .send-button.stop .thinking-orb {
+    animation: none;
+  }
 }
 
 .composer-error {
@@ -143,4 +295,3 @@ textarea {
   color: var(--status-danger-text);
   font-size: 12px;
 }
-

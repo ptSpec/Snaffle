@@ -33,6 +33,8 @@ export const lightTheme = {
     "status-warning-background": "#f5e8cf",
     "status-danger-text": "#8f2d2d",
     "status-danger-background": "#f4dddd",
+    "thinking-orb-blue": "#176fe5",
+    "thinking-orb-red": "#dc3048",
     "message-danger-background": "#f8e6e6",
     "unsafe-text": "#75502f",
     "unsafe-indicator": "#a96528",

@@ -69,7 +69,7 @@ test("agent loop executes a tool and completes naturally", async (t) => {
     task: "Create answer.txt",
     provider: new ScriptedProvider(),
     tools: defaultTools(),
-    workspace: new LocalWorkspace(root, false),
+    workspace: new LocalWorkspace(root, "disabled"),
     trace,
     signal: new AbortController().signal,
   });
@@ -95,7 +95,7 @@ test("agent loop executes a tool and completes naturally", async (t) => {
 test("agent loop carries conversation history into a follow-up", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "agent-history-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
-  const workspace = new LocalWorkspace(root, false);
+  const workspace = new LocalWorkspace(root, "disabled");
   const signal = new AbortController().signal;
   const first = await runAgent({
     task: "Write a short paragraph.",

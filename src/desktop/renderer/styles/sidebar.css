@@ -314,12 +314,16 @@
 }
 
 .thread-running {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
+  display: inline-grid;
+  width: 10px;
+  height: 10px;
   margin-left: 6px;
-  background: var(--accent);
-  border-radius: 50%;
+  vertical-align: -1px;
+}
+
+.thread-running .thinking-orb {
+  width: 12px;
+  height: 12px;
 }
 
 .thread-row > input {

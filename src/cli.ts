@@ -7,6 +7,7 @@ import { OpenAICompatibleProvider } from "./providers/openai-compatible.js";
 import { listOpenRouterModels, OpenRouterProvider } from "./providers/openrouter.js";
 import type { ModelProvider } from "./providers/provider.js";
 import type { RunEvent } from "./protocol.js";
+import { probeNativeSandbox } from "./sandbox.js";
 import { defaultTools } from "./tools/default-tools.js";
 import { JsonlTrace } from "./trace.js";
 import { LocalWorkspace } from "./workspace.js";
@@ -40,13 +41,13 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (!options.unsafeHost) {
-    throw new Error(
-      "Container execution is not implemented yet. Pass --unsafe-host only inside a disposable or trusted workspace.",
-    );
+  if (options.unsafeHost) {
+    console.error("Warning: model-generated commands are running without sandbox restrictions.");
+  } else {
+    const sandbox = await probeNativeSandbox();
+    if (!sandbox.available) throw new Error(sandbox.detail);
+    console.error(`Restricted execution: ${sandbox.detail}`);
   }
-
-  console.error("Warning: this prototype can execute model-generated commands on the host.");
 
   const controller = new AbortController();
   process.once("SIGINT", () => controller.abort());
@@ -55,7 +56,7 @@ async function main(): Promise<void> {
     task: options.task,
     provider: createProvider(options),
     tools: defaultTools(),
-    workspace: new LocalWorkspace(options.workspace, true),
+    workspace: new LocalWorkspace(options.workspace, options.unsafeHost ? "unsafe" : "restricted"),
     trace: new JsonlTrace(options.tracePath),
     signal: controller.signal,
     maxSteps: options.maxSteps,
@@ -185,7 +186,7 @@ Options:
   --list-models       List tool-capable OpenRouter models, then exit
   --max-steps <n>     Maximum model turns (default: 20)
   --trace <path>      JSONL trace path (default: ${LOCAL_STATE_DIRECTORY}/traces/...)
-  --unsafe-host       Explicitly allow this prototype to modify and run on the host
+  --unsafe-host       Run commands without native sandbox restrictions
   --help              Show this help
 `);
 }

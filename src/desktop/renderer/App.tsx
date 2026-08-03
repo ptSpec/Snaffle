@@ -7,12 +7,14 @@ import {
   type FormEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import type { CommandApprovalDecision } from "../../protocol.js";
 import type { DesktopApi, DesktopRunEvent, DesktopState, SavedMessage } from "../api.js";
 import type { OpenRouterModel } from "../../providers/openrouter.js";
 import { DEFAULT_THEME, themeById, type Theme } from "../themes/index.js";
 import { Settings } from "./settings.js";
 import { SavedMessages } from "./saved-messages.js";
 import { Sidebar, type AppView, type SettingsPage } from "./sidebar.js";
+import { ThinkingOrb, type OrbMotion } from "./thinking-orb.js";
 import {
   addRunEvent,
   findTimelineItem,
@@ -38,8 +40,10 @@ const initialState: DesktopState = {
   savedMessages: [],
   openRouterAvailable: false,
   runningThreadIds: [],
+  unsafeThreadIds: [],
   defaultModel: null,
-  unsafeHostDefault: false,
+  restrictedHostAvailable: false,
+  restrictedHostDetail: "Checking restricted execution…",
   themeId: document.documentElement.dataset.theme ?? DEFAULT_THEME.id,
   maxSteps: 50,
   providerTimeoutMinutes: 3,
@@ -53,7 +57,6 @@ export function App(): JSX.Element {
   const [modelQuery, setModelQuery] = useState("");
   const [choosingModel, setChoosingModel] = useState(false);
   const [task, setTask] = useState("");
-  const [unsafeHostExecution, setUnsafeHostExecution] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
@@ -64,13 +67,18 @@ export function App(): JSX.Element {
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [view, setView] = useState<AppView>("conversation");
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("appearance");
+  const [sendOrbMotion, setSendOrbMotion] = useState<OrbMotion>("stopped");
   const taskInput = useRef<HTMLTextAreaElement>(null);
   const timelineView = useRef<HTMLDivElement>(null);
+  const executionMode = useRef<HTMLDetailsElement>(null);
   const followTimeline = useRef(true);
   const activeThreadId = useRef<string | null>(null);
   const threadTimelines = useRef(new Map<string, TimelineItem[]>());
   const running = desktopState.activeThreadId
     ? desktopState.runningThreadIds.includes(desktopState.activeThreadId)
+    : false;
+  const unsafeHostExecution = desktopState.activeThreadId
+    ? desktopState.unsafeThreadIds.includes(desktopState.activeThreadId)
     : false;
 
   useLayoutEffect(() => {
@@ -90,6 +98,32 @@ export function App(): JSX.Element {
       taskInput.current?.focus({ preventScroll: true });
     }
   }, [desktopState.activeThreadId, running, view]);
+
+  useEffect(() => {
+    if (running) {
+      setSendOrbMotion("active");
+      return;
+    }
+    setSendOrbMotion((motion) => (motion === "active" ? "settling" : motion));
+  }, [running]);
+
+  useEffect(() => {
+    if (sendOrbMotion !== "settling") return;
+    const timer = window.setTimeout(() => setSendOrbMotion("stopped"), 2300);
+    return () => window.clearTimeout(timer);
+  }, [sendOrbMotion]);
+
+  useEffect(() => {
+    function closeExecutionMode(event: PointerEvent): void {
+      const details = executionMode.current;
+      if (details?.open && event.target instanceof Node && !details.contains(event.target)) {
+        details.open = false;
+      }
+    }
+
+    document.addEventListener("pointerdown", closeExecutionMode);
+    return () => document.removeEventListener("pointerdown", closeExecutionMode);
+  }, []);
 
   useEffect(() => {
     const threadId = desktopState.activeThreadId;
@@ -144,7 +178,6 @@ export function App(): JSX.Element {
         setTimeline(initialTimeline);
         setTask(activeDraft(state));
         setSelectedModel(state.defaultModel ?? "");
-        setUnsafeHostExecution(state.unsafeHostDefault);
         if (state.openRouterAvailable) void loadModels();
       })
       .catch((cause: unknown) => setError(errorMessage(cause)));
@@ -173,8 +206,8 @@ export function App(): JSX.Element {
       ? "Describe a task before sending."
       : !selectedModel
         ? "Select a model before sending."
-        : !unsafeHostExecution
-          ? "Enable unsafe host execution before sending."
+        : !unsafeHostExecution && !desktopState.restrictedHostAvailable
+          ? desktopState.restrictedHostDetail
           : null;
 
   async function loadModels(): Promise<void> {
@@ -204,7 +237,6 @@ export function App(): JSX.Element {
       threadId,
       task: task.trim(),
       model: selectedModel,
-      unsafeHostExecution,
     };
 
     followTimeline.current = true;
@@ -245,6 +277,29 @@ export function App(): JSX.Element {
 
     try {
       await window.desktop.stopRun(threadId);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function setThreadUnsafe(unsafe: boolean): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId) return;
+    setError(null);
+    try {
+      setDesktopState(await window.desktop.setThreadUnsafe(threadId, unsafe));
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function resolveCommandApproval(
+    id: string,
+    decision: CommandApprovalDecision,
+  ): Promise<void> {
+    setError(null);
+    try {
+      setDesktopState(await window.desktop.resolveCommandApproval(id, decision));
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -476,6 +531,7 @@ export function App(): JSX.Element {
                 item={item}
                 selectedId={selectedItemId}
                 onSelect={setSelectedItemId}
+                onResolveApproval={(id, decision) => void resolveCommandApproval(id, decision)}
                 savedId={
                   item.kind === "assistant"
                     ? savedIdFor(item)
@@ -558,40 +614,63 @@ export function App(): JSX.Element {
                 </datalist>
               </div>
 
-              <label
-                className={unsafeHostExecution ? "host-toggle enabled" : "host-toggle"}
-                title="No container is active. The model can modify and run commands on the host."
+              <details
+                ref={executionMode}
+                className={unsafeHostExecution ? "execution-mode unsafe" : "execution-mode"}
               >
-                <input
-                  type="checkbox"
-                  checked={unsafeHostExecution}
-                  onChange={(event) => setUnsafeHostExecution(event.target.checked)}
-                  disabled={running}
-                />
-                Unsafe host
-              </label>
+                <summary>
+                  {unsafeHostExecution ? (
+                    <span className="execution-dot" aria-hidden="true" />
+                  ) : (
+                    <svg className="execution-shield" viewBox="0 0 16 18" aria-hidden="true">
+                      <path d="M8 1 14 3.4v4.3c0 3.9-2.5 7.1-6 8.3-3.5-1.2-6-4.4-6-8.3V3.4L8 1Z" />
+                    </svg>
+                  )}
+                  {unsafeHostExecution ? "Unsafe · this thread" : "Restricted"}
+                </summary>
+                <div className="execution-details">
+                  <button
+                    className="execution-details-close"
+                    type="button"
+                    aria-label="Close execution settings"
+                    title="Close"
+                    onClick={(event) => event.currentTarget.closest("details")?.removeAttribute("open")}
+                  >
+                    ×
+                  </button>
+                  <strong>
+                    {unsafeHostExecution ? "Unrestricted host execution" : desktopState.restrictedHostDetail}
+                  </strong>
+                  <p>
+                    {unsafeHostExecution
+                      ? "Shell commands run as your user and can access host files, network, and inherited environment. File tools remain workspace-only."
+                      : "Shell commands can write in this workspace and use private temporary files. Personal host files, network access, and Git metadata are blocked."}
+                  </p>
+                  <label className={unsafeHostExecution ? "host-toggle enabled" : "host-toggle"}>
+                    <input
+                      type="checkbox"
+                      checked={unsafeHostExecution}
+                      onChange={(event) => void setThreadUnsafe(event.target.checked)}
+                      disabled={running}
+                    />
+                    {unsafeHostExecution ? "Return to restricted" : "Allow unrestricted shell commands"}
+                  </label>
+                </div>
+              </details>
 
-              {running ? (
-                <button
-                  className="send-button stop"
-                  type="button"
-                  onClick={() => void stopRun()}
-                  aria-label="Stop run"
-                  title="Stop run"
-                >
-                  <span aria-hidden="true">■</span>
-                </button>
-              ) : (
-                <button
-                  className="send-button"
-                  type="submit"
-                  aria-label="Send task"
-                  aria-disabled={Boolean(runBlocker)}
-                  title={runBlocker ?? "Send task"}
-                >
-                  <span aria-hidden="true">↑</span>
-                </button>
-              )}
+              <button
+                className={running ? "send-button stop" : "send-button"}
+                type={running ? "button" : "submit"}
+                onClick={running ? () => void stopRun() : undefined}
+                aria-label={running ? "Stop run" : "Send task"}
+                aria-disabled={!running && Boolean(runBlocker)}
+                title={running ? "Stop run" : runBlocker ?? "Send task"}
+              >
+                <span className="send-button-orb" aria-hidden="true">
+                  <ThinkingOrb motion={sendOrbMotion} speed={1.7} />
+                </span>
+                <span className="send-button-symbol" aria-hidden="true">{running ? "■" : "↑"}</span>
+              </button>
             </div>
 
             {error ? (

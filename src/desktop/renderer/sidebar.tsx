@@ -7,6 +7,7 @@ import {
 import logoSvg from "../../../assets/logo_svg.svg?raw";
 import { PRODUCT } from "../../identity.js";
 import type { DesktopState, DesktopThread } from "../api.js";
+import { ThinkingOrb } from "./thinking-orb.js";
 
 export type AppView = "conversation" | "saved" | "settings";
 export type SettingsPage = "appearance" | "agent";
@@ -526,7 +527,11 @@ function ThreadRow({
       >
         <span>
           {thread.title}
-          {running ? <i className="thread-running" title="Running" aria-label="Running" /> : null}
+          {running ? (
+            <span className="thread-running" title="Running" aria-label="Running">
+              <ThinkingOrb motion="active" speed={1.7} />
+            </span>
+          ) : null}
         </span>
         {workspaceName ? <small>{workspaceName}</small> : null}
       </button>

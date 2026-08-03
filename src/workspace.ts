@@ -1,8 +1,11 @@
 import { exec, execFile } from "node:child_process";
-import { chmod, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { realpathSync } from "node:fs";
+import { chmod, mkdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { rgPath } from "@vscode/ripgrep";
+import { hostEnvironmentDescription, runRestrictedCommand } from "./sandbox.js";
+import type { CommandApprovalDecision } from "./protocol.js";
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -17,29 +20,53 @@ export type CommandResult = {
   exitCode: number | null;
   stdout: string;
   stderr: string;
+  approval?: Exclude<CommandApprovalDecision, "deny">;
 };
 
+export type CommandApprovalRequest = {
+  command: string;
+  cwd: string;
+  reason: string;
+};
+
+export type CommandApproval = (
+  request: CommandApprovalRequest,
+) => Promise<CommandApprovalDecision>;
+
 export interface Workspace {
+  readonly environment: string;
   read(path: string): Promise<string>;
   write(path: string, content: string): Promise<void>;
   search(query: string, options: SearchOptions): Promise<string[]>;
   run(command: string, cwd: string | undefined, timeoutMs: number): Promise<CommandResult>;
 }
 
+export type CommandExecution = "disabled" | "restricted" | "unsafe";
+
 export class LocalWorkspace implements Workspace {
   readonly root: string;
+  readonly environment: string;
 
-  constructor(root: string, private readonly allowCommands: boolean) {
-    this.root = path.resolve(root);
+  constructor(
+    root: string,
+    private commandExecution: CommandExecution,
+    private readonly approveCommand?: CommandApproval,
+  ) {
+    this.root = realpathSync(path.resolve(root));
+    const commandBoundary = commandExecution === "restricted"
+      ? "Shell commands can modify the workspace but cannot access personal host files, Git metadata, or the network."
+      : commandExecution === "unsafe"
+        ? "Shell commands have the host user's normal access."
+        : "Shell commands are disabled.";
+    this.environment = `${hostEnvironmentDescription()} ${commandBoundary}`;
   }
 
   async read(filePath: string): Promise<string> {
-    return readFile(this.resolve(filePath), "utf8");
+    return readFile(await this.resolveExisting(filePath), "utf8");
   }
 
   async write(filePath: string, content: string): Promise<void> {
-    const target = this.resolve(filePath);
-    await mkdir(path.dirname(target), { recursive: true });
+    const target = await this.resolveWrite(filePath);
 
     const temporary = `${target}.${process.pid}.tmp`;
     await writeFile(temporary, content, "utf8");
@@ -55,7 +82,7 @@ export class LocalWorkspace implements Workspace {
   }
 
   async search(query: string, options: SearchOptions): Promise<string[]> {
-    const searchPath = this.relative(this.resolve(options.path ?? "."));
+    const searchPath = this.relative(await this.resolveExisting(options.path ?? "."));
     const args = ["--line-number", "--no-heading", "--color", "never"];
 
     if (options.glob) args.push("--glob", options.glob);
@@ -78,12 +105,37 @@ export class LocalWorkspace implements Workspace {
     cwd: string | undefined,
     timeoutMs: number,
   ): Promise<CommandResult> {
-    if (!this.allowCommands) {
+    if (this.commandExecution === "disabled") {
       throw new Error("Host command execution is disabled");
     }
 
-    const commandCwd = this.resolve(cwd ?? ".");
+    const commandCwd = await this.resolveExisting(cwd ?? ".");
 
+    if (this.commandExecution === "restricted") {
+      const result = await runRestrictedCommand(command, this.root, commandCwd, timeoutMs);
+      if (!result.permissionDenied || !this.approveCommand) return result;
+
+      const decision = await this.approveCommand({
+        command,
+        cwd: this.relative(commandCwd) || ".",
+        reason: result.stderr,
+      });
+      if (decision === "deny") {
+        return { ...result, stderr: `${result.stderr}\nUnrestricted retry denied by the user.` };
+      }
+      if (decision === "thread") this.commandExecution = "unsafe";
+      const retried = await this.runUnsafe(command, commandCwd, timeoutMs);
+      return { ...retried, approval: decision };
+    }
+
+    return this.runUnsafe(command, commandCwd, timeoutMs);
+  }
+
+  private async runUnsafe(
+    command: string,
+    commandCwd: string,
+    timeoutMs: number,
+  ): Promise<CommandResult> {
     try {
       const { stdout, stderr } = await execAsync(command, {
         cwd: commandCwd,
@@ -114,6 +166,51 @@ export class LocalWorkspace implements Workspace {
     return resolved;
   }
 
+  private async resolveExisting(input: string): Promise<string> {
+    const resolved = this.resolve(input);
+    const actual = await realpath(resolved);
+    this.assertInside(actual, input);
+    return actual;
+  }
+
+  private async resolveWrite(input: string): Promise<string> {
+    const target = this.resolve(input);
+
+    try {
+      this.assertInside(await realpath(target), input);
+      return target;
+    } catch (error) {
+      if (!isMissingPath(error)) throw error;
+    }
+
+    let existing = path.dirname(target);
+    while (true) {
+      try {
+        this.assertInside(await realpath(existing), input);
+        break;
+      } catch (error) {
+        if (!isMissingPath(error)) throw error;
+        const parent = path.dirname(existing);
+        if (parent === existing) throw error;
+        existing = parent;
+      }
+    }
+
+    await mkdir(path.dirname(target), { recursive: true });
+    this.assertInside(await realpath(path.dirname(target)), input);
+    return target;
+  }
+
+  private assertInside(resolved: string, input: string): void {
+    const relative = path.relative(this.root, resolved);
+    if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+      throw new Error(`Path leaves the workspace: ${input}`);
+    }
+    if (relative.split(path.sep).includes(".git")) {
+      throw new Error("Git metadata is managed by Esch and cannot be accessed through file tools");
+    }
+  }
+
   private relative(input: string): string {
     return path.relative(this.root, input);
   }
@@ -127,4 +224,8 @@ type ProcessError = Error & {
 
 function isProcessError(error: unknown): error is ProcessError {
   return error instanceof Error;
+}
+
+function isMissingPath(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
 }

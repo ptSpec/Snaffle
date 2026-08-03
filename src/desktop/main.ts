@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadEnvFile } from "node:process";
@@ -12,10 +13,11 @@ import {
   DEFAULT_PROVIDER_RETRIES,
   DEFAULT_PROVIDER_TIMEOUT_MS,
 } from "../providers/openai-compatible.js";
-import type { Message, RunEvent } from "../protocol.js";
+import type { CommandApprovalDecision, Message, RunEvent } from "../protocol.js";
+import { probeNativeSandbox } from "../sandbox.js";
 import type { Trace } from "../trace.js";
 import { defaultTools } from "../tools/default-tools.js";
-import { LocalWorkspace } from "../workspace.js";
+import { LocalWorkspace, type CommandApprovalRequest } from "../workspace.js";
 import type { DesktopState, SaveMessageInput, StartRunInput } from "./api.js";
 import { openStore, type DesktopStore } from "./store.js";
 import { DEFAULT_THEME, themeById, type Theme } from "./themes/index.js";
@@ -29,6 +31,11 @@ let store: DesktopStore;
 const activeRuns = new Map<
   string,
   { controller: AbortController; threadId: string; workspaceId: string }
+>();
+const unsafeThreads = new Set<string>();
+const pendingApprovals = new Map<
+  string,
+  { threadId: string; resolve: (decision: CommandApprovalDecision) => void }
 >();
 let activeTheme: Theme = DEFAULT_THEME;
 let maxSteps = DEFAULT_MAX_STEPS;
@@ -164,6 +171,7 @@ function registerIpc(): void {
     if (threadIds.some((threadId) => activeRuns.has(threadId))) {
       throw new Error("The running thread cannot be deleted");
     }
+    threadIds.forEach((threadId) => unsafeThreads.delete(threadId));
     await store.deleteThreads(threadIds);
     return desktopState();
   });
@@ -188,14 +196,21 @@ function registerIpc(): void {
       (workspace) => workspace.threads.some((thread) => thread.id === input.threadId),
     );
     if (!selectedWorkspace) throw new Error("The selected thread no longer exists");
-    if (!input.unsafeHostExecution) {
-      throw new Error("Unsafe host execution must be explicitly enabled before starting a run");
-    }
     if (activeRuns.has(input.threadId)) throw new Error("This thread is already running");
+    const unsafe = unsafeThreads.has(input.threadId);
+    if (!unsafe) {
+      const sandbox = await probeNativeSandbox();
+      if (!sandbox.available) throw new Error(sandbox.detail);
+    }
 
     const apiKey = openRouterApiKey();
     const controller = new AbortController();
     const threadId = input.threadId;
+    const workspace = new LocalWorkspace(
+      selectedWorkspace.path,
+      unsafe ? "unsafe" : "restricted",
+      (request) => requestCommandApproval(threadId, request),
+    );
     const run = { controller, threadId, workspaceId: selectedWorkspace.id };
     activeRuns.set(threadId, run);
     let conversation: Message[];
@@ -205,7 +220,7 @@ function registerIpc(): void {
         threadId,
         conversation.length
           ? [...conversation, { role: "user", content: input.task }]
-          : initialMessages(input.task),
+          : initialMessages(input.task, workspace.environment),
       );
     } catch (error) {
       activeRuns.delete(threadId);
@@ -221,7 +236,7 @@ function registerIpc(): void {
         maxRetries: providerRetries,
       }),
       tools: defaultTools(),
-      workspace: new LocalWorkspace(selectedWorkspace.path, true),
+      workspace,
       trace: memoryTrace,
       signal: controller.signal,
       history: conversation,
@@ -239,8 +254,36 @@ function registerIpc(): void {
     const run = activeRuns.get(parseId(value, "Thread"));
     if (!run) return false;
     run.controller.abort();
+    resolveThreadApprovals(run.threadId, "deny");
     return true;
   });
+
+  ipcMain.handle(
+    "desktop:set-thread-unsafe",
+    async (_event, rawThreadId: unknown, unsafe: unknown): Promise<DesktopState> => {
+      const threadId = parseId(rawThreadId, "Thread");
+      if (typeof unsafe !== "boolean") throw new Error("Unsafe state must be a boolean");
+      if (activeRuns.has(threadId)) throw new Error("Execution mode cannot change during a run");
+      if (unsafe) unsafeThreads.add(threadId);
+      else unsafeThreads.delete(threadId);
+      return desktopState();
+    },
+  );
+
+  ipcMain.handle(
+    "desktop:resolve-command-approval",
+    async (_event, rawId: unknown, rawDecision: unknown): Promise<DesktopState> => {
+      const id = parseId(rawId, "Approval");
+      const decision = parseApprovalDecision(rawDecision);
+      const pending = pendingApprovals.get(id);
+      if (!pending) throw new Error("This approval request is no longer active");
+      pendingApprovals.delete(id);
+      if (decision === "thread") unsafeThreads.add(pending.threadId);
+      await emitPermissionEvent(pending.threadId, { type: "permission.resolved", id, decision });
+      pending.resolve(decision);
+      return desktopState();
+    },
+  );
 
   ipcMain.handle("desktop:set-theme", (_event, themeId: unknown): void => {
     if (typeof themeId !== "string") throw new Error("Theme id must be a string");
@@ -307,6 +350,7 @@ function registerIpc(): void {
 
 async function desktopState(): Promise<DesktopState> {
   const state = await store.state();
+  const sandbox = await probeNativeSandbox();
   const workspace =
     state.workspaces.find((item) => item.id === state.activeWorkspaceId) ?? null;
   return {
@@ -317,8 +361,10 @@ async function desktopState(): Promise<DesktopState> {
     savedMessages: await store.savedMessages.list(),
     openRouterAvailable: Boolean(process.env.OPENROUTER_API_KEY),
     runningThreadIds: [...activeRuns.keys()],
+    unsafeThreadIds: [...unsafeThreads],
     defaultModel: app.isPackaged ? null : DEVELOPMENT_MODEL,
-    unsafeHostDefault: !app.isPackaged,
+    restrictedHostAvailable: sandbox.available,
+    restrictedHostDetail: sandbox.detail,
     themeId: activeTheme.id,
     maxSteps,
     providerTimeoutMinutes,
@@ -391,13 +437,14 @@ function parseStartRunInput(input: unknown): StartRunInput {
   if (!task) throw new Error("Enter a task before starting a run");
   if (task.length > 30000) throw new Error("Task is too long");
   if (!model) throw new Error("Choose an OpenRouter model before starting a run");
-  if (typeof value.unsafeHostExecution !== "boolean") {
-    throw new Error("Unsafe host execution consent is required");
-  }
-
   const threadId = typeof value.threadId === "string" ? value.threadId : "";
   if (!threadId) throw new Error("Choose a thread before starting a run");
-  return { threadId, task, model, unsafeHostExecution: value.unsafeHostExecution };
+  return { threadId, task, model };
+}
+
+function parseApprovalDecision(value: unknown): CommandApprovalDecision {
+  if (value === "deny" || value === "once" || value === "thread") return value;
+  throw new Error("Invalid approval decision");
 }
 
 function parseSaveMessageInput(input: unknown): SaveMessageInput {
@@ -440,6 +487,39 @@ function sendRunEvent(threadId: string, event: RunEvent): void {
   mainWindow.webContents.send("desktop:run-event", { threadId, event });
 }
 
+async function requestCommandApproval(
+  threadId: string,
+  request: CommandApprovalRequest,
+): Promise<CommandApprovalDecision> {
+  const id = randomUUID();
+  const event: RunEvent = {
+    type: "permission.requested",
+    id,
+    command: request.command,
+    cwd: request.cwd,
+    reason: request.reason.slice(0, 2000),
+  };
+  const decision = new Promise<CommandApprovalDecision>((resolve) => {
+    pendingApprovals.set(id, { threadId, resolve });
+  });
+  await emitPermissionEvent(threadId, event);
+  return decision;
+}
+
+async function emitPermissionEvent(threadId: string, event: RunEvent): Promise<void> {
+  await memoryTrace.write(event);
+  sendRunEvent(threadId, event);
+}
+
+function resolveThreadApprovals(threadId: string, decision: CommandApprovalDecision): void {
+  for (const [id, pending] of pendingApprovals) {
+    if (pending.threadId !== threadId) continue;
+    pendingApprovals.delete(id);
+    void emitPermissionEvent(threadId, { type: "permission.resolved", id, decision });
+    pending.resolve(decision);
+  }
+}
+
 function loadDevelopmentEnvironment(): void {
   const environmentPath = path.join(process.cwd(), ".env");
   if (!app.isPackaged && existsSync(environmentPath)) loadEnvFile(environmentPath);
@@ -453,6 +533,7 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   for (const run of activeRuns.values()) run.controller.abort();
+  for (const run of activeRuns.values()) resolveThreadApprovals(run.threadId, "deny");
   store?.close();
 });
 

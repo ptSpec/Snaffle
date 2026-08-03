@@ -33,6 +33,8 @@ export const darkTheme = {
     "status-warning-background": "#56391c",
     "status-danger-text": "#ffb9b4",
     "status-danger-background": "#55292a",
+    "thinking-orb-blue": "#398cff",
+    "thinking-orb-red": "#ff465c",
     "message-danger-background": "#3c2020",
     "unsafe-text": "#bca58f",
     "unsafe-indicator": "#d28a4a",

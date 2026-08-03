@@ -27,6 +27,8 @@ export const THEME_COLOR_DESCRIPTIONS = {
   "status-warning-background": "Background for warning or nonzero command status.",
   "status-danger-text": "Text for errors and failed status.",
   "status-danger-background": "Background for compact error status.",
+  "thinking-orb-blue": "Blue fluid color in the active thinking indicator.",
+  "thinking-orb-red": "Red fluid color in the active thinking indicator.",
   "message-danger-background": "Background for a full error message.",
   "unsafe-text": "Text indicating unsafe host execution.",
   "unsafe-indicator": "Indicator showing unsafe host execution is enabled.",

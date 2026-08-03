@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { CommandApprovalDecision } from "../protocol.js";
 import type { DesktopApi, DesktopRunEvent, SaveMessageInput, StartRunInput } from "./api.js";
 
 const api: DesktopApi = {
@@ -21,6 +22,10 @@ const api: DesktopApi = {
   listOpenRouterModels: () => ipcRenderer.invoke("desktop:list-openrouter-models"),
   startRun: (input: StartRunInput) => ipcRenderer.invoke("desktop:start-run", input),
   stopRun: (threadId: string) => ipcRenderer.invoke("desktop:stop-run", threadId),
+  setThreadUnsafe: (threadId: string, unsafe: boolean) =>
+    ipcRenderer.invoke("desktop:set-thread-unsafe", threadId, unsafe),
+  resolveCommandApproval: (id: string, decision: CommandApprovalDecision) =>
+    ipcRenderer.invoke("desktop:resolve-command-approval", id, decision),
   setTheme: (themeId: string) => ipcRenderer.invoke("desktop:set-theme", themeId),
   setMaxSteps: (maxSteps: number) => ipcRenderer.invoke("desktop:set-max-steps", maxSteps),
   setProviderTimeoutMinutes: (minutes: number) =>

@@ -2,7 +2,8 @@ import { integerField, objectInput, stringField, type Tool } from "./tool.js";
 
 export const readTool: Tool = {
   name: "read_file",
-  description: "Read a UTF-8 file or a bounded range of its lines.",
+  description:
+    'Read a UTF-8 file or a bounded range of its lines. Example: {"path":"src/app.ts","startLine":40,"lineCount":80}.',
   inputSchema: {
     type: "object",
     properties: {

@@ -2,7 +2,8 @@ import { objectInput, stringField, type Tool } from "./tool.js";
 
 export const writeTool: Tool = {
   name: "write_file",
-  description: "Create a file or replace its complete contents. Use edit_file for targeted changes.",
+  description:
+    'Create a file or replace its complete contents. Example: {"path":"src/config.ts","content":"export const port = 3000;\\n"}. Use edit_file for targeted changes.',
   inputSchema: {
     type: "object",
     properties: {

@@ -61,7 +61,10 @@ function repairJsonSyntax(
 
 export function healToolCall(call: ToolCall, schema: JsonSchema): ToolCall {
   const healed = healToolInput(call.input, schema);
-  const repair = [call.inputRepair, healed.repair].filter(Boolean).join("; ");
+  const repairedObject = isObject(healed.input);
+  const repair = repairedObject
+    ? [call.inputRepair, healed.repair].filter(Boolean).join("; ")
+    : "";
   return {
     ...call,
     input: healed.input,
