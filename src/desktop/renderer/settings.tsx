@@ -5,22 +5,26 @@ import type { SettingsPage } from "./sidebar.js";
 export function Settings({
   page,
   themeId,
+  editorFontSize,
   maxSteps,
   providerTimeoutMinutes,
   providerRetries,
   error,
   onSelectTheme,
+  onEditorFontSize,
   onMaxSteps,
   onProviderTimeoutMinutes,
   onProviderRetries,
 }: {
   page: SettingsPage;
   themeId: string;
+  editorFontSize: number;
   maxSteps: number;
   providerTimeoutMinutes: number;
   providerRetries: number;
   error: string | null;
   onSelectTheme: (themeId: string) => void;
+  onEditorFontSize: (size: number) => void;
   onMaxSteps: (maxSteps: number) => void;
   onProviderTimeoutMinutes: (minutes: number) => void;
   onProviderRetries: (retries: number) => void;
@@ -67,6 +71,15 @@ export function Settings({
             </button>
           ))}
         </div>
+
+        <NumberSetting
+          label="Code editor font size"
+          description="Text size in the Git editor, from 10 to 24 pixels."
+          value={editorFontSize}
+          min={10}
+          max={24}
+          onChange={onEditorFontSize}
+        />
 
         {error ? <p className="settings-error">{error}</p> : null}
       </div>

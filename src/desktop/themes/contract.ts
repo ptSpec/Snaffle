@@ -41,6 +41,8 @@ export const THEME_COLOR_DESCRIPTIONS = {
   "syntax-function": "Syntax-highlighted function names.",
   "syntax-type": "Syntax-highlighted type names.",
   "syntax-operator": "Syntax-highlighted operators and punctuation.",
+  "editor-selection-background": "Selection highlight inside the code editor.",
+  "editor-cursor": "Insertion cursor inside the code editor.",
   "diff-added-text": "Text of added lines in a Git diff.",
   "diff-added-background": "Background of added lines in a Git diff.",
   "diff-removed-text": "Text of removed lines in a Git diff.",

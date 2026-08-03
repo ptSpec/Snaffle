@@ -47,6 +47,8 @@ export const lightTheme = {
     "syntax-function": "#d2a8ff",
     "syntax-type": "#ffa657",
     "syntax-operator": "#c9d1d9",
+    "editor-selection-background": "#356f9f",
+    "editor-cursor": "#ffffff",
     "diff-added-text": "#1f6637",
     "diff-added-background": "#dcefe2",
     "diff-removed-text": "#8f2d2d",
