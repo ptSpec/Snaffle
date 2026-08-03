@@ -205,12 +205,14 @@ test("restricted commands stay inside the workspace", async (t) => {
   const workspace = new LocalWorkspace(root, "restricted");
 
   const inside = await workspace.run("printf ok > generated.txt", undefined, 5000);
+  const listing = await workspace.run("ls -la", undefined, 5000);
   const outsideRead = await workspace.run(`cat ${JSON.stringify(secret)}`, undefined, 5000);
   const gitWrite = await workspace.run("touch .git/forbidden", undefined, 5000);
   const nestedGitWrite = await workspace.run("touch nested/.git/forbidden", undefined, 5000);
   const inheritedSecret = await workspace.run("test -z \"$OPENROUTER_API_KEY\"", undefined, 5000);
 
   assert.equal(inside.exitCode, 0);
+  assert.equal(listing.exitCode, 0);
   assert.equal(await readFile(path.join(root, "generated.txt"), "utf8"), "ok");
   assert.notEqual(outsideRead.exitCode, 0);
   assert.notEqual(gitWrite.exitCode, 0);
