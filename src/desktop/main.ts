@@ -1,15 +1,16 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
 import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_MAX_STEPS, runAgent } from "../agent-loop.js";
 import { initialMessages } from "../context.js";
-import { initializeGitRepository, saveGitFile } from "../git/actions.js";
+import { commitGitChanges, initializeGitRepository, saveGitFile } from "../git/actions.js";
 import { safeWorkspacePath } from "../git/process.js";
-import { gitChanges, gitFileContents } from "../git/repository.js";
+import { gitChanges, gitDiffPreview, gitFileContents } from "../git/repository.js";
 import { PRODUCT } from "../identity.js";
 import { OpenRouterProvider, listOpenRouterModels } from "../providers/openrouter.js";
 import {
@@ -42,6 +43,8 @@ const pendingApprovals = new Map<
 >();
 let activeTheme: Theme = DEFAULT_THEME;
 let editorFontSize = 13;
+let editorCommand = "";
+let editorArguments = "";
 let maxSteps = DEFAULT_MAX_STEPS;
 let providerTimeoutMinutes = DEFAULT_PROVIDER_TIMEOUT_MS / 60_000;
 let providerRetries = DEFAULT_PROVIDER_RETRIES;
@@ -61,6 +64,8 @@ async function start(): Promise<void> {
       ? themeById(settings.themeId) ?? DEFAULT_THEME
       : DEFAULT_THEME;
   editorFontSize = validEditorFontSize(settings.editorFontSize) ?? editorFontSize;
+  editorCommand = typeof settings.editorCommand === "string" ? settings.editorCommand : "";
+  editorArguments = typeof settings.editorArguments === "string" ? settings.editorArguments : "";
   maxSteps = validMaxSteps(settings.maxSteps) ?? DEFAULT_MAX_STEPS;
   providerTimeoutMinutes = validProviderTimeout(settings.providerTimeoutMinutes) ?? providerTimeoutMinutes;
   providerRetries = validProviderRetries(settings.providerRetries) ?? DEFAULT_PROVIDER_RETRIES;
@@ -85,7 +90,7 @@ function createWindow(): void {
     minWidth: 980,
     minHeight: 640,
     icon: applicationIcon(),
-    backgroundColor: activeTheme.colors["app-background"],
+    backgroundColor: activeTheme.colors.background,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
     ...(process.platform === "darwin"
       ? {
@@ -93,8 +98,8 @@ function createWindow(): void {
         }
       : {
           titleBarOverlay: {
-            color: activeTheme.colors["app-background"],
-            symbolColor: activeTheme.colors["text-primary"],
+            color: activeTheme.colors.background,
+            symbolColor: activeTheme.colors.text,
             height: 40,
           },
         }),
@@ -297,11 +302,11 @@ function registerIpc(): void {
 
     activeTheme = theme;
     saveSettings({ themeId: theme.id });
-    mainWindow?.setBackgroundColor(theme.colors["app-background"]);
+    mainWindow?.setBackgroundColor(theme.colors.background);
     if (process.platform !== "darwin") {
       mainWindow?.setTitleBarOverlay({
-        color: theme.colors["app-background"],
-        symbolColor: theme.colors["text-primary"],
+        color: theme.colors.background,
+        symbolColor: theme.colors.text,
         height: 40,
       });
     }
@@ -312,6 +317,23 @@ function registerIpc(): void {
     if (next === undefined) throw new Error("Editor font size must be an integer from 10 to 24");
     editorFontSize = next;
     saveSettings({ editorFontSize });
+  });
+
+  ipcMain.handle("desktop:set-editor-launcher", (_event, command: unknown, argumentsTemplate: unknown): void => {
+    if (typeof command !== "string" || typeof argumentsTemplate !== "string") {
+      throw new Error("Editor command and arguments must be text");
+    }
+    editorCommand = command.trim();
+    editorArguments = argumentsTemplate.trim();
+    saveSettings({ editorCommand, editorArguments });
+  });
+
+  ipcMain.handle("desktop:choose-editor-application", async (): Promise<string | null> => {
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      title: "Choose editor application",
+      properties: ["openFile"],
+    });
+    return result.canceled ? null : result.filePaths[0] ?? null;
   });
 
   ipcMain.handle("desktop:set-max-steps", (_event, value: unknown): void => {
@@ -358,6 +380,10 @@ function registerIpc(): void {
     return gitFileContents(await workspacePath(workspaceId), parseFilePath(filePath));
   });
 
+  ipcMain.handle("desktop:get-git-diff-preview", async (_event, workspaceId: unknown, filePath: unknown) => {
+    return gitDiffPreview(await workspacePath(workspaceId), parseFilePath(filePath));
+  });
+
   ipcMain.handle("desktop:save-git-file", async (
     _event,
     workspaceId: unknown,
@@ -370,8 +396,29 @@ function registerIpc(): void {
     await saveGitFile(await workspacePath(workspaceId), parseFilePath(filePath), content, lineEnding);
   });
 
+  ipcMain.handle("desktop:commit-git-changes", async (
+    _event,
+    workspaceId: unknown,
+    rawMessage: unknown,
+    rawPaths: unknown,
+  ) => {
+    const workspace = await workspacePath(workspaceId);
+    const message = typeof rawMessage === "string" ? rawMessage.trim() : "";
+    if (!message) throw new Error("Enter a commit message");
+    if (message.length > 6000) throw new Error("Commit message is too long");
+    const paths = parseFilePaths(rawPaths);
+    for (const filePath of paths) safeWorkspacePath(workspace, filePath);
+    await commitGitChanges(workspace, message, paths);
+    return gitChanges(workspace);
+  });
+
   ipcMain.handle("desktop:open-workspace-file", async (_event, workspaceId: unknown, filePath: unknown) => {
-    const error = await shell.openPath(safeWorkspacePath(await workspacePath(workspaceId), parseFilePath(filePath)));
+    const target = safeWorkspacePath(await workspacePath(workspaceId), parseFilePath(filePath));
+    if (editorCommand) {
+      await launchEditor(target);
+      return;
+    }
+    const error = await shell.openPath(target);
     if (error) throw new Error(error);
   });
 
@@ -407,6 +454,13 @@ function parseFilePath(value: unknown): string {
   return value;
 }
 
+function parseFilePaths(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || !item)) {
+    throw new Error("Select at least one file to commit");
+  }
+  return value;
+}
+
 async function desktopState(): Promise<DesktopState> {
   const state = await store.state();
   const sandbox = await probeNativeSandbox();
@@ -426,6 +480,8 @@ async function desktopState(): Promise<DesktopState> {
     restrictedHostDetail: sandbox.detail,
     themeId: activeTheme.id,
     editorFontSize,
+    editorCommand,
+    editorArguments,
     maxSteps,
     providerTimeoutMinutes,
     providerRetries,
@@ -439,6 +495,8 @@ function settingsPath(): string {
 type SavedSettings = {
   themeId?: unknown;
   editorFontSize?: unknown;
+  editorCommand?: unknown;
+  editorArguments?: unknown;
   maxSteps?: unknown;
   providerTimeoutMinutes?: unknown;
   providerRetries?: unknown;
@@ -460,6 +518,8 @@ function loadSettings(): SavedSettings {
 function saveSettings(update: {
   themeId?: string;
   editorFontSize?: number;
+  editorCommand?: string;
+  editorArguments?: string;
   maxSteps?: number;
   providerTimeoutMinutes?: number;
   providerRetries?: number;
@@ -473,6 +533,35 @@ function validEditorFontSize(value: unknown): number | undefined {
   return Number.isInteger(value) && Number(value) >= 10 && Number(value) <= 24
     ? Number(value)
     : undefined;
+}
+
+async function launchEditor(target: string): Promise<void> {
+  const folder = path.dirname(target);
+  const parsed = editorArguments.match(/(?:[^\s"]+|"[^"]*")+/g)?.map((argument) =>
+    argument.startsWith('"') && argument.endsWith('"') ? argument.slice(1, -1) : argument
+  ) ?? [];
+  const hasTarget = parsed.some((argument) => argument.includes("{path}") || argument.includes("{folder}"));
+  const args = parsed.map((argument) => argument
+    .replaceAll("{path}", target)
+    .replaceAll("{folder}", folder));
+  if (!hasTarget) args.push(target);
+
+  const macApplication = process.platform === "darwin" && /\.app\/?$/i.test(editorCommand);
+  const command = macApplication ? "open" : editorCommand;
+  const launchArgs = macApplication
+    ? editorArguments
+      ? ["-a", editorCommand, "--args", ...args]
+      : ["-a", editorCommand, target]
+    : args;
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(command, launchArgs, { detached: true, stdio: "ignore" });
+    child.once("spawn", () => {
+      child.unref();
+      resolve();
+    });
+    child.once("error", reject);
+  });
 }
 
 function validMaxSteps(value: unknown): number | undefined {

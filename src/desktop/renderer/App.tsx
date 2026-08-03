@@ -15,6 +15,7 @@ import { Settings } from "./settings.js";
 import { SavedMessages } from "./saved-messages.js";
 import { Sidebar, type AppView, type SettingsPage } from "./sidebar.js";
 import { InspectorPanel, type InspectorTab } from "./inspector/panel.js";
+import { SearchPicker } from "./search-picker.js";
 import { ThinkingOrb, type OrbMotion } from "./thinking-orb.js";
 import {
   addRunEvent,
@@ -46,6 +47,8 @@ const initialState: DesktopState = {
   restrictedHostDetail: "Checking restricted execution…",
   themeId: document.documentElement.dataset.theme ?? DEFAULT_THEME.id,
   editorFontSize: 13,
+  editorCommand: "",
+  editorArguments: "",
   maxSteps: 50,
   providerTimeoutMinutes: 3,
   providerRetries: 2,
@@ -55,8 +58,6 @@ export function App(): JSX.Element {
   const [desktopState, setDesktopState] = useState(initialState);
   const [models, setModels] = useState<OpenRouterModel[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
-  const [modelQuery, setModelQuery] = useState("");
-  const [choosingModel, setChoosingModel] = useState(false);
   const [task, setTask] = useState("");
   const [loadingModels, setLoadingModels] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -470,6 +471,25 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setEditorLauncher(editorCommand: string, editorArguments: string): Promise<void> {
+    try {
+      await window.desktop.setEditorLauncher(editorCommand, editorArguments);
+      setDesktopState((state) => ({ ...state, editorCommand, editorArguments }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function chooseEditorApplication(): Promise<void> {
+    try {
+      const command = await window.desktop.chooseEditorApplication();
+      if (command) await setEditorLauncher(command, desktopState.editorArguments);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   async function setProviderTimeoutMinutes(providerTimeoutMinutes: number): Promise<void> {
     try {
       await window.desktop.setProviderTimeoutMinutes(providerTimeoutMinutes);
@@ -553,12 +573,16 @@ export function App(): JSX.Element {
             page={settingsPage}
             themeId={desktopState.themeId}
             editorFontSize={desktopState.editorFontSize}
+            editorCommand={desktopState.editorCommand}
+            editorArguments={desktopState.editorArguments}
             maxSteps={desktopState.maxSteps}
             providerTimeoutMinutes={desktopState.providerTimeoutMinutes}
             providerRetries={desktopState.providerRetries}
             error={error}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
             onEditorFontSize={(size) => void setEditorFontSize(size)}
+            onEditorLauncher={(command, argumentsTemplate) => void setEditorLauncher(command, argumentsTemplate)}
+            onChooseEditor={() => void chooseEditorApplication()}
             onMaxSteps={(maxSteps) => void setMaxSteps(maxSteps)}
             onProviderTimeoutMinutes={(minutes) => void setProviderTimeoutMinutes(minutes)}
             onProviderRetries={(retries) => void setProviderRetries(retries)}
@@ -625,53 +649,16 @@ export function App(): JSX.Element {
             />
 
             <div className="composer-controls">
-              <div className="model-search">
-                {choosingModel ? (
-                  <input
-                    autoFocus
-                    id="model"
-                    list="openrouter-models"
-                    value={modelQuery}
-                    onChange={(event) => {
-                      const model = event.currentTarget.value;
-                      setModelQuery(model);
-                      if (!models.some((item) => item.id === model)) return;
-                      setSelectedModel(model);
-                      setChoosingModel(false);
-                    }}
-                    onBlur={() => setChoosingModel(false)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Escape") setChoosingModel(false);
-                      if (event.key !== "Enter" || !modelQuery.trim()) return;
-                      event.preventDefault();
-                      setSelectedModel(modelQuery.trim());
-                      setChoosingModel(false);
-                    }}
-                    placeholder={loadingModels ? "Loading models…" : "Search models…"}
-                    disabled={loadingModels || !desktopState.openRouterAvailable || running}
-                    aria-label="OpenRouter model"
-                  />
-                ) : (
-                  <button
-                    className={selectedModel ? "model-choice" : "model-choice empty"}
-                    type="button"
-                    onClick={() => {
-                      setModelQuery(selectedModel);
-                      setChoosingModel(true);
-                    }}
-                    disabled={loadingModels || !desktopState.openRouterAvailable || running}
-                  >
-                    {loadingModels ? "Loading models…" : selectedModel || "Select model"}
-                  </button>
-                )}
-                <datalist id="openrouter-models">
-                  {models.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.name}
-                    </option>
-                  ))}
-                </datalist>
-              </div>
+              <SearchPicker
+                className={selectedModel ? "model-search" : "model-search empty"}
+                value={selectedModel}
+                options={models.map((model) => ({ value: model.id, label: model.name }))}
+                placeholder={loadingModels ? "Loading models…" : "Select model"}
+                searchPlaceholder="Search models…"
+                disabled={loadingModels || !desktopState.openRouterAvailable || running}
+                allowCustom
+                onChange={setSelectedModel}
+              />
 
               <details
                 ref={executionMode}

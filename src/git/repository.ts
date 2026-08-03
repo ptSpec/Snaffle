@@ -1,5 +1,5 @@
 import { readFile, stat } from "node:fs/promises";
-import type { GitChanges, GitFileChange, GitFileContents } from "../desktop/api.js";
+import type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents } from "../desktop/api.js";
 import { MAX_GIT_OUTPUT_BYTES, runGit, safeWorkspacePath } from "./process.js";
 
 export async function gitChanges(workspace: string): Promise<GitChanges> {
@@ -20,6 +20,7 @@ export async function gitChanges(workspace: string): Promise<GitChanges> {
       ...change,
       path: workspaceRelativePath(change.path, prefix),
     }));
+    const branch = await gitBranch(workspace);
     const hasHead = await gitHasHead(workspace);
     const numstat = await runGit(
       workspace,
@@ -43,6 +44,7 @@ export async function gitChanges(workspace: string): Promise<GitChanges> {
 
     return {
       state: "ready",
+      branch,
       files,
       additions: files.reduce((total, file) => total + file.additions, 0),
       deletions: files.reduce((total, file) => total + file.deletions, 0),
@@ -69,6 +71,15 @@ export async function gitFileContents(workspace: string, filePath: string): Prom
   };
 }
 
+export async function gitDiffPreview(workspace: string, filePath: string): Promise<GitDiffPreview> {
+  const file = safeWorkspacePath(workspace, filePath);
+  const output = await gitHasHead(workspace)
+    ? (await runGit(workspace, ["--literal-pathspecs", "diff", "--no-ext-diff", "--no-color", "--unified=2", "HEAD", "--", filePath])).stdout
+    : "";
+  const lines = output ? previewLines(output) : await newFilePreview(file);
+  return { lines: lines.slice(0, 80), truncated: lines.length > 80 };
+}
+
 export function parseGitStatus(output: string): Omit<GitFileChange, "additions" | "deletions" | "exists">[] {
   return output.split("\0").filter(Boolean).map((entry) => ({
     path: entry.slice(3),
@@ -93,6 +104,11 @@ async function gitHasHead(workspace: string): Promise<boolean> {
   return runGit(workspace, ["rev-parse", "--verify", "HEAD"]).then(() => true, () => false);
 }
 
+async function gitBranch(workspace: string): Promise<string> {
+  return runGit(workspace, ["symbolic-ref", "--quiet", "--short", "HEAD"])
+    .then(({ stdout }) => stdout.trim(), () => "Detached HEAD");
+}
+
 async function lineCount(file: string): Promise<number> {
   const info = await stat(file);
   if (info.size > MAX_GIT_OUTPUT_BYTES) return 0;
@@ -115,6 +131,27 @@ function normalizeLineEndings(content: string): string {
   return content.replaceAll("\r\n", "\n");
 }
 
+function previewLines(output: string): string[] {
+  return output.split("\n").filter((line) =>
+    line.startsWith("@@")
+    || (line.startsWith("+") && !line.startsWith("+++"))
+    || (line.startsWith("-") && !line.startsWith("---"))
+    || line.startsWith(" ")
+    || line.startsWith("Binary files")
+  );
+}
+
+async function newFilePreview(file: string): Promise<string[]> {
+  try {
+    if ((await stat(file)).size > MAX_GIT_OUTPUT_BYTES) return ["File is too large to preview."];
+    const content = await readFile(file);
+    if (content.includes(0)) return ["Binary file changed."];
+    return content.toString("utf8").replaceAll("\r\n", "\n").split("\n").map((line) => `+${line}`);
+  } catch {
+    return ["File is unavailable."];
+  }
+}
+
 function detectLineEnding(content: string): GitFileContents["lineEnding"] {
   const newlines = content.split("\n").length - 1;
   const crlf = content.split("\r\n").length - 1;
@@ -134,7 +171,7 @@ function statusLabel(code: string): string {
 }
 
 function empty(state: GitChanges["state"], message: string): GitChanges {
-  return { state, message, files: [], additions: 0, deletions: 0 };
+  return { state, message, branch: null, files: [], additions: 0, deletions: 0 };
 }
 
 function isMissingCommand(error: unknown): boolean {

@@ -235,6 +235,22 @@
   height: 14px;
 }
 
+.workspace-icon path {
+  fill: color-mix(in srgb, currentColor 5%, transparent);
+}
+
+.workspace-row.active .workspace-icon {
+  color: color-mix(in srgb, var(--primary) 58%, var(--text-faint));
+}
+
+.workspace-row.active .workspace-icon path {
+  fill: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.workspace-row.active .workspace-icon .folder-flap {
+  fill: color-mix(in srgb, var(--primary) 16%, var(--panel));
+}
+
 .threads {
   min-height: 0;
   flex: 1;

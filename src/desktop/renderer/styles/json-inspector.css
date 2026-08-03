@@ -18,7 +18,7 @@
   background: transparent;
   border: 0;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .json-inspector-mode button:hover,
@@ -37,7 +37,7 @@
   display: block;
   padding: 9px;
   color: var(--code-text);
-  font: 11px/1.4 var(--font-code);
+  font: 13px/1.4 var(--font-code);
 }
 
 .json-field + .json-field {
@@ -70,7 +70,7 @@
 .json-field strong {
   overflow: hidden;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -80,7 +80,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--code-text);
-  font: 11px/1.4 var(--font-code);
+  font: 13px/1.4 var(--font-code);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

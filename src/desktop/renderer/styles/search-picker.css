@@ -1,0 +1,104 @@
+.search-picker {
+  position: relative;
+  min-width: 0;
+}
+
+.search-picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  color: var(--text-strong);
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+}
+
+.search-picker-trigger:hover,
+.search-picker-trigger[aria-expanded="true"] {
+  background: var(--hover-background);
+  border-color: var(--border-default);
+}
+
+.search-picker-trigger > span {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-picker-trigger > i {
+  color: var(--text-muted);
+  font-size: 18px;
+  font-style: normal;
+  line-height: 1;
+  transform: translateY(-4px);
+}
+
+.search-picker-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 5px);
+  left: 0;
+  width: min(460px, 100%);
+  min-width: 240px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border-default);
+  border-radius: 9px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 24%);
+}
+
+.search-picker-menu input {
+  width: 100%;
+  padding: 7px 8px;
+  color: var(--text-primary);
+  background: var(--composer-background);
+  border: 0;
+  border-radius: 6px;
+  outline: none;
+}
+
+.search-picker-options {
+  max-height: 260px;
+  overflow: auto;
+  margin-top: 5px;
+}
+
+.search-picker-options button {
+  display: block;
+  width: 100%;
+  padding: 7px 8px;
+  overflow: hidden;
+  color: var(--text-primary);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+}
+
+.search-picker-options button:hover,
+.search-picker-options button.active {
+  background: var(--hover-background);
+}
+
+.search-picker-options span,
+.search-picker-options small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-picker-options small,
+.search-picker-empty {
+  color: var(--text-muted);
+}
+
+.search-picker-empty {
+  display: block;
+  padding: 8px;
+}

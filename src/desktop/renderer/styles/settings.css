@@ -102,6 +102,49 @@
   outline: none;
 }
 
+.setting-field.text-setting input {
+  width: min(310px, 52%);
+}
+
+.editor-current {
+  display: grid;
+  gap: 4px;
+  padding: 14px 0 10px;
+  border-top: 1px solid var(--border-default);
+}
+
+.editor-current span {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.editor-current strong {
+  overflow: hidden;
+  color: var(--text-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 0 16px;
+}
+
+.editor-actions button {
+  padding: 8px 11px;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+}
+
+.editor-actions button.primary {
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border-color: transparent;
+}
+
 .setting-field input:focus {
   border-color: var(--border-focus);
 }

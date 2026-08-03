@@ -6,6 +6,11 @@ export async function initializeGitRepository(workspace: string): Promise<void> 
   await runGit(workspace, ["init"]);
 }
 
+export async function commitGitChanges(workspace: string, message: string, paths: string[]): Promise<void> {
+  await runGit(workspace, ["--literal-pathspecs", "add", "-A", "--", ...paths]);
+  await runGit(workspace, ["--literal-pathspecs", "commit", "--only", "-m", message, "--", ...paths]);
+}
+
 export async function saveGitFile(
   workspace: string,
   filePath: string,
