@@ -36,6 +36,7 @@ const MACOS_PROFILE = `(version 1)
   (subpath "/Applications/Xcode.app")
   (subpath "/private/etc")
   (subpath "/private/var/select"))
+(allow file-read-metadata (literal (param "WORKSPACE_PARENT")))
 (allow file-write* (subpath (param "WORKSPACE")) (subpath (param "TEMP")))
 (deny file-write* (regex #"/\\.git(/|$)"))
 (deny network*)`;
@@ -131,6 +132,7 @@ async function runMacos(
       "/usr/bin/sandbox-exec",
       [
         "-D", `WORKSPACE=${workspace}`,
+        "-D", `WORKSPACE_PARENT=${path.dirname(workspace)}`,
         "-D", `TEMP=${temporary}`,
         "-p", MACOS_PROFILE,
         ...restrictedShell(command, timeoutMs),

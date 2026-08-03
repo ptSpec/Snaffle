@@ -525,13 +525,13 @@ function ThreadRow({
         onClick={selecting ? onToggleSelected : onSelect}
         title={thread.title}
       >
-        <span>
-          {thread.title}
+        <span className="thread-title-row">
           {running ? (
             <span className="thread-running" title="Running" aria-label="Running">
               <ThinkingOrb motion="active" speed={1.7} />
             </span>
           ) : null}
+          <span className="thread-title-text">{thread.title}</span>
         </span>
         {workspaceName ? <small>{workspaceName}</small> : null}
       </button>

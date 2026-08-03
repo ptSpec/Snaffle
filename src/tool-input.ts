@@ -30,6 +30,7 @@ export function healToolInput(value: unknown, schema?: JsonSchema): ParsedToolIn
     }
   }
 
+  candidate = wrapSingleArrayItems(candidate, schema, repairs);
   candidate = removeEmptyOptionalStrings(candidate, schema, repairs);
   const healed = candidate !== null && typeof candidate === "object" && !Array.isArray(candidate);
   return {
@@ -70,6 +71,24 @@ export function healToolCall(call: ToolCall, schema: JsonSchema): ToolCall {
     input: healed.input,
     ...(repair ? { inputRepair: repair } : {}),
   };
+}
+
+function wrapSingleArrayItems(
+  input: unknown,
+  schema: JsonSchema | undefined,
+  repairs: string[],
+): unknown {
+  if (!isObject(input) || !isObject(schema?.properties)) return input;
+  let result = input;
+
+  for (const [name, definition] of Object.entries(schema.properties)) {
+    if (!isObject(definition) || definition.type !== "array" || !isObject(input[name])) continue;
+    if (result === input) result = { ...input };
+    result[name] = [input[name]];
+    repairs.push(`"${name}" was one object; wrapped it in an array`);
+  }
+
+  return result;
 }
 
 function removeEmptyOptionalStrings(
