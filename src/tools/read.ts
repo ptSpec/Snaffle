@@ -1,9 +1,9 @@
-import { integerField, objectInput, stringField, type Tool } from "./tool.js";
+import { contentRevision, integerField, objectInput, stringField, type Tool } from "./tool.js";
 
 export const readTool: Tool = {
   name: "read_file",
   description:
-    'Read a UTF-8 file or a bounded range of its lines. Example: {"path":"src/app.ts","startLine":40,"lineCount":80}.',
+    'Read a UTF-8 file or a bounded range of numbered lines. The result includes a version for this exact path; use it only when editing the same file. Example: {"path":"src/app.ts","startLine":40,"lineCount":80}.',
   inputSchema: {
     type: "object",
     properties: {
@@ -28,12 +28,15 @@ export const readTool: Tool = {
     const content = await workspace.read(filePath);
     if (content.includes("\0")) throw new Error("Binary files cannot be read as text");
 
-    const lines = content.split("\n");
+    const lines = content.replaceAll("\r\n", "\n").split("\n");
     const selected = lines.slice(startLine - 1, startLine - 1 + lineCount);
     const endLine = Math.min(startLine + selected.length - 1, lines.length);
+    const numbered = selected.map((line, index) => `${startLine + index} | ${line}`).join("\n");
 
     return {
-      content: `[lines ${startLine}-${endLine} of ${lines.length}]\n${selected.join("\n")}`,
+      content:
+        `[path: ${filePath}; version: ${contentRevision(content)}; lines ${startLine}-${endLine} of ${lines.length}]\n` +
+        numbered,
     };
   },
 };

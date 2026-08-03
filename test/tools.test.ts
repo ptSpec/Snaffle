@@ -8,6 +8,7 @@ import { editTool } from "../src/tools/edit.js";
 import { readTool } from "../src/tools/read.js";
 import { runTool } from "../src/tools/run.js";
 import { searchTool } from "../src/tools/search.js";
+import { contentRevision } from "../src/tools/tool.js";
 import { writeTool } from "../src/tools/write.js";
 import { LocalWorkspace } from "../src/workspace.js";
 import { nativeSandboxStatus } from "../src/sandbox.js";
@@ -21,19 +22,33 @@ test("the five explicit file and command tools work together", async (t) => {
   const { root, workspace } = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));
 
-  await writeTool.execute(workspace, {
+  const written = await writeTool.execute(workspace, {
     path: "src/example.ts",
-    content: "const value = 1;\nconst ready = false;\n",
+    content: "const value = 1;\nconst ready = false;\nconst label = 'old';\n",
   });
+  assert.equal(
+    written.content,
+    `Wrote src/example.ts; version: ${contentRevision("const value = 1;\nconst ready = false;\nconst label = 'old';\n")}.`,
+  );
   const read = await readTool.execute(workspace, { path: "src/example.ts" });
-  assert.match(read.content, /const value = 1/);
+  assert.match(read.content, /version: [0-9a-f]{12}.*\n1 \| const value = 1/);
 
+  const writtenVersion = /version: ([0-9a-f]{12})/.exec(written.content)?.[1];
+  assert.ok(writtenVersion);
+  const edited = await editTool.execute(workspace, {
+    path: "src/example.ts",
+    version: writtenVersion,
+    edits: [
+      { startLine: 1, endLine: 1, newText: "const value = 2;" },
+      { startLine: 2, endLine: 2, newText: "const ready = true;" },
+    ],
+  });
+  const editedVersion = /version: ([0-9a-f]{12})/.exec(edited.content)?.[1];
+  assert.ok(editedVersion);
   await editTool.execute(workspace, {
     path: "src/example.ts",
-    edits: [
-      { oldText: "value = 1", newText: "value = 2" },
-      { oldText: "ready = false", newText: "ready = true" },
-    ],
+    version: editedVersion,
+    edits: [{ startLine: 3, endLine: 3, newText: "const label = 'new';" }],
   });
 
   const matches = await searchTool.execute(workspace, { query: "value = 2" });
@@ -55,7 +70,7 @@ test("the five explicit file and command tools work together", async (t) => {
   assert.equal(command.exitCode, 0);
   assert.equal(
     await readFile(path.join(root, "src/example.ts"), "utf8"),
-    "const value = 2;\nconst ready = true;\n",
+    "const value = 2;\nconst ready = true;\nconst label = 'new';\n",
   );
 });
 
@@ -94,22 +109,55 @@ test("tool input healer repairs a quoted object with a malformed integer", () =>
   );
 });
 
-test("edit rejects ambiguous text", async (t) => {
+test("tool input healer accepts one edit without an array", () => {
+  const healed = healToolCall(
+    {
+      id: "call-1",
+      name: "edit_file",
+      input: {
+        path: "src/app.ts",
+        version: "8e42c197a810",
+        edits: { startLine: 10, endLine: 10, newText: "const port = 4000;" },
+      },
+    },
+    editTool.inputSchema,
+  );
+
+  assert.deepEqual(healed.input, {
+    path: "src/app.ts",
+    version: "8e42c197a810",
+    edits: [{ startLine: 10, endLine: 10, newText: "const port = 4000;" }],
+  });
+  assert.equal(healed.inputRepair, '"edits" was one object; wrapped it in an array');
+});
+
+test("edit rejects stale versions and overlapping ranges", async (t) => {
   const { root, workspace } = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));
-  await writeFile(path.join(root, "duplicate.txt"), "first\nsame\nsame\n");
+  const original = "first\nsecond\nthird\n";
+  await writeFile(path.join(root, "example.txt"), original);
 
   await assert.rejects(
     editTool.execute(workspace, {
-      path: "duplicate.txt",
+      path: "example.txt",
+      version: contentRevision(original),
       edits: [
-        { oldText: "first", newText: "changed" },
-        { oldText: "same", newText: "different" },
+        { startLine: 1, endLine: 2, newText: "changed" },
+        { startLine: 2, endLine: 3, newText: "overlap" },
       ],
     }),
-    /Edit 2.*found 2.*one edit/,
+    /must not overlap/,
   );
-  assert.equal(await readFile(path.join(root, "duplicate.txt"), "utf8"), "first\nsame\nsame\n");
+
+  await writeFile(path.join(root, "example.txt"), "changed externally\n");
+  await assert.rejects(
+    editTool.execute(workspace, {
+      path: "example.txt",
+      version: contentRevision(original),
+      edits: [{ startLine: 1, endLine: 1, newText: "changed" }],
+    }),
+    /stale or belongs to another file/,
+  );
 });
 
 test("workspace rejects paths outside its root", async (t) => {
@@ -157,12 +205,14 @@ test("restricted commands stay inside the workspace", async (t) => {
   const workspace = new LocalWorkspace(root, "restricted");
 
   const inside = await workspace.run("printf ok > generated.txt", undefined, 5000);
+  const listing = await workspace.run("ls -la", undefined, 5000);
   const outsideRead = await workspace.run(`cat ${JSON.stringify(secret)}`, undefined, 5000);
   const gitWrite = await workspace.run("touch .git/forbidden", undefined, 5000);
   const nestedGitWrite = await workspace.run("touch nested/.git/forbidden", undefined, 5000);
   const inheritedSecret = await workspace.run("test -z \"$OPENROUTER_API_KEY\"", undefined, 5000);
 
   assert.equal(inside.exitCode, 0);
+  assert.equal(listing.exitCode, 0);
   assert.equal(await readFile(path.join(root, "generated.txt"), "utf8"), "ok");
   assert.notEqual(outsideRead.exitCode, 0);
   assert.notEqual(gitWrite.exitCode, 0);

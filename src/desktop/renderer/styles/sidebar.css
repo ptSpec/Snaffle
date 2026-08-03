@@ -313,11 +313,25 @@
   white-space: nowrap;
 }
 
+.thread-title-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.thread-title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .thread-running {
   display: inline-grid;
   width: 10px;
   height: 10px;
-  margin-left: 6px;
+  flex: 0 0 10px;
+  margin-right: 6px;
   vertical-align: -1px;
 }
 
@@ -370,7 +384,7 @@
   padding: 4px 6px;
 }
 
-.bookmarked-threads .thread-item span {
+.bookmarked-threads .thread-title-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
