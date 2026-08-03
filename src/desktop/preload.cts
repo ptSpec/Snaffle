@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { CommandApprovalDecision } from "../protocol.js";
-import type { DesktopApi, DesktopRunEvent, SaveMessageInput, StartRunInput } from "./api.js";
+import type { DesktopApi, DesktopRunEvent, GitFileContents, SaveMessageInput, StartRunInput } from "./api.js";
 
 const api: DesktopApi = {
   platform: process.platform,
@@ -27,6 +27,7 @@ const api: DesktopApi = {
   resolveCommandApproval: (id: string, decision: CommandApprovalDecision) =>
     ipcRenderer.invoke("desktop:resolve-command-approval", id, decision),
   setTheme: (themeId: string) => ipcRenderer.invoke("desktop:set-theme", themeId),
+  setEditorFontSize: (size: number) => ipcRenderer.invoke("desktop:set-editor-font-size", size),
   setMaxSteps: (maxSteps: number) => ipcRenderer.invoke("desktop:set-max-steps", maxSteps),
   setProviderTimeoutMinutes: (minutes: number) =>
     ipcRenderer.invoke("desktop:set-provider-timeout", minutes),
@@ -35,6 +36,18 @@ const api: DesktopApi = {
   saveMessage: (input: SaveMessageInput) => ipcRenderer.invoke("desktop:save-message", input),
   deleteSavedMessage: (id: string) => ipcRenderer.invoke("desktop:delete-saved-message", id),
   openSavedMessage: (id: string) => ipcRenderer.invoke("desktop:open-saved-message", id),
+  getGitChanges: (workspaceId: string) =>
+    ipcRenderer.invoke("desktop:get-git-changes", workspaceId),
+  getGitFile: (workspaceId: string, path: string) =>
+    ipcRenderer.invoke("desktop:get-git-file", workspaceId, path),
+  saveGitFile: (workspaceId: string, path: string, content: string, lineEnding: GitFileContents["lineEnding"]) =>
+    ipcRenderer.invoke("desktop:save-git-file", workspaceId, path, content, lineEnding),
+  openWorkspaceFile: (workspaceId: string, path: string) =>
+    ipcRenderer.invoke("desktop:open-workspace-file", workspaceId, path),
+  revealWorkspaceFile: (workspaceId: string, path: string) =>
+    ipcRenderer.invoke("desktop:reveal-workspace-file", workspaceId, path),
+  initializeGitRepository: (workspaceId: string) =>
+    ipcRenderer.invoke("desktop:initialize-git-repository", workspaceId),
   openExternal: (url: string) => ipcRenderer.invoke("desktop:open-external", url),
   onRunEvent(listener: (event: DesktopRunEvent) => void): () => void {
     const receiveEvent = (_event: Electron.IpcRendererEvent, event: DesktopRunEvent) => listener(event);

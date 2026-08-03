@@ -14,11 +14,11 @@ import { DEFAULT_THEME, themeById, type Theme } from "../themes/index.js";
 import { Settings } from "./settings.js";
 import { SavedMessages } from "./saved-messages.js";
 import { Sidebar, type AppView, type SettingsPage } from "./sidebar.js";
+import { InspectorPanel, type InspectorTab } from "./inspector/panel.js";
 import { ThinkingOrb, type OrbMotion } from "./thinking-orb.js";
 import {
   addRunEvent,
   findTimelineItem,
-  Inspector,
   newTimelineId,
   TimelineEntry,
   timelineFromEntries,
@@ -45,6 +45,7 @@ const initialState: DesktopState = {
   restrictedHostAvailable: false,
   restrictedHostDetail: "Checking restricted execution…",
   themeId: document.documentElement.dataset.theme ?? DEFAULT_THEME.id,
+  editorFontSize: 13,
   maxSteps: 50,
   providerTimeoutMinutes: 3,
   providerRetries: 2,
@@ -65,6 +66,7 @@ export function App(): JSX.Element {
   const [rightWidth, setRightWidth] = useState(320);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>("inspect");
   const [view, setView] = useState<AppView>("conversation");
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("appearance");
   const [sendOrbMotion, setSendOrbMotion] = useState<OrbMotion>("stopped");
@@ -72,6 +74,7 @@ export function App(): JSX.Element {
   const timelineView = useRef<HTMLDivElement>(null);
   const executionMode = useRef<HTMLDetailsElement>(null);
   const followTimeline = useRef(true);
+  const leftAutoCollapsed = useRef(false);
   const activeThreadId = useRef<string | null>(null);
   const threadTimelines = useRef(new Map<string, TimelineItem[]>());
   const running = desktopState.activeThreadId
@@ -112,6 +115,42 @@ export function App(): JSX.Element {
     const timer = window.setTimeout(() => setSendOrbMotion("stopped"), 2300);
     return () => window.clearTimeout(timer);
   }, [sendOrbMotion]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--editor-font-size", `${desktopState.editorFontSize}px`);
+  }, [desktopState.editorFontSize]);
+
+  useEffect(() => {
+    let reopenTimer: number | undefined;
+
+    function updateSidebarForInspector(): void {
+      if (reopenTimer !== undefined) {
+        window.clearTimeout(reopenTimer);
+        reopenTimer = undefined;
+      }
+      if (view !== "conversation" || rightCollapsed) return;
+
+      if (rightWidth > window.innerWidth / 2) {
+        setLeftCollapsed((collapsed) => {
+          if (collapsed) return true;
+          leftAutoCollapsed.current = true;
+          return true;
+        });
+      } else if (rightWidth < window.innerWidth * 0.4 && leftAutoCollapsed.current) {
+        reopenTimer = window.setTimeout(() => {
+          leftAutoCollapsed.current = false;
+          setLeftCollapsed(false);
+        }, 500);
+      }
+    }
+
+    updateSidebarForInspector();
+    window.addEventListener("resize", updateSidebarForInspector);
+    return () => {
+      if (reopenTimer !== undefined) window.clearTimeout(reopenTimer);
+      window.removeEventListener("resize", updateSidebarForInspector);
+    };
+  }, [rightCollapsed, rightWidth, view]);
 
   useEffect(() => {
     function closeExecutionMode(event: PointerEvent): void {
@@ -421,6 +460,16 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setEditorFontSize(editorFontSize: number): Promise<void> {
+    try {
+      await window.desktop.setEditorFontSize(editorFontSize);
+      setDesktopState((state) => ({ ...state, editorFontSize }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   async function setProviderTimeoutMinutes(providerTimeoutMinutes: number): Promise<void> {
     try {
       await window.desktop.setProviderTimeoutMinutes(providerTimeoutMinutes);
@@ -448,12 +497,13 @@ export function App(): JSX.Element {
     event.preventDefault();
     const startX = event.clientX;
     const startWidth = side === "left" ? leftWidth : rightWidth;
-    const otherWidth = side === "left" ? rightWidth : leftWidth;
+    const otherWidth = side === "left" ? rightWidth : 0;
     const minimum = 220;
 
     function move(pointer: PointerEvent): void {
       const movement = side === "left" ? pointer.clientX - startX : startX - pointer.clientX;
-      const maximum = Math.max(minimum, Math.min(480, window.innerWidth - otherWidth - 360));
+      const limit = side === "left" ? 480 : 1200;
+      const maximum = Math.max(minimum, Math.min(limit, window.innerWidth - otherWidth - 360));
       const width = Math.min(maximum, Math.max(minimum, startWidth + movement));
       if (side === "left") setLeftWidth(width);
       else setRightWidth(width);
@@ -492,18 +542,23 @@ export function App(): JSX.Element {
             setSettingsPage(page);
             setError(null);
           }}
-          onCollapse={() => setLeftCollapsed(true)}
+          onCollapse={() => {
+            leftAutoCollapsed.current = false;
+            setLeftCollapsed(true);
+          }}
         />
 
         {view === "settings" ? (
           <Settings
             page={settingsPage}
             themeId={desktopState.themeId}
+            editorFontSize={desktopState.editorFontSize}
             maxSteps={desktopState.maxSteps}
             providerTimeoutMinutes={desktopState.providerTimeoutMinutes}
             providerRetries={desktopState.providerRetries}
             error={error}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
+            onEditorFontSize={(size) => void setEditorFontSize(size)}
             onMaxSteps={(maxSteps) => void setMaxSteps(maxSteps)}
             onProviderTimeoutMinutes={(minutes) => void setProviderTimeoutMinutes(minutes)}
             onProviderRetries={(retries) => void setProviderRetries(retries)}
@@ -530,7 +585,11 @@ export function App(): JSX.Element {
                 key={item.id}
                 item={item}
                 selectedId={selectedItemId}
-                onSelect={setSelectedItemId}
+                onSelect={(id) => {
+                  setSelectedItemId(id);
+                  setInspectorTab("inspect");
+                  setRightCollapsed(false);
+                }}
                 onResolveApproval={(id, decision) => void resolveCommandApproval(id, decision)}
                 savedId={
                   item.kind === "assistant"
@@ -684,31 +743,29 @@ export function App(): JSX.Element {
 
         <aside
           className={view !== "conversation" || rightCollapsed ? "inspector collapsed" : "inspector"}
-          aria-label="Inspector"
+          aria-label="Context panel"
           aria-hidden={view !== "conversation" || rightCollapsed}
         >
-          <div className="section-heading">
-            <h2>Inspector</h2>
-            <button
-              className="panel-toggle"
-              type="button"
-              onClick={() => setRightCollapsed(true)}
-              aria-label="Hide inspector"
-              title="Hide inspector"
-            >
-              <span className="pane-icon right" aria-hidden="true" />
-            </button>
-          </div>
-
-          {view === "conversation" && selectedItem ? <Inspector item={selectedItem} /> : null}
-
+          {view === "conversation" ? (
+            <InspectorPanel
+              workspace={desktopState.workspace}
+              selectedItem={selectedItem}
+              running={running}
+              tab={inspectorTab}
+              onTab={setInspectorTab}
+              onCollapse={() => setRightCollapsed(true)}
+            />
+          ) : null}
         </aside>
 
         {leftCollapsed ? (
           <button
             className="panel-reopen left"
             type="button"
-            onClick={() => setLeftCollapsed(false)}
+            onClick={() => {
+              leftAutoCollapsed.current = false;
+              setLeftCollapsed(false);
+            }}
             aria-label="Show workspace sidebar"
             title="Show sidebar"
           >
@@ -729,8 +786,8 @@ export function App(): JSX.Element {
             className="panel-reopen right"
             type="button"
             onClick={() => setRightCollapsed(false)}
-            aria-label="Show inspector"
-            title="Show inspector"
+            aria-label="Show right panel"
+            title="Show right panel"
           >
             <span className="pane-icon right" aria-hidden="true" />
           </button>
@@ -739,7 +796,7 @@ export function App(): JSX.Element {
             className="column-resizer right-resizer"
             style={{ right: rightWidth }}
             role="separator"
-            aria-label="Resize inspector"
+            aria-label="Resize right panel"
             aria-orientation="vertical"
             onPointerDown={(event) => beginResize("right", event)}
           />

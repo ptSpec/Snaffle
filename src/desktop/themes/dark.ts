@@ -47,6 +47,8 @@ export const darkTheme = {
     "syntax-function": "#d2a8ff",
     "syntax-type": "#ffa657",
     "syntax-operator": "#c9d1d9",
+    "editor-selection-background": "#356f9f",
+    "editor-cursor": "#ffffff",
     "diff-added-text": "#9cf0b7",
     "diff-added-background": "#153823",
     "diff-removed-text": "#ffb9b4",

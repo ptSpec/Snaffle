@@ -18,6 +18,13 @@
     "test": "npm run build && node --test dist/test/*.test.js"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.10.4",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/legacy-modes": "^6.5.3",
+    "@codemirror/merge": "^6.12.2",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.7",
+    "@lezer/highlight": "^1.2.3",
     "@libsql/client": "^0.17.4",
     "@vscode/ripgrep": "^1.18.0",
     "highlight.js": "^11.11.1",

@@ -1,0 +1,6 @@
+.git-editor {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--code-background);
+}

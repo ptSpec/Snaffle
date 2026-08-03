@@ -7,4 +7,5 @@
 @import "./styles/settings.css";
 @import "./styles/saved-messages.css";
 @import "./styles/inspector.css";
+@import "./styles/inspector-panel.css";
 @import "./styles/json-inspector.css";

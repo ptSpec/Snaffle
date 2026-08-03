@@ -7,6 +7,9 @@ import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_MAX_STEPS, runAgent } from "../agent-loop.js";
 import { initialMessages } from "../context.js";
+import { initializeGitRepository, saveGitFile } from "../git/actions.js";
+import { safeWorkspacePath } from "../git/process.js";
+import { gitChanges, gitFileContents } from "../git/repository.js";
 import { PRODUCT } from "../identity.js";
 import { OpenRouterProvider, listOpenRouterModels } from "../providers/openrouter.js";
 import {
@@ -38,6 +41,7 @@ const pendingApprovals = new Map<
   { threadId: string; resolve: (decision: CommandApprovalDecision) => void }
 >();
 let activeTheme: Theme = DEFAULT_THEME;
+let editorFontSize = 13;
 let maxSteps = DEFAULT_MAX_STEPS;
 let providerTimeoutMinutes = DEFAULT_PROVIDER_TIMEOUT_MS / 60_000;
 let providerRetries = DEFAULT_PROVIDER_RETRIES;
@@ -56,6 +60,7 @@ async function start(): Promise<void> {
     typeof settings.themeId === "string"
       ? themeById(settings.themeId) ?? DEFAULT_THEME
       : DEFAULT_THEME;
+  editorFontSize = validEditorFontSize(settings.editorFontSize) ?? editorFontSize;
   maxSteps = validMaxSteps(settings.maxSteps) ?? DEFAULT_MAX_STEPS;
   providerTimeoutMinutes = validProviderTimeout(settings.providerTimeoutMinutes) ?? providerTimeoutMinutes;
   providerRetries = validProviderRetries(settings.providerRetries) ?? DEFAULT_PROVIDER_RETRIES;
@@ -302,6 +307,13 @@ function registerIpc(): void {
     }
   });
 
+  ipcMain.handle("desktop:set-editor-font-size", (_event, value: unknown): void => {
+    const next = validEditorFontSize(value);
+    if (next === undefined) throw new Error("Editor font size must be an integer from 10 to 24");
+    editorFontSize = next;
+    saveSettings({ editorFontSize });
+  });
+
   ipcMain.handle("desktop:set-max-steps", (_event, value: unknown): void => {
     const next = validMaxSteps(value);
     if (next === undefined) throw new Error("Maximum turns must be an integer from 1 to 200");
@@ -338,6 +350,41 @@ function registerIpc(): void {
     return { state: await desktopState(), entryId: source.entryId };
   });
 
+  ipcMain.handle("desktop:get-git-changes", async (_event, value: unknown) => {
+    return gitChanges(await workspacePath(value));
+  });
+
+  ipcMain.handle("desktop:get-git-file", async (_event, workspaceId: unknown, filePath: unknown) => {
+    return gitFileContents(await workspacePath(workspaceId), parseFilePath(filePath));
+  });
+
+  ipcMain.handle("desktop:save-git-file", async (
+    _event,
+    workspaceId: unknown,
+    filePath: unknown,
+    content: unknown,
+    lineEnding: unknown,
+  ) => {
+    if (typeof content !== "string") throw new Error("File content must be a string");
+    if (lineEnding !== "lf" && lineEnding !== "crlf") throw new Error("Invalid line ending");
+    await saveGitFile(await workspacePath(workspaceId), parseFilePath(filePath), content, lineEnding);
+  });
+
+  ipcMain.handle("desktop:open-workspace-file", async (_event, workspaceId: unknown, filePath: unknown) => {
+    const error = await shell.openPath(safeWorkspacePath(await workspacePath(workspaceId), parseFilePath(filePath)));
+    if (error) throw new Error(error);
+  });
+
+  ipcMain.handle("desktop:reveal-workspace-file", async (_event, workspaceId: unknown, filePath: unknown) => {
+    shell.showItemInFolder(safeWorkspacePath(await workspacePath(workspaceId), parseFilePath(filePath)));
+  });
+
+  ipcMain.handle("desktop:initialize-git-repository", async (_event, workspaceId: unknown) => {
+    const workspace = await workspacePath(workspaceId);
+    await initializeGitRepository(workspace);
+    return gitChanges(workspace);
+  });
+
   ipcMain.handle("desktop:open-external", async (_event, rawUrl: unknown): Promise<void> => {
     if (typeof rawUrl !== "string") throw new Error("External URL must be a string");
     const url = new URL(rawUrl);
@@ -346,6 +393,18 @@ function registerIpc(): void {
     }
     await shell.openExternal(url.href);
   });
+}
+
+async function workspacePath(value: unknown): Promise<string> {
+  const id = parseId(value, "Workspace");
+  const workspace = (await store.state()).workspaces.find((item) => item.id === id);
+  if (!workspace) throw new Error("The selected workspace no longer exists");
+  return workspace.path;
+}
+
+function parseFilePath(value: unknown): string {
+  if (typeof value !== "string" || !value) throw new Error("File path must be text");
+  return value;
 }
 
 async function desktopState(): Promise<DesktopState> {
@@ -366,6 +425,7 @@ async function desktopState(): Promise<DesktopState> {
     restrictedHostAvailable: sandbox.available,
     restrictedHostDetail: sandbox.detail,
     themeId: activeTheme.id,
+    editorFontSize,
     maxSteps,
     providerTimeoutMinutes,
     providerRetries,
@@ -378,6 +438,7 @@ function settingsPath(): string {
 
 type SavedSettings = {
   themeId?: unknown;
+  editorFontSize?: unknown;
   maxSteps?: unknown;
   providerTimeoutMinutes?: unknown;
   providerRetries?: unknown;
@@ -398,6 +459,7 @@ function loadSettings(): SavedSettings {
 
 function saveSettings(update: {
   themeId?: string;
+  editorFontSize?: number;
   maxSteps?: number;
   providerTimeoutMinutes?: number;
   providerRetries?: number;
@@ -405,6 +467,12 @@ function saveSettings(update: {
   const file = settingsPath();
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify({ ...loadSettings(), ...update }, null, 2)}\n`);
+}
+
+function validEditorFontSize(value: unknown): number | undefined {
+  return Number.isInteger(value) && Number(value) >= 10 && Number(value) <= 24
+    ? Number(value)
+    : undefined;
 }
 
 function validMaxSteps(value: unknown): number | undefined {
