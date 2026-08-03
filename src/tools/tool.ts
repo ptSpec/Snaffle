@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { JsonSchema, ToolSpec } from "../protocol.js";
 import type { Workspace } from "../workspace.js";
 
@@ -9,6 +10,10 @@ export type ToolResult = {
 export interface Tool extends ToolSpec {
   inputSchema: JsonSchema;
   execute(workspace: Workspace, input: unknown): Promise<ToolResult>;
+}
+
+export function contentRevision(content: string): string {
+  return createHash("sha256").update(content).digest("hex").slice(0, 12);
 }
 
 export function objectInput(input: unknown): Record<string, unknown> {
