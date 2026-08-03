@@ -28,6 +28,9 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:resolve-command-approval", id, decision),
   setTheme: (themeId: string) => ipcRenderer.invoke("desktop:set-theme", themeId),
   setEditorFontSize: (size: number) => ipcRenderer.invoke("desktop:set-editor-font-size", size),
+  setEditorLauncher: (command: string, argumentsTemplate: string) =>
+    ipcRenderer.invoke("desktop:set-editor-launcher", command, argumentsTemplate),
+  chooseEditorApplication: () => ipcRenderer.invoke("desktop:choose-editor-application"),
   setMaxSteps: (maxSteps: number) => ipcRenderer.invoke("desktop:set-max-steps", maxSteps),
   setProviderTimeoutMinutes: (minutes: number) =>
     ipcRenderer.invoke("desktop:set-provider-timeout", minutes),
@@ -40,8 +43,12 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:get-git-changes", workspaceId),
   getGitFile: (workspaceId: string, path: string) =>
     ipcRenderer.invoke("desktop:get-git-file", workspaceId, path),
+  getGitDiffPreview: (workspaceId: string, path: string) =>
+    ipcRenderer.invoke("desktop:get-git-diff-preview", workspaceId, path),
   saveGitFile: (workspaceId: string, path: string, content: string, lineEnding: GitFileContents["lineEnding"]) =>
     ipcRenderer.invoke("desktop:save-git-file", workspaceId, path, content, lineEnding),
+  commitGitChanges: (workspaceId: string, message: string, paths: string[]) =>
+    ipcRenderer.invoke("desktop:commit-git-changes", workspaceId, message, paths),
   openWorkspaceFile: (workspaceId: string, path: string) =>
     ipcRenderer.invoke("desktop:open-workspace-file", workspaceId, path),
   revealWorkspaceFile: (workspaceId: string, path: string) =>

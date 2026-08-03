@@ -12,6 +12,7 @@ export type GitFileChange = {
 export type GitChanges = {
   state: "ready" | "unavailable" | "not-repository" | "error";
   message?: string;
+  branch: string | null;
   files: GitFileChange[];
   additions: number;
   deletions: number;
@@ -21,6 +22,11 @@ export type GitFileContents = {
   current: string;
   original: string;
   lineEnding: "lf" | "crlf";
+};
+
+export type GitDiffPreview = {
+  lines: string[];
+  truncated: boolean;
 };
 
 export type DesktopThread = {
@@ -87,6 +93,8 @@ export type DesktopState = {
   restrictedHostDetail: string;
   themeId: string;
   editorFontSize: number;
+  editorCommand: string;
+  editorArguments: string;
   maxSteps: number;
   providerTimeoutMinutes: number;
   providerRetries: number;
@@ -121,6 +129,8 @@ export interface DesktopApi {
   resolveCommandApproval(id: string, decision: CommandApprovalDecision): Promise<DesktopState>;
   setTheme(themeId: string): Promise<void>;
   setEditorFontSize(size: number): Promise<void>;
+  setEditorLauncher(command: string, argumentsTemplate: string): Promise<void>;
+  chooseEditorApplication(): Promise<string | null>;
   setMaxSteps(maxSteps: number): Promise<void>;
   setProviderTimeoutMinutes(minutes: number): Promise<void>;
   setProviderRetries(retries: number): Promise<void>;
@@ -129,7 +139,9 @@ export interface DesktopApi {
   openSavedMessage(id: string): Promise<SavedMessageSource | null>;
   getGitChanges(workspaceId: string): Promise<GitChanges>;
   getGitFile(workspaceId: string, path: string): Promise<GitFileContents>;
+  getGitDiffPreview(workspaceId: string, path: string): Promise<GitDiffPreview>;
   saveGitFile(workspaceId: string, path: string, content: string, lineEnding: GitFileContents["lineEnding"]): Promise<void>;
+  commitGitChanges(workspaceId: string, message: string, paths: string[]): Promise<GitChanges>;
   openWorkspaceFile(workspaceId: string, path: string): Promise<void>;
   revealWorkspaceFile(workspaceId: string, path: string): Promise<void>;
   initializeGitRepository(workspaceId: string): Promise<GitChanges>;

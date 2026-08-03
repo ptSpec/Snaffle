@@ -4,6 +4,7 @@
   justify-content: space-between;
   min-width: 0;
   margin-bottom: 8px;
+  padding: 0 12px;
 }
 
 .inspector-tabs {
@@ -28,7 +29,7 @@
   padding: 4px 6px;
   border-bottom: 1px solid transparent;
   border-radius: 0;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .inspector-tabs button:hover,
@@ -62,7 +63,7 @@
 .git-state {
   margin: 18px 2px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.45;
 }
 
@@ -75,8 +76,167 @@
   align-items: center;
   gap: 8px;
   min-height: 28px;
+  padding: 0 12px;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
+}
+
+.commit-panel {
+  --commit-surface: color-mix(in srgb, var(--text) 76%, var(--surface));
+  --commit-ink: var(--background);
+
+  margin: 6px 0 8px;
+  padding: 0;
+  color: var(--commit-ink);
+  background: var(--commit-surface);
+  border-block: 1px solid var(--border-default);
+}
+
+.commit-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 12px;
+  color: var(--commit-ink);
+  list-style: none;
+  cursor: pointer;
+}
+
+.commit-summary::-webkit-details-marker {
+  display: none;
+}
+
+.commit-summary::before {
+  color: var(--commit-ink);
+  font-size: 18px;
+  line-height: 1;
+  content: "›";
+  transition: transform 120ms ease;
+}
+
+.commit-panel[open] .commit-summary::before {
+  transform: rotate(90deg);
+}
+
+.commit-summary > span:first-of-type {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.commit-summary > small {
+  margin-left: auto;
+  color: var(--commit-ink);
+  opacity: 0.62;
+  white-space: nowrap;
+}
+
+.commit-body {
+  padding: 0 12px 9px;
+}
+
+.commit-selection,
+.commit-entry {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.commit-selection {
+  min-height: 30px;
+  color: var(--commit-ink);
+  font-size: 12px;
+}
+
+.commit-selection > span {
+  font-weight: 600;
+}
+
+.commit-branch {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.commit-branch small {
+  color: var(--commit-ink);
+  opacity: 0.62;
+}
+
+.commit-branch strong {
+  overflow: hidden;
+  color: var(--commit-ink);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-selection button {
+  margin-left: auto;
+  padding: 3px 7px;
+  color: var(--commit-ink);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--commit-ink) 32%, transparent);
+  border-radius: 6px;
+}
+
+.commit-selection button:hover {
+  color: var(--commit-surface);
+  background: var(--commit-ink);
+}
+
+.commit-entry input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 8px;
+  color: var(--text-primary);
+  background: var(--composer-background);
+  border: 0;
+  border-radius: 7px;
+  outline: none;
+}
+
+.commit-limit {
+  color: var(--commit-ink);
+  font-size: 11px;
+  opacity: 0.62;
+  white-space: nowrap;
+}
+
+.commit-body > textarea {
+  width: 100%;
+  margin-top: 6px;
+  padding: 7px 8px;
+  resize: none;
+  color: var(--text-primary);
+  background: var(--composer-background);
+  border: 0;
+  border-radius: 7px;
+  outline: none;
+  line-height: 1.35;
+}
+
+.commit-entry button {
+  padding: 7px 9px;
+  color: var(--commit-surface);
+  white-space: nowrap;
+  background: var(--commit-ink);
+  border: 1px solid var(--commit-ink);
+  border-radius: 7px;
+  font-weight: 600;
+}
+
+.commit-entry button:disabled {
+  opacity: 0.68;
+}
+
+.commit-hint {
+  display: block;
+  margin-top: 5px;
+  color: var(--commit-ink);
+  opacity: 0.72;
 }
 
 .change-counts {
@@ -98,18 +258,37 @@
 }
 
 .change-filter {
-  width: 100%;
-  margin: 6px 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: calc(100% - 24px);
+  margin: 6px 12px 8px;
   padding: 7px 8px;
   color: var(--text-primary);
-  background: transparent;
-  border: 1px solid var(--border-default);
+  background: var(--composer-background);
+  border: 0;
   border-radius: 7px;
   outline: none;
+  font-size: 14px;
 }
 
-.change-filter:focus {
-  border-color: var(--border-focus);
+.change-filter svg {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.change-filter input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  color: var(--text-primary);
+  background: transparent;
+  border: 0;
+  outline: none;
 }
 
 .change-files {
@@ -118,7 +297,7 @@
 
 .change-file {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
+  grid-template-columns: 16px 18px minmax(0, 1fr) auto;
   gap: 7px;
   align-items: center;
   width: 100%;
@@ -128,11 +307,28 @@
   background: transparent;
   border: 0;
   border-radius: 6px;
+  font-size: 14px;
+}
+
+.change-file > input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 .change-file:hover {
   color: var(--text-strong);
   background: var(--selected-background);
+}
+
+.change-file-open {
+  min-width: 0;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
 }
 
 .change-file-name {
@@ -159,7 +355,7 @@
 
 .change-status {
   color: var(--text-muted);
-  font: 600 11px/1 var(--font-code);
+  font: 600 12px/1 var(--font-code);
   text-align: center;
 }
 
@@ -185,39 +381,58 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 7px;
+  gap: 4px 0;
   min-height: 34px;
   padding-bottom: 7px;
   border-bottom: 1px solid var(--border-default);
   color: var(--text-strong);
-  font-size: 12px;
+  font-size: 14px;
 }
 
-.change-detail-heading > .change-file-name {
+.change-file-picker {
   flex: 1;
   min-width: 0;
+}
+
+.change-file-picker .search-picker-trigger {
+  padding: 4px 3px;
+  font: inherit;
+  font-weight: 500;
 }
 
 .change-actions {
   display: flex;
   flex-basis: 100%;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 7px;
+}
+
+.change-actions > div {
+  display: flex;
+  align-items: center;
+}
+
+.change-actions .change-save {
   margin-left: auto;
 }
 
 .change-detail-heading button {
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .change-detail-heading .change-back {
-  width: 22px;
+  width: 30px;
+  margin-left: 4px;
   padding: 0;
   font-size: 22px;
   line-height: 1;
+  transform: translateY(-2px);
 }
 
 .change-error {
   margin: 7px;
   color: var(--status-danger-text);
-  font-size: 12px;
+  font-size: 14px;
+  line-height: 1.4;
 }

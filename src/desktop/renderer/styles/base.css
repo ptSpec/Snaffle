@@ -2,6 +2,57 @@
   --font-text: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-code: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 
+  /* Component roles derived from the small public theme palette. */
+  --app-background: var(--background);
+  --sidebar-background: color-mix(in srgb, var(--panel) 92%, transparent);
+  --inspector-background: var(--panel);
+  --composer-background: var(--surface);
+  --card-background: var(--panel);
+  --hover-background: color-mix(in srgb, var(--text) 7%, var(--surface));
+  --selected-background: color-mix(in srgb, var(--primary) 6%, var(--panel));
+  --control-background: color-mix(in srgb, var(--text) 18%, var(--surface));
+  --border-default: var(--border);
+  --border-focus: color-mix(in srgb, var(--text) 42%, var(--border));
+  --text-primary: var(--text);
+  --text-strong: var(--text);
+  --text-secondary: color-mix(in srgb, var(--text) 82%, var(--background));
+  --text-muted: var(--muted-text);
+  --text-faint: color-mix(in srgb, var(--muted-text) 88%, var(--background));
+  --link-text: var(--primary);
+  --brand-mark-base: var(--brand);
+  --brand-mark-detail: var(--brand-detail);
+  --accent: var(--primary);
+  --accent-contrast: var(--primary-text);
+  --status-info-text: var(--primary);
+  --status-info-background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  --status-success-text: var(--success);
+  --status-success-background: color-mix(in srgb, var(--success) 18%, var(--surface));
+  --status-warning-text: var(--warning);
+  --status-warning-background: color-mix(in srgb, var(--warning) 18%, var(--surface));
+  --status-danger-text: var(--danger);
+  --status-danger-background: color-mix(in srgb, var(--danger) 18%, var(--surface));
+  --message-danger-background: color-mix(in srgb, var(--danger) 18%, var(--background));
+  --unsafe-text: var(--warning);
+  --unsafe-indicator: var(--warning);
+  --thinking-orb-blue: var(--code-number);
+  --thinking-orb-red: var(--danger);
+  --syntax-comment: var(--code-comment);
+  --syntax-keyword: var(--code-keyword);
+  --syntax-string: var(--code-string);
+  --syntax-number: var(--code-number);
+  --syntax-function: var(--primary);
+  --syntax-type: var(--code-type);
+  --syntax-operator: var(--code-text);
+  --code-block-background: color-mix(in srgb, var(--code-text) 7%, var(--code-background));
+  --editor-selection-background: var(--primary);
+  --editor-cursor: var(--code-text);
+  --diff-added-text: var(--success);
+  --diff-added-background: color-mix(in srgb, var(--success) 18%, var(--code-background));
+  --diff-removed-text: var(--danger);
+  --diff-removed-background: color-mix(in srgb, var(--danger) 18%, var(--code-background));
+  --diff-modified-text: var(--warning);
+  --diff-modified-background: color-mix(in srgb, var(--warning) 18%, var(--code-background));
+
   color: var(--text-primary);
   background: var(--app-background);
   font-family: var(--font-text);
@@ -248,4 +299,3 @@ body.resizing-columns .workspace-shell {
   visibility: hidden;
   border: 0;
 }
-

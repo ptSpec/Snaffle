@@ -1,0 +1,74 @@
+.git-hover-preview {
+  position: fixed;
+  z-index: 80;
+  width: min(520px, calc(100vw - 16px));
+  max-height: 352px;
+  overflow: hidden;
+  color: var(--code-text);
+  cursor: pointer;
+  pointer-events: auto;
+  background: var(--code-background);
+  border: 1px solid var(--border-default);
+  border-radius: 9px;
+  box-shadow: 0 14px 38px rgb(0 0 0 / 32%);
+}
+
+.git-hover-preview > strong {
+  display: block;
+  padding: 8px 10px;
+  overflow: hidden;
+  color: var(--text-strong);
+  background: var(--panel);
+  border-bottom: 1px solid var(--border-default);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-hover-preview > small {
+  display: block;
+  padding: 12px;
+  color: var(--text-muted);
+}
+
+.git-hover-preview pre {
+  max-height: 310px;
+  overflow: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  white-space: pre;
+}
+
+.git-hover-preview pre span {
+  display: block;
+  min-height: 1.45em;
+  padding: 0 9px;
+}
+
+.git-hover-preview .added {
+  color: var(--diff-added-text);
+  background: var(--diff-added-background);
+  border-left: 3px solid var(--diff-added-text);
+}
+
+.git-hover-preview .removed {
+  color: var(--diff-removed-text);
+  background: var(--diff-removed-background);
+  border-left: 3px solid var(--diff-removed-text);
+}
+
+.git-hover-preview .hunk {
+  color: var(--diff-modified-text);
+  background: var(--diff-modified-background);
+}
+
+.git-hover-preview .context {
+  color: var(--code-text);
+}
+
+.git-hover-preview .truncated {
+  padding-block: 5px;
+  color: var(--text-muted);
+  text-align: center;
+  background: var(--panel);
+}

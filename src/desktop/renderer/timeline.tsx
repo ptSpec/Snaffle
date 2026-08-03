@@ -296,10 +296,7 @@ function MessageFooter({
           </button>
         ) : null}
         <button type="button" onClick={() => void copy()} title="Copy message" aria-label="Copy message">
-          <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <rect x="5" y="5" width="8" height="8" rx="1.5" />
-            <path d="M3 10.5H2.5V3A1.5 1.5 0 0 1 4 1.5h7.5V2" />
-          </svg>
+          <CopyIcon />
           <span className="action-label">{copied ? "Copied" : "Copy"}</span>
         </button>
         {onEdit ? (
@@ -395,6 +392,7 @@ function CodeBlock({ children }: ComponentProps<"pre">): JSX.Element {
 
   const code = String(child.props.children).replace(/\n$/, "");
   const language = /language-([\w-]+)/.exec(child.props.className ?? "")?.[1] ?? "text";
+  const actionPositions = code.split("\n").length >= 8 ? ["top", "bottom"] : ["bottom"];
   const highlighted = hljs.getLanguage(language)
     ? hljs.highlight(code, { language, ignoreIllegals: true }).value
     : null;
@@ -403,6 +401,7 @@ function CodeBlock({ children }: ComponentProps<"pre">): JSX.Element {
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
     } catch {
       setCopied(false);
     }
@@ -410,12 +409,21 @@ function CodeBlock({ children }: ComponentProps<"pre">): JSX.Element {
 
   return (
     <div className="code-block">
-      <div className="code-block-header">
-        <span>{language}</span>
-        <button type="button" onClick={() => void copyCode()}>
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
+      {actionPositions.map((position) => (
+        <div className={`code-block-actions ${position}`} key={position}>
+          <span className="code-block-language">{language}</span>
+          <span className="code-block-action-separator" aria-hidden="true">/</span>
+          <button
+            className={copied ? "copied" : ""}
+            type="button"
+            onClick={() => void copyCode()}
+            title={copied ? "Copied" : "Copy code"}
+            aria-label={copied ? "Copied" : "Copy code"}
+          >
+            <CopyIcon />
+          </button>
+        </div>
+      ))}
       <pre>
         {highlighted ? (
           <code
@@ -427,6 +435,15 @@ function CodeBlock({ children }: ComponentProps<"pre">): JSX.Element {
         )}
       </pre>
     </div>
+  );
+}
+
+function CopyIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="5" y="5" width="8" height="8" rx="1.5" />
+      <path d="M3 10.5H2.5V3A1.5 1.5 0 0 1 4 1.5h7.5V2" />
+    </svg>
   );
 }
 

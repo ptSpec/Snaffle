@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
-import { saveGitFile } from "../src/git/actions.js";
-import { gitFileContents, parseGitNumstat, parseGitStatus } from "../src/git/repository.js";
+import { commitGitChanges, saveGitFile } from "../src/git/actions.js";
+import { gitDiffPreview, gitFileContents, parseGitNumstat, parseGitStatus } from "../src/git/repository.js";
 
 const exec = promisify(execFile);
 
@@ -43,6 +43,35 @@ test("Git editor preserves CRLF line endings", async () => {
 
     await saveGitFile(workspace, "example.txt", "one\ntwo saved\n", contents.lineEnding);
     assert.equal(await readFile(join(workspace, "example.txt"), "utf8"), "one\r\ntwo saved\r\n");
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("Git commit includes only selected files", async () => {
+  const workspace = await mkdtemp(join(tmpdir(), "esch-git-commit-"));
+  try {
+    await exec("git", ["init"], { cwd: workspace });
+    await exec("git", ["config", "user.name", "Esch Test"], { cwd: workspace });
+    await exec("git", ["config", "user.email", "test@example.com"], { cwd: workspace });
+    await writeFile(join(workspace, "one.txt"), "one\n");
+    await writeFile(join(workspace, "two.txt"), "two\n");
+    await exec("git", ["add", "."], { cwd: workspace });
+    await exec("git", ["commit", "-m", "initial"], { cwd: workspace });
+
+    await writeFile(join(workspace, "one.txt"), "one changed\n");
+    await writeFile(join(workspace, "two.txt"), "two changed\n");
+    await writeFile(join(workspace, "new.txt"), "new\n");
+    const preview = await gitDiffPreview(workspace, "one.txt");
+    assert.ok(preview.lines.includes("-one"));
+    assert.ok(preview.lines.includes("+one changed"));
+    await exec("git", ["add", "two.txt"], { cwd: workspace });
+    await commitGitChanges(workspace, "selected files", ["one.txt", "new.txt"]);
+
+    assert.equal((await exec("git", ["show", "HEAD:one.txt"], { cwd: workspace })).stdout, "one changed\n");
+    assert.equal((await exec("git", ["show", "HEAD:new.txt"], { cwd: workspace })).stdout, "new\n");
+    assert.equal((await exec("git", ["show", "HEAD:two.txt"], { cwd: workspace })).stdout, "two\n");
+    assert.match((await exec("git", ["status", "--porcelain", "two.txt"], { cwd: workspace })).stdout, /^M  two\.txt/);
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }

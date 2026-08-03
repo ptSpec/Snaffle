@@ -10,7 +10,7 @@ import type { DesktopState, DesktopThread } from "../api.js";
 import { ThinkingOrb } from "./thinking-orb.js";
 
 export type AppView = "conversation" | "saved" | "settings";
-export type SettingsPage = "appearance" | "agent";
+export type SettingsPage = "appearance" | "editor" | "agent";
 
 export function Sidebar({
   state,
@@ -244,6 +244,13 @@ export function Sidebar({
               <span>Appearance</span>
             </button>
             <button
+              className={settingsPage === "editor" ? "sidebar-action active" : "sidebar-action"}
+              type="button"
+              onClick={() => onSettingsPage("editor")}
+            >
+              <span>Editor</span>
+            </button>
+            <button
               className={settingsPage === "agent" ? "sidebar-action active" : "sidebar-action"}
               type="button"
               onClick={() => onSettingsPage("agent")}
@@ -286,7 +293,7 @@ export function Sidebar({
               <>
                 <div className="sidebar-row workspace-row active">
                   <div className="workspace-item" title={state.workspace.path}>
-                    <WorkspaceIcon />
+                    <WorkspaceIcon open />
                     <span>{state.workspace.name}</span>
                   </div>
                   <span className="thread-actions">
@@ -590,11 +597,37 @@ function SavedIcon(): JSX.Element {
   );
 }
 
-function WorkspaceIcon(): JSX.Element {
+function WorkspaceIcon({ open = false }: { open?: boolean }): JSX.Element {
   return (
     <span className="workspace-icon" aria-hidden="true">
       <svg viewBox="0 0 18 14" fill="none">
-        <path d="M1.5 2.5h5l1.6 2h8.4v8H1.5z" stroke="currentColor" strokeWidth="1.4" />
+        {open ? (
+          <>
+            <path
+              d="M2 11.5V3.75c0-.7.56-1.25 1.25-1.25h3.3c.45 0 .87.2 1.15.55L8.9 4.5h5.85c.7 0 1.25.56 1.25 1.25v1"
+              stroke="currentColor"
+              strokeWidth="1.35"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              className="folder-flap"
+              d="M2 11.5 3.7 6.25h12.4l-1.7 5.25z"
+              stroke="currentColor"
+              strokeWidth="1.35"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </>
+        ) : (
+          <path
+            d="M2 11.5V3.75c0-.7.56-1.25 1.25-1.25h3.3c.45 0 .87.2 1.15.55L8.9 4.5h5.85c.7 0 1.25.56 1.25 1.25v5.75z"
+            stroke="currentColor"
+            strokeWidth="1.35"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
       </svg>
     </span>
   );
