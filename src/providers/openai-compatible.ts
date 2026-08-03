@@ -13,6 +13,8 @@ export type OpenAICompatibleOptions = {
   apiKey?: string;
   streamIdleTimeoutMs?: number;
   maxRetries?: number;
+  temperature?: number;
+  seed?: number;
 };
 
 export class OpenAICompatibleProvider implements ModelProvider {
@@ -21,6 +23,8 @@ export class OpenAICompatibleProvider implements ModelProvider {
   private readonly apiKey: string | undefined;
   private readonly streamIdleTimeoutMs: number;
   private readonly maxRetries: number;
+  private readonly temperature: number | undefined;
+  private readonly seed: number | undefined;
 
   constructor(options: OpenAICompatibleOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
@@ -28,6 +32,8 @@ export class OpenAICompatibleProvider implements ModelProvider {
     this.apiKey = options.apiKey;
     this.streamIdleTimeoutMs = options.streamIdleTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
     this.maxRetries = options.maxRetries ?? DEFAULT_PROVIDER_RETRIES;
+    this.temperature = options.temperature;
+    this.seed = options.seed;
   }
 
   async complete(
@@ -63,6 +69,8 @@ export class OpenAICompatibleProvider implements ModelProvider {
             })),
             parallel_tool_calls: false,
             stream: true,
+            ...(this.temperature === undefined ? {} : { temperature: this.temperature }),
+            ...(this.seed === undefined ? {} : { seed: this.seed }),
           }),
           signal,
         });

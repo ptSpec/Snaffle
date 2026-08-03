@@ -16,6 +16,8 @@ test("OpenAI-compatible provider repairs a common double-encoded tool call", asy
         messages: Array<{ role: string; content: string }>;
         parallel_tool_calls: boolean;
         stream: boolean;
+        temperature?: number;
+        seed?: number;
         tools: unknown[];
       };
       requestCount += 1;
@@ -25,6 +27,8 @@ test("OpenAI-compatible provider repairs a common double-encoded tool call", asy
       assert.equal(parsed.model, "test-model");
       assert.equal(parsed.parallel_tool_calls, false);
       assert.equal(parsed.stream, true);
+      assert.equal(parsed.temperature, 0);
+      assert.equal(parsed.seed, 42);
       assert.equal(parsed.tools.length, 1);
 
       if (requestCount === 1) {
@@ -74,6 +78,8 @@ test("OpenAI-compatible provider repairs a common double-encoded tool call", asy
     baseUrl: `http://127.0.0.1:${address.port}/v1`,
     model: "test-model",
     apiKey: "secret",
+    temperature: 0,
+    seed: 42,
   });
   const result = await provider.complete(
     [{ role: "user", content: "Inspect the project" }],

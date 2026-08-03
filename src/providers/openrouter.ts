@@ -16,6 +16,8 @@ export class OpenRouterProvider extends OpenAICompatibleProvider {
     apiKey: string;
     streamIdleTimeoutMs?: number;
     maxRetries?: number;
+    temperature?: number;
+    seed?: number;
   }) {
     super({
       baseUrl: OPENROUTER_BASE_URL,
@@ -25,6 +27,8 @@ export class OpenRouterProvider extends OpenAICompatibleProvider {
         ? {}
         : { streamIdleTimeoutMs: options.streamIdleTimeoutMs }),
       ...(options.maxRetries === undefined ? {} : { maxRetries: options.maxRetries }),
+      ...(options.temperature === undefined ? {} : { temperature: options.temperature }),
+      ...(options.seed === undefined ? {} : { seed: options.seed }),
     });
   }
 }
