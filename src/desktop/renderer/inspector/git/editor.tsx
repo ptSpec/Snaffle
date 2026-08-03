@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import {
   HighlightStyle,
@@ -21,22 +21,29 @@ import {
 import { tags } from "@lezer/highlight";
 import "./editor.css";
 
-export default function GitEditor({
-  path,
-  current,
-  original,
-  onChange,
-  onSave,
-}: {
+export type GitEditorHandle = { value(): string };
+
+const GitEditor = forwardRef<GitEditorHandle, {
   path: string;
   current: string;
   original: string;
-  onChange(value: string): void;
-  onSave(): void;
-}): JSX.Element {
+  onDirty(): void;
+  onSave(value: string): void;
+}>(function GitEditor({
+  path,
+  current,
+  original,
+  onDirty,
+  onSave,
+}, ref): JSX.Element {
   const parent = useRef<HTMLDivElement>(null);
-  const handlers = useRef({ onChange, onSave });
-  handlers.current = { onChange, onSave };
+  const editor = useRef<EditorView>();
+  const handlers = useRef({ onDirty, onSave });
+  handlers.current = { onDirty, onSave };
+
+  useImperativeHandle(ref, () => ({
+    value: () => editor.current?.state.doc.toString() ?? current,
+  }), [current]);
 
   useEffect(() => {
     let view: EditorView | undefined;
@@ -59,7 +66,7 @@ export default function GitEditor({
             highlightActiveLine(),
             syntaxHighlighting(eschHighlighting),
             keymap.of([
-              { key: "Mod-s", run: () => { handlers.current.onSave(); return true; } },
+              { key: "Mod-s", run: (target) => { handlers.current.onSave(target.state.doc.toString()); return true; } },
               indentWithTab,
               ...defaultKeymap,
               ...historyKeymap,
@@ -73,23 +80,27 @@ export default function GitEditor({
               collapseUnchanged: { margin: 3, minSize: 6 },
             }),
             EditorView.updateListener.of((update) => {
-              if (update.docChanged) handlers.current.onChange(update.state.doc.toString());
+              if (update.docChanged) handlers.current.onDirty();
             }),
             editorTheme,
             language,
           ],
         }),
       });
+      editor.current = view;
     });
 
     return () => {
       cancelled = true;
       view?.destroy();
+      if (editor.current === view) editor.current = undefined;
     };
   }, [current, original, path]);
 
   return <div className="git-editor" ref={parent} />;
-}
+});
+
+export default GitEditor;
 
 const editorTheme = EditorView.theme({
   "&": {

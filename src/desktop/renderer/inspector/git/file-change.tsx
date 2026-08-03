@@ -22,6 +22,7 @@ export function FileChange({
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const showTimer = useRef<number>();
   const hideTimer = useRef<number>();
+  const showing = useRef(false);
 
   useEffect(() => setPreview(null), [previewVersion]);
   useEffect(() => () => {
@@ -39,16 +40,24 @@ export function FileChange({
       left: Math.max(8, bounds.left - width + 1),
     });
     showTimer.current = window.setTimeout(() => {
+      showing.current = true;
       setVisible(true);
-      if (!preview) void window.desktop.getGitDiffPreview(workspaceId, file.path).then(setPreview, () => {
-        setPreview({ lines: ["Preview unavailable."], truncated: false });
-      });
+      if (!preview) void window.desktop.getGitDiffPreview(workspaceId, file.path).then(
+        (next) => { if (showing.current) setPreview(next); },
+        () => { if (showing.current) setPreview({ lines: ["Preview unavailable."], truncated: false }); },
+      );
     }, 350);
   }
 
   function hide(): void {
     window.clearTimeout(showTimer.current);
-    hideTimer.current = window.setTimeout(() => setVisible(false), 250);
+    hideTimer.current = window.setTimeout(close, 250);
+  }
+
+  function close(): void {
+    showing.current = false;
+    setVisible(false);
+    setPreview(null);
   }
 
   return (
@@ -65,7 +74,7 @@ export function FileChange({
           onEnter={() => window.clearTimeout(hideTimer.current)}
           onLeave={hide}
           onOpen={() => {
-            setVisible(false);
+            close();
             onSelect();
           }}
         />

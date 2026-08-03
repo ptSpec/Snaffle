@@ -160,20 +160,28 @@ function ActivityGroup({
   onSelect: (id: string) => void;
   onResolveApproval?: (id: string, decision: CommandApprovalDecision) => void;
 }): JSX.Element {
+  const [open, setOpen] = useState(false);
+
   return (
-    <details className="activity-group">
+    <details
+      className="activity-group"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
       <summary>Work details</summary>
-      <div className="activity-group-body">
-        {item.items.map((child) => (
-          <TimelineEntry
-            key={child.id}
-            item={child}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            {...(onResolveApproval ? { onResolveApproval } : {})}
-          />
-        ))}
-      </div>
+      {open ? (
+        <div className="activity-group-body">
+          {item.items.map((child) => (
+            <TimelineEntry
+              key={child.id}
+              item={child}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              {...(onResolveApproval ? { onResolveApproval } : {})}
+            />
+          ))}
+        </div>
+      ) : null}
     </details>
   );
 }
@@ -693,17 +701,18 @@ export function addRunEvent(
 
   if (event.type === "tool.completed") {
     setTimeline((items) => {
+      const existing = items.findIndex((item) => item.id === event.call.id);
+      const runningCall = existing === -1 ? undefined : items[existing];
       const completed: TimelineItem = {
         id: event.call.id,
         kind: "tool",
-        call: event.call,
+        call: runningCall?.kind === "tool" ? runningCall.call : event.call,
         phase: "completed",
         content: event.content,
         isError: event.isError,
         sequence: event.sequence,
         ...(event.exitCode === undefined ? {} : { exitCode: event.exitCode }),
       };
-      const existing = items.findIndex((item) => item.id === event.call.id);
       if (existing === -1) return [...items, completed];
       return items.map((item, index) => (index === existing ? completed : item));
     });

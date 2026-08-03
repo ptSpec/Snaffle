@@ -1,4 +1,4 @@
-import { createClient, type Client, type Row, type InStatement } from "@libsql/client";
+import { createClient, type Client, type Row, type InStatement } from "@libsql/client/sqlite3";
 import { mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";

@@ -1,6 +1,7 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DesktopWorkspace, GitChanges, GitFileContents } from "../../../api.js";
 import { SearchPicker } from "../../search-picker.js";
+import type { GitEditorHandle } from "./editor.js";
 import { FileChange } from "./file-change.js";
 
 const GitEditor = lazy(() => import("./editor.js"));
@@ -15,7 +16,7 @@ export function GitPanel({
   const [changes, setChanges] = useState<GitChanges | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [fileContents, setFileContents] = useState<GitFileContents | null>(null);
-  const [draft, setDraft] = useState("");
+  const [dirty, setDirty] = useState(false);
   const [filter, setFilter] = useState("");
   const [commitMessage, setCommitMessage] = useState("");
   const [commitDescription, setCommitDescription] = useState("");
@@ -26,6 +27,7 @@ export function GitPanel({
   const [previewVersion, setPreviewVersion] = useState(0);
   const [pathCopied, setPathCopied] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const editor = useRef<GitEditorHandle>(null);
 
   const refresh = useCallback(async (): Promise<void> => {
     if (!workspace) return;
@@ -47,7 +49,7 @@ export function GitPanel({
     setChanges(null);
     setSelectedPath(null);
     setFileContents(null);
-    setDraft("");
+    setDirty(false);
     setFilter("");
     setCommitMessage("");
     setCommitDescription("");
@@ -61,7 +63,7 @@ export function GitPanel({
   useEffect(() => {
     if (!workspace || !selectedPath) {
       setFileContents(null);
-      setDraft("");
+      setDirty(false);
       return;
     }
     let current = true;
@@ -71,7 +73,7 @@ export function GitPanel({
       (next) => {
         if (!current) return;
         setFileContents(next);
-        setDraft(next.current);
+        setDirty(false);
       },
       (error) => { if (current) setFailure(errorMessage(error)); },
     );
@@ -114,12 +116,14 @@ export function GitPanel({
     }
   }
 
-  async function save(): Promise<void> {
-    if (!workspace || !selectedPath || !fileContents || draft === fileContents.current || saving) return;
+  async function save(content?: string): Promise<void> {
+    if (!workspace || !selectedPath || !fileContents || (!dirty && content === undefined) || saving) return;
+    const nextContent = content ?? editor.current?.value();
+    if (nextContent === undefined) return;
     setSaving(true);
     setFailure(null);
     try {
-      await window.desktop.saveGitFile(workspace.id, selectedPath, draft, fileContents.lineEnding);
+      await window.desktop.saveGitFile(workspace.id, selectedPath, nextContent, fileContents.lineEnding);
       await refresh();
     } catch (error) {
       setFailure(errorMessage(error));
@@ -203,18 +207,19 @@ export function GitPanel({
                 <button type="button" disabled={!selectedFile.exists} onClick={() => void fileAction("open")}>Open</button>
                 <button type="button" disabled={!selectedFile.exists} onClick={() => void fileAction("reveal")}>Reveal</button>
               </div>
-              <button className="change-save" type="button" disabled={!fileContents || draft === fileContents.current || saving} onClick={() => void save()}>{saving ? "Saving…" : "Save"}</button>
+              <button className="change-save" type="button" disabled={!fileContents || !dirty || saving} onClick={() => void save()}>{saving ? "Saving…" : "Save"}</button>
             </div>
           </div>
           {failure ? <p className="change-error">{failure}</p> : null}
           {fileContents ? (
             <Suspense fallback={<p className="inspector-empty">Loading editor…</p>}>
               <GitEditor
+                ref={editor}
                 path={selectedFile.path}
                 current={fileContents.current}
                 original={fileContents.original}
-                onChange={setDraft}
-                onSave={() => void save()}
+                onDirty={() => setDirty(true)}
+                onSave={(content) => void save(content)}
               />
             </Suspense>
           ) : failure ? null : <p className="inspector-empty">Loading file…</p>}

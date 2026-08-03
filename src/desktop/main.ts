@@ -70,7 +70,7 @@ async function start(): Promise<void> {
   providerTimeoutMinutes = validProviderTimeout(settings.providerTimeoutMinutes) ?? providerTimeoutMinutes;
   providerRetries = validProviderRetries(settings.providerRetries) ?? DEFAULT_PROVIDER_RETRIES;
   store = await openStore(path.join(app.getPath("userData"), `${PRODUCT.slug}.db`));
-  if (process.platform === "darwin") app.dock?.setIcon(applicationIcon());
+  if (process.platform === "darwin" && !app.isPackaged) app.dock?.setIcon(applicationIcon());
   if (!app.isPackaged && (await store.state()).workspaces.length === 0) {
     await store.addWorkspace(process.cwd(), path.basename(process.cwd()) || process.cwd());
   }
@@ -89,7 +89,7 @@ function createWindow(): void {
     height: 860,
     minWidth: 980,
     minHeight: 640,
-    icon: applicationIcon(),
+    ...(process.platform === "darwin" ? {} : { icon: applicationIcon() }),
     backgroundColor: activeTheme.colors.background,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
     ...(process.platform === "darwin"
@@ -172,7 +172,7 @@ function registerIpc(): void {
     async (_event, threadId: unknown, bookmarked: unknown): Promise<DesktopState> => {
       if (typeof bookmarked !== "boolean") throw new Error("Bookmark value must be a boolean");
       await store.setBookmarked(parseId(threadId, "Thread"), bookmarked);
-      return desktopState();
+      return desktopState(false);
     },
   );
 
@@ -253,7 +253,10 @@ function registerIpc(): void {
       maxSteps,
       onEvent: (event) => sendRunEvent(threadId, event),
     })
-      .then((result) => store.saveMessages(threadId, result.messages))
+      .then(async (result) => {
+        await store.saveMessages(threadId, result.messages);
+        sendRunEvent(threadId, { type: "run.persisted" });
+      })
       .catch(() => undefined)
       .finally(() => {
         if (activeRuns.get(threadId) === run) activeRuns.delete(threadId);
@@ -276,7 +279,7 @@ function registerIpc(): void {
       if (activeRuns.has(threadId)) throw new Error("Execution mode cannot change during a run");
       if (unsafe) unsafeThreads.add(threadId);
       else unsafeThreads.delete(threadId);
-      return desktopState();
+      return desktopState(false);
     },
   );
 
@@ -291,7 +294,7 @@ function registerIpc(): void {
       if (decision === "thread") unsafeThreads.add(pending.threadId);
       await emitPermissionEvent(pending.threadId, { type: "permission.resolved", id, decision });
       pending.resolve(decision);
-      return desktopState();
+      return desktopState(false);
     },
   );
 
@@ -364,6 +367,8 @@ function registerIpc(): void {
   ipcMain.handle("desktop:delete-saved-message", async (_event, value: unknown) => {
     return store.savedMessages.delete(parseId(value, "Saved message"));
   });
+
+  ipcMain.handle("desktop:list-saved-messages", () => store.savedMessages.list());
 
   ipcMain.handle("desktop:open-saved-message", async (_event, value: unknown) => {
     const source = await store.savedMessages.source(parseId(value, "Saved message"));
@@ -461,7 +466,7 @@ function parseFilePaths(value: unknown): string[] {
   return value;
 }
 
-async function desktopState(): Promise<DesktopState> {
+async function desktopState(includeConversation = true): Promise<DesktopState> {
   const state = await store.state();
   const sandbox = await probeNativeSandbox();
   const workspace =
@@ -470,8 +475,8 @@ async function desktopState(): Promise<DesktopState> {
     workspace,
     workspaces: state.workspaces,
     activeThreadId: state.activeThreadId,
-    conversation: await store.entries(state.activeThreadId),
-    savedMessages: await store.savedMessages.list(),
+    conversation: includeConversation ? await store.entries(state.activeThreadId) : [],
+    savedMessages: await store.savedMessages.summaries(),
     openRouterAvailable: Boolean(process.env.OPENROUTER_API_KEY),
     runningThreadIds: [...activeRuns.keys()],
     unsafeThreadIds: [...unsafeThreads],
@@ -641,7 +646,23 @@ function openRouterApiKey(): string {
 
 function sendRunEvent(threadId: string, event: RunEvent): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send("desktop:run-event", { threadId, event });
+  mainWindow.webContents.send("desktop:run-event", { threadId, event: compactRunEvent(event) });
+}
+
+function compactRunEvent(event: RunEvent): RunEvent {
+  if (event.type === "model.completed" && event.response.toolCalls.length) {
+    return {
+      ...event,
+      response: {
+        ...event.response,
+        toolCalls: event.response.toolCalls.map((call) => ({ ...call, input: null })),
+      },
+    };
+  }
+  if (event.type === "tool.completed") {
+    return { ...event, call: { ...event.call, input: null } };
+  }
+  return event;
 }
 
 async function requestCommandApproval(

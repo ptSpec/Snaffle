@@ -67,6 +67,8 @@ export type SavedMessage = {
   sourceAvailable: boolean;
 };
 
+export type SavedMessageSummary = Omit<SavedMessage, "text">;
+
 export type SaveMessageInput = {
   threadId: string;
   sequence: number;
@@ -84,7 +86,7 @@ export type DesktopState = {
   workspaces: DesktopWorkspace[];
   activeThreadId: string | null;
   conversation: DesktopEntry[];
-  savedMessages: SavedMessage[];
+  savedMessages: SavedMessageSummary[];
   openRouterAvailable: boolean;
   runningThreadIds: string[];
   unsafeThreadIds: string[];
@@ -134,8 +136,9 @@ export interface DesktopApi {
   setMaxSteps(maxSteps: number): Promise<void>;
   setProviderTimeoutMinutes(minutes: number): Promise<void>;
   setProviderRetries(retries: number): Promise<void>;
-  saveMessage(input: SaveMessageInput): Promise<SavedMessage[]>;
-  deleteSavedMessage(id: string): Promise<SavedMessage[]>;
+  saveMessage(input: SaveMessageInput): Promise<SavedMessageSummary[]>;
+  deleteSavedMessage(id: string): Promise<SavedMessageSummary[]>;
+  listSavedMessages(): Promise<SavedMessage[]>;
   openSavedMessage(id: string): Promise<SavedMessageSource | null>;
   getGitChanges(workspaceId: string): Promise<GitChanges>;
   getGitFile(workspaceId: string, path: string): Promise<GitFileContents>;
