@@ -16,6 +16,7 @@ export type RunAgentOptions = {
   history?: Message[];
   maxSteps?: number;
   onEvent?: (event: RunEvent) => void | Promise<void>;
+  takeSteering?: () => string[];
 };
 
 export type AgentResult = {
@@ -84,6 +85,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
       });
 
       if (response.toolCalls.length === 0) {
+        if (appendSteering(messages, options.takeSteering?.())) continue;
         if (!response.text.trim()) throw new Error("Model returned an empty final response");
         await emit(options, { type: "run.completed", text: response.text, steps: step });
         return { text: response.text, steps: step, messages };
@@ -126,6 +128,8 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           ...(exitCode === undefined ? {} : { exitCode }),
         });
       }
+
+      appendSteering(messages, options.takeSteering?.());
     }
 
     throw new Error(`Agent exceeded the ${maxSteps}-step limit`);
@@ -133,6 +137,12 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
     await emit(options, { type: "run.failed", message: errorMessage(error) });
     throw error;
   }
+}
+
+function appendSteering(messages: Message[], steering: string[] | undefined): boolean {
+  if (!steering?.length) return false;
+  for (const content of steering) messages.push({ role: "user", content });
+  return true;
 }
 
 function emitModelEvent(

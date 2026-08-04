@@ -21,6 +21,8 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:remove-workspace", workspaceId),
   listOpenRouterModels: () => ipcRenderer.invoke("desktop:list-openrouter-models"),
   startRun: (input: StartRunInput) => ipcRenderer.invoke("desktop:start-run", input),
+  steerRun: (threadId: string, message: string) =>
+    ipcRenderer.invoke("desktop:steer-run", threadId, message),
   stopRun: (threadId: string) => ipcRenderer.invoke("desktop:stop-run", threadId),
   setThreadUnsafe: (threadId: string, unsafe: boolean) =>
     ipcRenderer.invoke("desktop:set-thread-unsafe", threadId, unsafe),
