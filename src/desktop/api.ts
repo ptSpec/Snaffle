@@ -7,6 +7,7 @@ export type GitFileChange = {
   additions: number;
   deletions: number;
   exists: boolean;
+  editable: boolean;
 };
 
 export type GitChanges = {

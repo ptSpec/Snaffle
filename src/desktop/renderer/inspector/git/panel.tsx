@@ -39,7 +39,7 @@ export function GitPanel({
       const next = await window.desktop.getGitChanges(workspace.id);
       setChanges(next);
       setPreviewVersion((current) => current + 1);
-      setSelectedPath((current) => next.files.some((file) => file.path === current) ? current : null);
+      setSelectedPath((current) => next.files.some((file) => file.path === current && file.editable) ? current : null);
     } catch (error) {
       setFailure(errorMessage(error));
     } finally {
@@ -206,7 +206,7 @@ export function GitPanel({
             <SearchPicker
               className="change-file-picker"
               value={selectedFile.path}
-              options={changes.files.map((file) => ({
+              options={changes.files.filter((file) => file.editable).map((file) => ({
                 value: file.path,
                 label: file.path.slice(file.path.lastIndexOf("/") + 1),
               }))}
@@ -319,7 +319,7 @@ export function GitPanel({
                 selected={commitPaths.has(file.path)}
                 previewVersion={previewVersion}
                 onToggle={() => toggleCommitPath(file.path)}
-                onSelect={() => setSelectedPath(file.path)}
+                onSelect={() => { if (file.editable) setSelectedPath(file.path); }}
                 onAction={(action) => {
                   if (action === "copy") void copyPath(file.path);
                   else if (action === "copy-relative") void copyPath(file.path, true);

@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { commitGitChanges, saveGitFile } from "../src/git/actions.js";
-import { gitDiffPreview, gitFileContents, parseGitNumstat, parseGitStatus } from "../src/git/repository.js";
+import { gitChanges, gitDiffPreview, gitFileContents, parseGitNumstat, parseGitStatus } from "../src/git/repository.js";
 
 const exec = promisify(execFile);
 
@@ -43,6 +43,23 @@ test("Git editor preserves CRLF line endings", async () => {
 
     await saveGitFile(workspace, "example.txt", "one\ntwo saved\n", contents.lineEnding);
     assert.equal(await readFile(join(workspace, "example.txt"), "utf8"), "one\r\ntwo saved\r\n");
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("Git changes do not open directory symbolic links as files", async () => {
+  const workspace = await mkdtemp(join(tmpdir(), "esch-git-link-"));
+  try {
+    await exec("git", ["init"], { cwd: workspace });
+    await mkdir(join(workspace, "target"));
+    await symlink(join(workspace, "target"), join(workspace, "current"));
+
+    const changes = await gitChanges(workspace);
+    const link = changes.files.find((file) => file.path === "current");
+    assert.equal(link?.exists, true);
+    assert.equal(link?.editable, false);
+    await assert.rejects(gitFileContents(workspace, "current"), /Symbolic links cannot be edited/);
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }
