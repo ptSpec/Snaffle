@@ -108,11 +108,12 @@ export function FileChange({
       <span className={`change-status status-${file.status === "?" ? "new" : file.status.toLowerCase()}`}>{file.status}</span>
       <FileName path={file.path} />
       <button
-        className="change-file-open-zone"
+        className={`change-file-open-zone${file.editable ? "" : " non-editable"}`}
         type="button"
-        onClick={onSelect}
-        title={`Open ${file.path}`}
-        aria-label={`Open ${file.path}`}
+        onClick={() => { if (file.editable) onSelect(); }}
+        title={file.editable ? `Open ${file.path}` : "This path cannot be edited here"}
+        aria-label={file.editable ? `Open ${file.path}` : `${file.path} cannot be edited here`}
+        aria-disabled={!file.editable}
       >
         <span className="change-file-stats"><b>+{file.additions}</b> <i>−{file.deletions}</i></span>
         <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -126,10 +127,10 @@ export function FileChange({
           position={position}
           onEnter={() => window.clearTimeout(hideTimer.current)}
           onLeave={hide}
-          onOpen={() => {
+          onOpen={file.editable ? () => {
             close();
             onSelect();
-          }}
+          } : undefined}
         />
       ) : null}
       {menu ? (
@@ -163,7 +164,7 @@ function DiffPreview({
   position: { top: number; left: number };
   onEnter(): void;
   onLeave(): void;
-  onOpen(): void;
+  onOpen: (() => void) | undefined;
 }): JSX.Element {
   return (
     <aside
@@ -173,7 +174,7 @@ function DiffPreview({
       onPointerEnter={onEnter}
       onPointerLeave={onLeave}
       onClick={() => {
-        if (!window.getSelection()?.toString()) onOpen();
+        if (onOpen && !window.getSelection()?.toString()) onOpen();
       }}
     >
       <strong>{path}</strong>

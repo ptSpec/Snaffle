@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { lstat, readFile, readlink, stat } from "node:fs/promises";
 import type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents } from "../desktop/api.js";
 import { MAX_GIT_OUTPUT_BYTES, runGit, safeWorkspacePath } from "./process.js";
 
@@ -36,10 +36,12 @@ export async function gitChanges(workspace: string): Promise<GitChanges> {
     );
     const files = await Promise.all(parsed.map(async (change) => {
       const file = safeWorkspacePath(workspace, change.path);
-      const exists = await stat(file).then(() => true, () => false);
+      const info = await lstat(file).catch(() => null);
+      const exists = Boolean(info);
+      const editable = !info || info.isFile();
       const tracked = counts.get(change.path);
-      const additions = tracked?.additions ?? (change.status === "?" && exists ? await lineCount(file) : 0);
-      return { ...change, additions, deletions: tracked?.deletions ?? 0, exists };
+      const additions = tracked?.additions ?? (change.status === "?" && editable && exists ? await lineCount(file) : 0);
+      return { ...change, additions, deletions: tracked?.deletions ?? 0, exists, editable };
     }));
 
     return {
@@ -56,6 +58,9 @@ export async function gitChanges(workspace: string): Promise<GitChanges> {
 
 export async function gitFileContents(workspace: string, filePath: string): Promise<GitFileContents> {
   const file = safeWorkspacePath(workspace, filePath);
+  const info = await lstat(file).catch((error) => isMissingCommand(error) ? null : Promise.reject(error));
+  if (info?.isDirectory()) throw new Error("Directories cannot be edited here");
+  if (info?.isSymbolicLink()) throw new Error("Symbolic links cannot be edited here");
   const prefix = (await runGit(workspace, ["rev-parse", "--show-prefix"])).stdout.trim().replace(/\/$/, "");
   const current = await readTextFile(file).catch((error) => {
     if (isMissingCommand(error)) return "";
@@ -80,7 +85,7 @@ export async function gitDiffPreview(workspace: string, filePath: string): Promi
   return { lines: lines.slice(0, 80), truncated: lines.length > 80 };
 }
 
-export function parseGitStatus(output: string): Omit<GitFileChange, "additions" | "deletions" | "exists">[] {
+export function parseGitStatus(output: string): Omit<GitFileChange, "additions" | "deletions" | "exists" | "editable">[] {
   return output.split("\0").filter(Boolean).map((entry) => ({
     path: entry.slice(3),
     status: statusLabel(entry.slice(0, 2)),
@@ -143,7 +148,10 @@ function previewLines(output: string): string[] {
 
 async function newFilePreview(file: string): Promise<string[]> {
   try {
-    if ((await stat(file)).size > MAX_GIT_OUTPUT_BYTES) return ["File is too large to preview."];
+    const info = await lstat(file);
+    if (info.isDirectory()) return ["Directory changed."];
+    if (info.isSymbolicLink()) return [`Symbolic link → ${await readlink(file)}`];
+    if (info.size > MAX_GIT_OUTPUT_BYTES) return ["File is too large to preview."];
     const content = await readFile(file);
     if (content.includes(0)) return ["Binary file changed."];
     return content.toString("utf8").replaceAll("\r\n", "\n").split("\n").map((line) => `+${line}`);

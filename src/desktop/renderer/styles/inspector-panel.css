@@ -364,6 +364,19 @@
   background: var(--hover-background);
 }
 
+.change-file-open-zone.non-editable {
+  cursor: default;
+}
+
+.change-file-open-zone.non-editable:hover {
+  color: var(--text-muted);
+  background: transparent;
+}
+
+.change-file-open-zone.non-editable svg {
+  display: none;
+}
+
 .change-file-menu {
   position: fixed;
   z-index: 100;
