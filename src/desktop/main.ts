@@ -25,6 +25,13 @@ import { LocalWorkspace, type CommandApprovalRequest } from "../workspace.js";
 import type { DesktopState, SaveMessageInput, StartRunInput } from "./api.js";
 import { openStore, type DesktopStore } from "./store.js";
 import { DEFAULT_THEME, themeById, type Theme } from "./themes/index.js";
+import {
+  DEFAULT_FONTS,
+  DEFAULT_FONT_SCALE,
+  fontById,
+  validFontScale,
+  type FontId,
+} from "./typography.js";
 
 const desktopDirectory = path.dirname(fileURLToPath(import.meta.url));
 const rendererPath = path.join(desktopDirectory, "../../renderer/index.html");
@@ -48,6 +55,13 @@ const pendingApprovals = new Map<
   { threadId: string; resolve: (decision: CommandApprovalDecision) => void }
 >();
 let activeTheme: Theme = DEFAULT_THEME;
+let interfaceFont: FontId = DEFAULT_FONTS.interface;
+let primaryFont: FontId = DEFAULT_FONTS.primary;
+let secondaryFont: FontId = DEFAULT_FONTS.secondary;
+let codeFont: FontId = DEFAULT_FONTS.code;
+let interfaceFontScale = DEFAULT_FONT_SCALE;
+let conversationFontScale = DEFAULT_FONT_SCALE;
+let codeBlockFontSize = 15;
 let editorFontSize = 13;
 let editorCommand = "";
 let editorArguments = "";
@@ -69,6 +83,13 @@ async function start(): Promise<void> {
     typeof settings.themeId === "string"
       ? themeById(settings.themeId) ?? DEFAULT_THEME
       : DEFAULT_THEME;
+  interfaceFont = fontById(settings.interfaceFont)?.id ?? DEFAULT_FONTS.interface;
+  primaryFont = fontById(settings.primaryFont)?.id ?? DEFAULT_FONTS.primary;
+  secondaryFont = fontById(settings.secondaryFont)?.id ?? DEFAULT_FONTS.secondary;
+  codeFont = fontById(settings.codeFont)?.id ?? DEFAULT_FONTS.code;
+  interfaceFontScale = validFontScale(settings.interfaceFontScale) ?? DEFAULT_FONT_SCALE;
+  conversationFontScale = validFontScale(settings.conversationFontScale) ?? DEFAULT_FONT_SCALE;
+  codeBlockFontSize = validCodeFontSize(settings.codeBlockFontSize) ?? codeBlockFontSize;
   editorFontSize = validEditorFontSize(settings.editorFontSize) ?? editorFontSize;
   editorCommand = typeof settings.editorCommand === "string" ? settings.editorCommand : "";
   editorArguments = typeof settings.editorArguments === "string" ? settings.editorArguments : "";
@@ -119,7 +140,17 @@ function createWindow(): void {
   });
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  void mainWindow.loadFile(rendererPath, { query: { theme: activeTheme.id } });
+  void mainWindow.loadFile(rendererPath, {
+    query: {
+      theme: activeTheme.id,
+      interfaceFont,
+      primaryFont,
+      secondaryFont,
+      codeFont,
+      interfaceFontScale: String(interfaceFontScale),
+      conversationFontScale: String(conversationFontScale),
+    },
+  });
   mainWindow.on("closed", () => {
     mainWindow = undefined;
   });
@@ -341,11 +372,41 @@ function registerIpc(): void {
     }
   });
 
+  ipcMain.handle("desktop:set-typography", (_event, interfaceValue: unknown, primary: unknown, secondary: unknown, code: unknown): void => {
+    const nextInterface = fontById(interfaceValue)?.id;
+    const nextPrimary = fontById(primary)?.id;
+    const nextSecondary = fontById(secondary)?.id;
+    const nextCode = fontById(code)?.id;
+    if (!nextInterface || !nextPrimary || !nextSecondary || !nextCode) throw new Error("Unknown font selection");
+    interfaceFont = nextInterface;
+    primaryFont = nextPrimary;
+    secondaryFont = nextSecondary;
+    codeFont = nextCode;
+    saveSettings({ interfaceFont, primaryFont, secondaryFont, codeFont });
+  });
+
+  ipcMain.handle("desktop:set-typography-scale", (_event, role: unknown, value: unknown): void => {
+    const scale = validFontScale(value);
+    if ((role !== "interface" && role !== "conversation") || scale === undefined) {
+      throw new Error("Font scale must be from 85% to 125%");
+    }
+    if (role === "interface") interfaceFontScale = scale;
+    else conversationFontScale = scale;
+    saveSettings(role === "interface" ? { interfaceFontScale: scale } : { conversationFontScale: scale });
+  });
+
   ipcMain.handle("desktop:set-editor-font-size", (_event, value: unknown): void => {
     const next = validEditorFontSize(value);
     if (next === undefined) throw new Error("Editor font size must be an integer from 10 to 24");
     editorFontSize = next;
     saveSettings({ editorFontSize });
+  });
+
+  ipcMain.handle("desktop:set-code-block-font-size", (_event, value: unknown): void => {
+    const next = validCodeFontSize(value);
+    if (next === undefined) throw new Error("Code block font size must be an integer from 10 to 24");
+    codeBlockFontSize = next;
+    saveSettings({ codeBlockFontSize });
   });
 
   ipcMain.handle("desktop:set-editor-launcher", (_event, command: unknown, argumentsTemplate: unknown): void => {
@@ -510,6 +571,13 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     restrictedHostAvailable: sandbox.available,
     restrictedHostDetail: sandbox.detail,
     themeId: activeTheme.id,
+    interfaceFont,
+    primaryFont,
+    secondaryFont,
+    codeFont,
+    interfaceFontScale,
+    conversationFontScale,
+    codeBlockFontSize,
     editorFontSize,
     editorCommand,
     editorArguments,
@@ -525,6 +593,13 @@ function settingsPath(): string {
 
 type SavedSettings = {
   themeId?: unknown;
+  interfaceFont?: unknown;
+  primaryFont?: unknown;
+  secondaryFont?: unknown;
+  codeFont?: unknown;
+  interfaceFontScale?: unknown;
+  conversationFontScale?: unknown;
+  codeBlockFontSize?: unknown;
   editorFontSize?: unknown;
   editorCommand?: unknown;
   editorArguments?: unknown;
@@ -548,6 +623,13 @@ function loadSettings(): SavedSettings {
 
 function saveSettings(update: {
   themeId?: string;
+  interfaceFont?: FontId;
+  primaryFont?: FontId;
+  secondaryFont?: FontId;
+  codeFont?: FontId;
+  interfaceFontScale?: number;
+  conversationFontScale?: number;
+  codeBlockFontSize?: number;
   editorFontSize?: number;
   editorCommand?: string;
   editorArguments?: string;
@@ -564,6 +646,10 @@ function validEditorFontSize(value: unknown): number | undefined {
   return Number.isInteger(value) && Number(value) >= 10 && Number(value) <= 24
     ? Number(value)
     : undefined;
+}
+
+function validCodeFontSize(value: unknown): number | undefined {
+  return validEditorFontSize(value);
 }
 
 async function launchEditor(target: string): Promise<void> {

@@ -114,6 +114,12 @@ html[data-appearance="light"] .thinking-orb.preview {
     drop-shadow(0 2px 9px color-mix(in srgb, var(--thinking-orb-red) 18%, transparent));
 }
 
+html[data-accented-theme="true"] .thinking-orb {
+  --thinking-orb-yellow-left: var(--primary);
+  --thinking-orb-yellow-right: color-mix(in srgb, var(--primary) 72%, #ffb84d);
+  --thinking-orb-ambient: color-mix(in srgb, var(--primary) 36%, #a58b99);
+}
+
 .thinking-orb.stopped:not(.preview) .thinking-orb-flow-a {
   animation: thinking-orb-idle-a 8s ease-in-out infinite;
 }

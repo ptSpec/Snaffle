@@ -14,7 +14,7 @@
 .settings h1 {
   margin: 0;
   color: var(--text-strong);
-  font-size: 28px;
+  font-size: calc(28px * var(--interface-font-scale));
   letter-spacing: -0.03em;
 }
 
@@ -26,6 +26,61 @@
 .theme-list {
   display: grid;
   gap: 8px;
+}
+
+.typography-settings {
+  display: grid;
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.typography-card {
+  padding: 4px 16px;
+  background: var(--card-background);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+}
+
+.typography-card h2 {
+  margin: 12px 0 2px;
+  color: var(--text-strong);
+  font-size: calc(15px * var(--interface-font-scale));
+}
+
+.typography-card .setting-field {
+  border-bottom: 0;
+}
+
+.typography-card .setting-field:first-of-type {
+  border-top: 0;
+}
+
+.scale-control {
+  display: grid;
+  grid-template-columns: 32px 52px 32px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+}
+
+.scale-control button {
+  height: 32px;
+  padding: 0;
+  color: var(--text-primary);
+  background: transparent;
+  border: 0;
+  font-size: calc(17px * var(--interface-font-scale));
+}
+
+.scale-control button:hover:not(:disabled) {
+  background: var(--hover-background);
+}
+
+.scale-control output {
+  color: var(--text-secondary);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .theme-option {
@@ -52,7 +107,7 @@
 
 .theme-preview {
   display: grid;
-  grid-template-columns: 20px 1fr 20px;
+  grid-template-columns: 20px 1fr 20px 6px;
   height: 42px;
   overflow: hidden;
   border: 1px solid var(--border-default);
@@ -92,7 +147,8 @@
   color: var(--text-muted);
 }
 
-.setting-field input {
+.setting-field input,
+.setting-field select {
   width: 84px;
   padding: 7px 9px;
   color: var(--text-primary);
@@ -100,6 +156,10 @@
   border: 1px solid var(--border-default);
   border-radius: 7px;
   outline: none;
+}
+
+.setting-field select {
+  width: 180px;
 }
 
 .setting-field.text-setting input {
@@ -115,7 +175,7 @@
 
 .editor-current span {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--interface-font-scale));
 }
 
 .editor-current strong {
@@ -145,7 +205,8 @@
   border-color: transparent;
 }
 
-.setting-field input:focus {
+.setting-field input:focus,
+.setting-field select:focus {
   border-color: var(--border-focus);
 }
 

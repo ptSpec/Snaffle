@@ -29,7 +29,7 @@
   padding: 4px 6px;
   border-bottom: 1px solid transparent;
   border-radius: 0;
-  font-size: 15px;
+  font-size: calc(15px * var(--interface-font-scale));
 }
 
 .inspector-tabs button:hover,
@@ -63,7 +63,7 @@
 .git-state {
   margin: 18px 2px;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: calc(14px * var(--interface-font-scale));
   line-height: 1.45;
 }
 
@@ -78,7 +78,7 @@
   min-height: 28px;
   padding: 0 12px;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: calc(14px * var(--interface-font-scale));
 }
 
 .change-branch {
@@ -101,8 +101,16 @@
 .change-branch strong {
   overflow: hidden;
   font-weight: 500;
+  color: var(--primary);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+html[data-accented-theme="true"] .commit-panel {
+  --commit-surface: color-mix(in srgb, var(--primary) 18%, var(--background));
+  --commit-ink: var(--primary);
+
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border-default));
 }
 
 .commit-panel {
@@ -178,7 +186,7 @@
 
 .commit-limit {
   color: var(--commit-ink);
-  font-size: 11px;
+  font-size: calc(11px * var(--interface-font-scale));
   opacity: 0.62;
   white-space: nowrap;
   animation: commit-limit-in 120ms ease-out;
@@ -263,7 +271,7 @@
   border: 0;
   border-radius: 7px;
   outline: none;
-  font-size: 14px;
+  font-size: calc(14px * var(--interface-font-scale));
 }
 
 .change-filter svg {
@@ -296,7 +304,7 @@
   align-items: center;
   padding: 7px 6px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--interface-font-scale));
   cursor: pointer;
 }
 
@@ -316,7 +324,7 @@
   background: transparent;
   border: 0;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: calc(14px * var(--interface-font-scale));
   cursor: pointer;
 }
 
@@ -461,7 +469,7 @@
   padding-bottom: 7px;
   border-bottom: 1px solid var(--border-default);
   color: var(--text-strong);
-  font-size: 14px;
+  font-size: calc(14px * var(--interface-font-scale));
 }
 
 .change-file-picker {
@@ -527,7 +535,7 @@ html[data-appearance="light"] .change-detail-heading .change-back:hover {
 }
 
 .change-detail-heading button {
-  font-size: 14px;
+  font-size: calc(14px * var(--interface-font-scale));
 }
 
 .change-detail-heading .change-back {
@@ -549,6 +557,6 @@ html[data-appearance="light"] .change-detail-heading .change-back:hover {
 .change-error {
   margin: 7px;
   color: var(--status-danger-text);
-  font-size: 14px;
+  font-size: calc(14px * var(--interface-font-scale));
   line-height: 1.4;
 }

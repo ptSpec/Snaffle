@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { CommandApprovalDecision } from "../protocol.js";
 import type { DesktopApi, DesktopRunEvent, GitFileContents, SaveMessageInput, StartRunInput } from "./api.js";
+import type { FontId } from "./typography.js";
 
 const api: DesktopApi = {
   platform: process.platform,
@@ -29,6 +30,11 @@ const api: DesktopApi = {
   resolveCommandApproval: (id: string, decision: CommandApprovalDecision) =>
     ipcRenderer.invoke("desktop:resolve-command-approval", id, decision),
   setTheme: (themeId: string) => ipcRenderer.invoke("desktop:set-theme", themeId),
+  setTypography: (interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId) =>
+    ipcRenderer.invoke("desktop:set-typography", interfaceFont, primary, secondary, code),
+  setTypographyScale: (role: "interface" | "conversation", value: number) =>
+    ipcRenderer.invoke("desktop:set-typography-scale", role, value),
+  setCodeBlockFontSize: (size: number) => ipcRenderer.invoke("desktop:set-code-block-font-size", size),
   setEditorFontSize: (size: number) => ipcRenderer.invoke("desktop:set-editor-font-size", size),
   setEditorLauncher: (command: string, argumentsTemplate: string) =>
     ipcRenderer.invoke("desktop:set-editor-launcher", command, argumentsTemplate),
