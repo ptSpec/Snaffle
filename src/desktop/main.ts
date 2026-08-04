@@ -34,7 +34,13 @@ let mainWindow: BrowserWindow | undefined;
 let store: DesktopStore;
 const activeRuns = new Map<
   string,
-  { controller: AbortController; threadId: string; workspaceId: string }
+  {
+    controller: AbortController;
+    threadId: string;
+    workspaceId: string;
+    steering: string[];
+    acceptingSteering: boolean;
+  }
 >();
 const unsafeThreads = new Set<string>();
 const pendingApprovals = new Map<
@@ -221,7 +227,13 @@ function registerIpc(): void {
       unsafe ? "unsafe" : "restricted",
       (request) => requestCommandApproval(threadId, request),
     );
-    const run = { controller, threadId, workspaceId: selectedWorkspace.id };
+    const run = {
+      controller,
+      threadId,
+      workspaceId: selectedWorkspace.id,
+      steering: [] as string[],
+      acceptingSteering: true,
+    };
     activeRuns.set(threadId, run);
     let conversation: Message[];
     try {
@@ -251,7 +263,13 @@ function registerIpc(): void {
       signal: controller.signal,
       history: conversation,
       maxSteps,
-      onEvent: (event) => sendRunEvent(threadId, event),
+      takeSteering: () => run.steering.splice(0),
+      onEvent: (event) => {
+        if (event.type === "run.completed" || event.type === "run.failed") {
+          run.acceptingSteering = false;
+        }
+        sendRunEvent(threadId, event);
+      },
     })
       .then(async (result) => {
         await store.saveMessages(threadId, result.messages);
@@ -261,6 +279,14 @@ function registerIpc(): void {
       .finally(() => {
         if (activeRuns.get(threadId) === run) activeRuns.delete(threadId);
       });
+  });
+
+  ipcMain.handle("desktop:steer-run", (_event, rawThreadId: unknown, rawMessage: unknown): boolean => {
+    const run = activeRuns.get(parseId(rawThreadId, "Thread"));
+    const message = parseSteeringMessage(rawMessage);
+    if (!run?.acceptingSteering) return false;
+    run.steering.push(message);
+    return true;
   });
 
   ipcMain.handle("desktop:stop-run", (_event, value: unknown): boolean => {
@@ -602,6 +628,13 @@ function parseStartRunInput(input: unknown): StartRunInput {
   const threadId = typeof value.threadId === "string" ? value.threadId : "";
   if (!threadId) throw new Error("Choose a thread before starting a run");
   return { threadId, task, model };
+}
+
+function parseSteeringMessage(value: unknown): string {
+  const message = typeof value === "string" ? value.trim() : "";
+  if (!message) throw new Error("Enter a message before steering the run");
+  if (message.length > 30000) throw new Error("Message is too long");
+  return message;
 }
 
 function parseApprovalDecision(value: unknown): CommandApprovalDecision {
