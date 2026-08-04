@@ -16,6 +16,14 @@ export function contentRevision(content: string): string {
   return createHash("sha256").update(content).digest("hex").slice(0, 12);
 }
 
+export function contentLineCount(content: string): number {
+  if (!content) return 0;
+  const normalized = content.replaceAll("\r\n", "\n");
+  return normalized.endsWith("\n")
+    ? normalized.slice(0, -1).split("\n").length
+    : normalized.split("\n").length;
+}
+
 export function objectInput(input: unknown): Record<string, unknown> {
   if (typeof input === "string") {
     throw new Error(

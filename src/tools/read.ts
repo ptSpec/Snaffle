@@ -1,4 +1,4 @@
-import { contentRevision, integerField, objectInput, stringField, type Tool } from "./tool.js";
+import { contentLineCount, contentRevision, integerField, objectInput, stringField, type Tool } from "./tool.js";
 
 export const readTool: Tool = {
   name: "read_file",
@@ -18,18 +18,19 @@ export const readTool: Tool = {
     const input = objectInput(rawInput);
     const filePath = stringField(input, "path") as string;
     const startLine = integerField(input, "startLine", 1);
-    const lineCount = integerField(input, "lineCount", 200);
+    const requestedLineCount = integerField(input, "lineCount", 200);
 
     if (startLine < 1) throw new Error("startLine must be at least 1");
-    if (lineCount < 1 || lineCount > 1000) {
+    if (requestedLineCount < 1 || requestedLineCount > 1000) {
       throw new Error("lineCount must be between 1 and 1000");
     }
 
     const content = await workspace.read(filePath);
     if (content.includes("\0")) throw new Error("Binary files cannot be read as text");
 
-    const lines = content.replaceAll("\r\n", "\n").split("\n");
-    const selected = lines.slice(startLine - 1, startLine - 1 + lineCount);
+    const actualLineCount = contentLineCount(content);
+    const lines = content.replaceAll("\r\n", "\n").split("\n").slice(0, actualLineCount);
+    const selected = lines.slice(startLine - 1, startLine - 1 + requestedLineCount);
     const endLine = Math.min(startLine + selected.length - 1, lines.length);
     const numbered = selected.map((line, index) => `${startLine + index} | ${line}`).join("\n");
 
