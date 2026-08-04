@@ -135,7 +135,7 @@ export function App(): JSX.Element {
   }, [timeline]);
 
   useEffect(() => {
-    if (!running && view === "conversation") {
+    if (view === "conversation") {
       taskInput.current?.focus({ preventScroll: true });
     }
   }, [desktopState.activeThreadId, running, view]);
@@ -328,7 +328,25 @@ export function App(): JSX.Element {
     setError(null);
     const threadId = desktopState.activeThreadId;
 
-    if (!threadId || running || runBlocker) {
+    if (running) {
+      if (!threadId || !task.trim()) return;
+      const message = task.trim();
+      setTask("");
+      try {
+        if (!await window.desktop.steerRun(threadId, message)) {
+          setTask(message);
+          setError("The run finished before the message could be queued. Send it again.");
+          return;
+        }
+        appendUserMessage(threadId, message);
+      } catch (cause) {
+        setTask(message);
+        setError(errorMessage(cause));
+      }
+      return;
+    }
+
+    if (!threadId || runBlocker) {
       if (runBlocker) setError(runBlocker);
       return;
     }
@@ -340,19 +358,7 @@ export function App(): JSX.Element {
     };
 
     followTimeline.current = true;
-    setTimeline((items) => {
-      const next = [
-        ...items,
-        {
-          id: newTimelineId(),
-          kind: "user" as const,
-          text: request.task,
-          sequence: nextMessageSequence(items),
-        },
-      ];
-      threadTimelines.current.set(request.threadId, next);
-      return next;
-    });
+    appendUserMessage(request.threadId, request.task);
     setTask("");
     setDesktopState((state) => ({
       ...state,
@@ -368,6 +374,23 @@ export function App(): JSX.Element {
       }));
       setError(errorMessage(cause));
     }
+  }
+
+  function appendUserMessage(threadId: string, text: string): void {
+    followTimeline.current = true;
+    setTimeline((items) => {
+      const next = [
+        ...items,
+        {
+          id: newTimelineId(),
+          kind: "user" as const,
+          text,
+          sequence: nextMessageSequence(items),
+        },
+      ];
+      threadTimelines.current.set(threadId, next);
+      return next;
+    });
   }
 
   async function stopRun(): Promise<void> {
@@ -710,7 +733,6 @@ export function App(): JSX.Element {
               }}
               placeholder="Describe the coding task…"
               rows={1}
-              disabled={running}
             />
 
             <div className="composer-controls">
@@ -768,6 +790,8 @@ export function App(): JSX.Element {
                   </label>
                 </div>
               </details>
+
+              {running && task.trim() ? <small className="steer-hint">Enter to steer</small> : null}
 
               <button
                 className={running ? "send-button stop" : "send-button"}

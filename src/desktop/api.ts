@@ -127,6 +127,7 @@ export interface DesktopApi {
   removeWorkspace(workspaceId: string): Promise<DesktopState>;
   listOpenRouterModels(): Promise<OpenRouterModel[]>;
   startRun(input: StartRunInput): Promise<void>;
+  steerRun(threadId: string, message: string): Promise<boolean>;
   stopRun(threadId: string): Promise<boolean>;
   setThreadUnsafe(threadId: string, unsafe: boolean): Promise<DesktopState>;
   resolveCommandApproval(id: string, decision: CommandApprovalDecision): Promise<DesktopState>;
