@@ -246,7 +246,28 @@ textarea {
 
 .send-button.stop {
   padding: 0;
-  font-size: 16px;
+}
+
+.steer-hint {
+  color: var(--text-faint);
+  font-size: 10px;
+  white-space: nowrap;
+  animation: steer-hint-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes steer-hint-pulse {
+  50% {
+    color: var(--text-secondary);
+  }
+}
+
+.send-button.stop .send-button-symbol {
+  width: 13px;
+  height: 13px;
+  overflow: hidden;
+  font-size: 0;
+  background: currentColor;
+  border-radius: 1px;
 }
 
 .send-button.stop .thinking-orb {
@@ -270,6 +291,10 @@ textarea {
 
 @media (prefers-reduced-motion: reduce) {
   .send-button.stop .thinking-orb {
+    animation: none;
+  }
+
+  .steer-hint {
     animation: none;
   }
 }

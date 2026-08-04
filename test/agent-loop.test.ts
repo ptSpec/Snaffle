@@ -123,3 +123,35 @@ test("agent loop carries conversation history into a follow-up", async (t) => {
     { role: "user", content: "Make it longer." },
   ]);
 });
+
+test("agent loop applies steering after the current model output", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "agent-steering-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const replies = ["Initial answer.", "Revised answer."];
+  const seen: Message[][] = [];
+  const provider: ModelProvider = {
+    model: "steering-test-model",
+    async complete(messages) {
+      seen.push([...messages]);
+      return { text: replies.shift() ?? "", toolCalls: [] };
+    },
+  };
+  let steering = ["Change direction."];
+
+  const result = await runAgent({
+    task: "Start work.",
+    provider,
+    tools: defaultTools(),
+    workspace: new LocalWorkspace(root, "disabled"),
+    trace: new MemoryTrace(),
+    signal: new AbortController().signal,
+    takeSteering: () => steering.splice(0),
+  });
+
+  assert.equal(result.text, "Revised answer.");
+  assert.equal(seen.length, 2);
+  assert.deepEqual(seen[1]?.slice(-2).map(({ role, content }) => ({ role, content })), [
+    { role: "assistant", content: "Initial answer." },
+    { role: "user", content: "Change direction." },
+  ]);
+});

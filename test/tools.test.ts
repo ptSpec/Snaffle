@@ -8,7 +8,7 @@ import { editTool } from "../src/tools/edit.js";
 import { readTool } from "../src/tools/read.js";
 import { runTool } from "../src/tools/run.js";
 import { searchTool } from "../src/tools/search.js";
-import { contentRevision } from "../src/tools/tool.js";
+import { contentLineCount, contentRevision } from "../src/tools/tool.js";
 import { writeTool } from "../src/tools/write.js";
 import { LocalWorkspace } from "../src/workspace.js";
 import { nativeSandboxStatus } from "../src/sandbox.js";
@@ -28,7 +28,7 @@ test("the five explicit file and command tools work together", async (t) => {
   });
   assert.equal(
     written.content,
-    `Wrote src/example.ts; version: ${contentRevision("const value = 1;\nconst ready = false;\nconst label = 'old';\n")}.`,
+    `Wrote src/example.ts; version: ${contentRevision("const value = 1;\nconst ready = false;\nconst label = 'old';\n")}; total lines: ${contentLineCount("const value = 1;\nconst ready = false;\nconst label = 'old';\n")}.`,
   );
   const read = await readTool.execute(workspace, { path: "src/example.ts" });
   assert.match(read.content, /version: [0-9a-f]{12}.*\n1 \| const value = 1/);
@@ -45,11 +45,15 @@ test("the five explicit file and command tools work together", async (t) => {
   });
   const editedVersion = /version: ([0-9a-f]{12})/.exec(edited.content)?.[1];
   assert.ok(editedVersion);
-  await editTool.execute(workspace, {
+  const finalEdit = await editTool.execute(workspace, {
     path: "src/example.ts",
     version: editedVersion,
-    edits: [{ startLine: 3, endLine: 3, newText: "const label = 'new';" }],
+    edits: [
+      { startLine: 3, endLine: 3, newText: "const label = 'new';" },
+      { startLine: 4, endLine: 4, newText: "export {};" },
+    ],
   });
+  assert.match(finalEdit.content, /total lines: 4/);
 
   const matches = await searchTool.execute(workspace, { query: "value = 2" });
   assert.match(matches.content, /src\/example\.ts:1/);
@@ -70,7 +74,7 @@ test("the five explicit file and command tools work together", async (t) => {
   assert.equal(command.exitCode, 0);
   assert.equal(
     await readFile(path.join(root, "src/example.ts"), "utf8"),
-    "const value = 2;\nconst ready = true;\nconst label = 'new';\n",
+    "const value = 2;\nconst ready = true;\nconst label = 'new';\nexport {};",
   );
 });
 
@@ -160,6 +164,22 @@ test("edit rejects stale versions and overlapping ranges", async (t) => {
   );
 });
 
+test("edit reports exact append coordinates", async (t) => {
+  const { root, workspace } = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const original = "first\nsecond";
+  await writeFile(path.join(root, "example.txt"), original);
+
+  await assert.rejects(
+    editTool.execute(workspace, {
+      path: "example.txt",
+      version: contentRevision(original),
+      edits: [{ startLine: 4, endLine: 5, newText: "too far" }],
+    }),
+    /has 2 lines.*use startLine 3 and endLine 3/,
+  );
+});
+
 test("workspace rejects paths outside its root", async (t) => {
   const { root, workspace } = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -206,6 +226,7 @@ test("restricted commands stay inside the workspace", async (t) => {
 
   const inside = await workspace.run("printf ok > generated.txt", undefined, 5000);
   const listing = await workspace.run("ls -la", undefined, 5000);
+  const nestedDirectory = await workspace.run("cd nested && pwd", undefined, 5000);
   const outsideRead = await workspace.run(`cat ${JSON.stringify(secret)}`, undefined, 5000);
   const gitWrite = await workspace.run("touch .git/forbidden", undefined, 5000);
   const nestedGitWrite = await workspace.run("touch nested/.git/forbidden", undefined, 5000);
@@ -213,6 +234,7 @@ test("restricted commands stay inside the workspace", async (t) => {
 
   assert.equal(inside.exitCode, 0);
   assert.equal(listing.exitCode, 0);
+  assert.equal(nestedDirectory.exitCode, 0);
   assert.equal(await readFile(path.join(root, "generated.txt"), "utf8"), "ok");
   assert.notEqual(outsideRead.exitCode, 0);
   assert.notEqual(gitWrite.exitCode, 0);
