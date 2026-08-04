@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type ClipboardEvent as ReactClipboardEvent,
+  type DragEvent as ReactDragEvent,
   type FormEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -13,6 +14,7 @@ import type { AttachmentPreview, AttachmentRef } from "../../attachments/types.j
 import type { CommandApprovalDecision } from "../../protocol.js";
 import type { DesktopApi, DesktopRunEvent, DesktopState, SavedMessage } from "../api.js";
 import type { OpenRouterModel } from "../../providers/openrouter.js";
+import { DEFAULT_MODEL_CONTEXT_LENGTH } from "../../providers/provider.js";
 import { DEFAULT_THEME, themeById, type Theme } from "../themes/index.js";
 import {
   CONVERSATION_FONT_BASE,
@@ -23,6 +25,7 @@ import {
   type FontId,
 } from "../typography.js";
 import { AttachmentTray } from "./attachment-tray.js";
+import { htmlToMarkdown } from "./attachment-markdown.js";
 import { Settings } from "./settings.js";
 import { SavedMessages } from "./saved-messages.js";
 import { Sidebar, type AppView, type SettingsPage } from "./sidebar.js";
@@ -80,6 +83,7 @@ export function App(): JSX.Element {
   const [selectedModel, setSelectedModel] = useState("");
   const [task, setTask] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentPreview[]>([]);
+  const [draggingAttachments, setDraggingAttachments] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
@@ -335,27 +339,37 @@ export function App(): JSX.Element {
   );
   const visibleLeftWidth = leftCollapsed ? 0 : leftWidth;
   const visibleRightWidth = view !== "conversation" || rightCollapsed ? 0 : rightWidth;
-  const attachmentTokens = pendingAttachments.reduce(
+  const activeContextAttachments = useMemo(() => {
+    const active = new Map<string, AttachmentRef>();
+    for (const item of timeline) {
+      if (item.kind !== "user") continue;
+      for (const attachment of item.attachments ?? []) {
+        if (attachment.includeInContext !== false) active.set(attachment.id, attachment);
+      }
+    }
+    return [...active.values()];
+  }, [timeline]);
+  const contextAttachments = [...activeContextAttachments, ...pendingAttachments];
+  const attachmentTokens = contextAttachments.reduce(
     (total, attachment) => total + attachment.estimatedTokens,
     0,
   );
-  const selectedContextLength = models.find((model) => model.id === selectedModel)?.contextLength;
+  const selectedContextLength = models.find((model) => model.id === selectedModel)?.contextLength ??
+    DEFAULT_MODEL_CONTEXT_LENGTH;
   const selectedModalities = models.find((model) => model.id === selectedModel)?.inputModalities;
-  const imageUnsupported = pendingAttachments.some((attachment) => attachment.kind === "image") &&
+  const imageUnsupported = contextAttachments.some((attachment) => attachment.kind === "image") &&
     selectedModalities !== undefined && !selectedModalities.includes("image");
-  const attachmentsTooLarge = Boolean(
-    selectedContextLength && attachmentTokens > selectedContextLength * 0.7,
-  );
+  const attachmentsTooLarge = attachmentTokens > selectedContextLength * 0.7;
   const runBlocker = !desktopState.workspace
     ? "Open a workspace before sending."
     : !task.trim() && pendingAttachments.length === 0
       ? "Describe a task or attach a file before sending."
-      : attachmentsTooLarge
-        ? "Attachments are too large for the selected model context."
-        : imageUnsupported
-          ? "The selected model does not accept images."
-          : !selectedModel
-            ? "Select a model before sending."
+      : !selectedModel
+        ? "Select a model before sending."
+        : attachmentsTooLarge
+          ? "Attachments are too large for the selected model context."
+          : imageUnsupported
+            ? "The selected model does not accept images."
             : !unsafeHostExecution && !desktopState.restrictedHostAvailable
               ? desktopState.restrictedHostDetail
               : null;
@@ -459,19 +473,45 @@ export function App(): JSX.Element {
   async function chooseAttachments(): Promise<void> {
     setError(null);
     try {
-      const imported = await window.desktop.chooseAttachments();
-      const remaining = Math.max(0, 8 - pendingAttachments.length);
-      const accepted = imported.slice(0, remaining);
-      await Promise.all(
-        imported.slice(remaining).map((item) => window.desktop.removeAttachment(item.id)),
+      await addAttachments(await window.desktop.chooseAttachments());
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function addAttachments(imported: AttachmentPreview[]): Promise<void> {
+    const fingerprints = new Set(pendingAttachments.map((attachment) => attachment.fingerprint));
+    const unique = imported.filter((attachment) => {
+      if (fingerprints.has(attachment.fingerprint)) return false;
+      fingerprints.add(attachment.fingerprint);
+      return true;
+    });
+    const duplicates = imported.filter((attachment) => !unique.includes(attachment));
+    const remaining = Math.max(0, 8 - pendingAttachments.length);
+    const accepted = unique.slice(0, remaining);
+    const rejected = [...duplicates, ...unique.slice(remaining)];
+    await Promise.all(
+      rejected.map((item) => window.desktop.removeAttachment(item.id)),
+    );
+    if (unique.length > remaining) setError("Attach at most 8 files to one message");
+    else if (duplicates.length) setError("That file is already attached");
+    setPendingAttachments((current) => {
+      const next = [...current, ...accepted];
+      const threadId = desktopState.activeThreadId;
+      if (threadId) threadAttachments.current.set(threadId, next);
+      return next;
+    });
+  }
+
+  async function dropAttachments(event: ReactDragEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    setDraggingAttachments(false);
+    if (running || event.dataTransfer.files.length === 0) return;
+    setError(null);
+    try {
+      await addAttachments(
+        await window.desktop.importDroppedFiles([...event.dataTransfer.files]),
       );
-      if (accepted.length < imported.length) setError("Attach at most 8 files to one message");
-      setPendingAttachments((current) => {
-        const next = [...current, ...accepted];
-        const threadId = desktopState.activeThreadId;
-        if (threadId) threadAttachments.current.set(threadId, next);
-        return next;
-      });
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -483,13 +523,7 @@ export function App(): JSX.Element {
       setError(null);
       try {
         if (pendingAttachments.length >= 8) throw new Error("Attach at most 8 files to one message");
-        const attachment = await window.desktop.importClipboardImage();
-        setPendingAttachments((current) => {
-          const next = [...current, attachment];
-          const threadId = desktopState.activeThreadId;
-          if (threadId) threadAttachments.current.set(threadId, next);
-          return next;
-        });
+        await addAttachments([await window.desktop.importClipboardImage()]);
       } catch (cause) {
         setError(errorMessage(cause));
       }
@@ -499,13 +533,7 @@ export function App(): JSX.Element {
     if (!event.clipboardData.getData("text/html")) return;
     event.preventDefault();
     const plain = event.clipboardData.getData("text/plain");
-    const input = event.currentTarget;
-    const start = input.selectionStart;
-    const end = input.selectionEnd;
-    setTask((current) => `${current.slice(0, start)}${plain}${current.slice(end)}`);
-    window.requestAnimationFrame(() => {
-      input.setSelectionRange(start + plain.length, start + plain.length);
-    });
+    insertTaskText(plain, event.currentTarget);
   }
 
   async function removeAttachment(attachment: AttachmentPreview): Promise<void> {
@@ -522,16 +550,73 @@ export function App(): JSX.Element {
     }
   }
 
+  async function toggleAttachmentContext(
+    item: Extract<TimelineItem, { kind: "user" }>,
+    attachment: AttachmentRef,
+  ): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId || running) return;
+    const include = attachment.includeInContext === false;
+
+    try {
+      await window.desktop.setAttachmentContext(threadId, item.sequence, attachment.id, include);
+      setTimeline((items) => {
+        const next = items.map((candidate) => {
+          if (candidate.id !== item.id || candidate.kind !== "user" || !candidate.attachments) {
+            return candidate;
+          }
+          return {
+            ...candidate,
+            attachments: candidate.attachments.map((current) => {
+              if (current.id !== attachment.id) return current;
+              if (!include) return { ...current, includeInContext: false as const };
+              const { includeInContext: _removed, ...restored } = current;
+              return restored;
+            }),
+          };
+        });
+        threadTimelines.current.set(threadId, next);
+        return next;
+      });
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  function removeActiveAttachment(attachment: AttachmentRef): void {
+    const item = timeline.find((candidate) => candidate.kind === "user" &&
+      candidate.attachments?.some((current) => current.id === attachment.id));
+    if (item?.kind === "user") void toggleAttachmentContext(item, attachment);
+  }
+
   async function pastePlainText(): Promise<void> {
     const input = taskInput.current;
     if (!input) return;
     const plain = await window.desktop.readClipboardText();
+    insertTaskText(plain, input);
+  }
+
+  async function pasteMarkdown(): Promise<void> {
+    const input = taskInput.current;
+    if (!input) return;
+    setError(null);
+    try {
+      const html = await window.desktop.readClipboardHtml();
+      const markdown = html ? await htmlToMarkdown(html) : await window.desktop.readClipboardText();
+      insertTaskText(markdown, input);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  function insertTaskText(text: string, input: HTMLTextAreaElement): void {
     const start = input.selectionStart;
     const end = input.selectionEnd;
-    setTask((current) => `${current.slice(0, start)}${plain}${current.slice(end)}`);
+    setTask((current) => `${current.slice(0, start)}${text}${current.slice(end)}`);
     window.requestAnimationFrame(() => {
       input.focus();
-      input.setSelectionRange(start + plain.length, start + plain.length);
+      input.setSelectionRange(start + text.length, start + text.length);
     });
   }
 
@@ -902,6 +987,9 @@ export function App(): JSX.Element {
                     : undefined
                 }
                 onToggleSaved={(message, savedId) => void toggleSavedMessage(message, savedId)}
+                {...(!running
+                  ? { onToggleAttachmentContext: (message, attachment) => void toggleAttachmentContext(message, attachment) }
+                  : {})}
                 onEditUser={(text) => {
                   setTask(text);
                   window.requestAnimationFrame(() => {
@@ -915,12 +1003,32 @@ export function App(): JSX.Element {
           </div>
 
           <AttachmentTray
-            attachments={pendingAttachments}
+            activeAttachments={activeContextAttachments}
+            pendingAttachments={pendingAttachments}
             estimatedTokens={attachmentTokens}
             tooLarge={attachmentsTooLarge}
-            onRemove={(attachment) => void removeAttachment(attachment)}
+            onRemoveActive={removeActiveAttachment}
+            onRemovePending={(attachment) => void removeAttachment(attachment)}
           />
-          <form className="composer" onSubmit={(event) => void startRun(event)}>
+          <form
+            className={draggingAttachments ? "composer dragging" : "composer"}
+            onSubmit={(event) => void startRun(event)}
+            onDragEnter={(event) => {
+              if (event.dataTransfer.types.includes("Files")) setDraggingAttachments(true);
+            }}
+            onDragOver={(event) => {
+              if (!event.dataTransfer.types.includes("Files")) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+            }}
+            onDragLeave={(event) => {
+              const nextTarget = event.relatedTarget;
+              if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+                setDraggingAttachments(false);
+              }
+            }}
+            onDrop={(event) => void dropAttachments(event)}
+          >
             <textarea
               ref={taskInput}
               value={task}
@@ -955,6 +1063,13 @@ export function App(): JSX.Element {
                     }}
                     disabled={running || pendingAttachments.length >= 8}
                   >Attach files</button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      void pasteMarkdown();
+                      event.currentTarget.closest("details")?.removeAttribute("open");
+                    }}
+                  >Paste as Markdown</button>
                   <button
                     type="button"
                     onClick={(event) => {
@@ -1212,6 +1327,6 @@ function nextMessageSequence(items: TimelineItem[]): number {
 }
 
 function attachmentRef(attachment: AttachmentPreview): AttachmentRef {
-  const { thumbnail: _thumbnail, ...reference } = attachment;
+  const { fingerprint: _fingerprint, thumbnail: _thumbnail, ...reference } = attachment;
   return reference;
 }

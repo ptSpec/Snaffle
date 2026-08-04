@@ -328,10 +328,17 @@ async function toOpenAIMessage(
   if (message.role !== "user" || !message.attachments?.length) {
     return { role: message.role, content: message.content };
   }
-  if (!resolveAttachment) throw new Error("This provider cannot load attachments");
 
   const content: Record<string, unknown>[] = [{ type: "text", text: message.content }];
   for (const attachment of message.attachments) {
+    if (attachment.includeInContext === false) {
+      content.push({
+        type: "text",
+        text: `<attachment name=${JSON.stringify(attachment.name)} available="false" />`,
+      });
+      continue;
+    }
+    if (!resolveAttachment) throw new Error("This provider cannot load attachments");
     const resolved = await resolveAttachment(attachment);
     if (resolved.type === "markdown") {
       content.push({

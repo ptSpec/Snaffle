@@ -46,6 +46,7 @@ export function TimelineEntry({
   onResolveApproval,
   savedId,
   onToggleSaved,
+  onToggleAttachmentContext,
 }: {
   item: TimelineItem;
   selectedId: string | null;
@@ -54,6 +55,10 @@ export function TimelineEntry({
   onResolveApproval?: (id: string, decision: CommandApprovalDecision) => void;
   savedId?: string | undefined;
   onToggleSaved?: (item: SaveableTimelineItem, savedId?: string) => void;
+  onToggleAttachmentContext?: (
+    item: Extract<TimelineItem, { kind: "user" }>,
+    attachment: AttachmentRef,
+  ) => void;
 }): JSX.Element {
   if (item.kind === "activity-group") {
     return (
@@ -138,6 +143,7 @@ export function TimelineEntry({
       <UserMessage
         item={item}
         {...(onEditUser ? { onEdit: onEditUser } : {})}
+        {...(onToggleAttachmentContext ? { onToggleAttachmentContext } : {})}
       />
     );
   }
@@ -231,9 +237,11 @@ export const MarkdownContent = memo(function MarkdownContent({ text }: { text: s
 function UserMessage({
   item,
   onEdit,
+  onToggleAttachmentContext,
 }: {
   item: Extract<TimelineItem, { kind: "user" }>;
   onEdit?: (text: string) => void;
+  onToggleAttachmentContext?: (item: Extract<TimelineItem, { kind: "user" }>, attachment: AttachmentRef) => void;
 }): JSX.Element {
   const collapsible = item.text.length > 1000 || item.text.split("\n").length > 12;
   const [expanded, setExpanded] = useState(false);
@@ -244,9 +252,23 @@ function UserMessage({
         {item.text ? <p>{item.text}</p> : null}
         {item.attachments?.length ? (
           <div className="message-attachments">
-            {item.attachments.map((attachment) => (
-              <span key={attachment.id} title={attachment.name}>{attachment.name}</span>
-            ))}
+            {item.attachments.map((attachment) => {
+              const included = attachment.includeInContext !== false;
+              return (
+                <button
+                  key={attachment.id}
+                  className={included ? "" : "removed"}
+                  type="button"
+                  disabled={!onToggleAttachmentContext}
+                  title={included ? "Remove from future model context" : "Add back to model context"}
+                  aria-label={`${included ? "Remove" : "Restore"} ${attachment.name} ${included ? "from" : "to"} model context`}
+                  onClick={() => onToggleAttachmentContext?.(item, attachment)}
+                >
+                  <span>{attachment.name}</span>
+                  <b aria-hidden="true">{included ? "×" : "↻"}</b>
+                </button>
+              );
+            })}
           </div>
         ) : null}
       </div>
