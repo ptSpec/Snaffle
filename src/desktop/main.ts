@@ -260,11 +260,35 @@ function registerIpc(): void {
     return attachments.importClipboardImage(image.toPNG());
   });
 
+  ipcMain.handle("desktop:import-dropped-files", (_event, value: unknown) => {
+    if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+      throw new Error("Dropped files must be local file paths");
+    }
+    return attachments.importFiles(value.slice(0, MAX_ATTACHMENTS));
+  });
+
   ipcMain.handle("desktop:read-clipboard-text", () => clipboard.readText());
+  ipcMain.handle("desktop:read-clipboard-html", () => clipboard.readHTML());
 
   ipcMain.handle("desktop:remove-attachment", (_event, value: unknown) => {
     return attachments.remove(parseId(value, "Attachment"));
   });
+
+  ipcMain.handle(
+    "desktop:set-attachment-context",
+    (_event, rawThreadId: unknown, rawSequence: unknown, rawAttachmentId: unknown, include: unknown) => {
+      if (typeof include !== "boolean") throw new Error("Invalid attachment context setting");
+      if (!Number.isInteger(rawSequence) || Number(rawSequence) < 0) {
+        throw new Error("Invalid message sequence");
+      }
+      return store.setAttachmentContext(
+        parseId(rawThreadId, "Thread"),
+        Number(rawSequence),
+        parseId(rawAttachmentId, "Attachment"),
+        include,
+      );
+    },
+  );
 
   ipcMain.handle("desktop:start-run", async (_event, rawInput: unknown): Promise<void> => {
     const input = parseStartRunInput(rawInput);

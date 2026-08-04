@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { copyFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { nativeImage } from "electron";
@@ -39,6 +39,7 @@ export class AttachmentStore {
     const preview = thumbnail(bytes);
     return {
       id,
+      fingerprint: fingerprint(bytes),
       name: "Pasted image.png",
       mediaType: "image/png",
       size: bytes.length,
@@ -77,14 +78,15 @@ export class AttachmentStore {
 
     const id = randomUUID();
     const folder = this.folder(id);
+    const bytes = await readFile(filePath);
     await mkdir(folder, { recursive: true });
     await copyFile(filePath, path.join(folder, "original"));
 
     if (mediaType) {
-      const bytes = await readFile(filePath);
       const preview = thumbnail(bytes);
       return {
         id,
+        fingerprint: fingerprint(bytes),
         name: path.basename(filePath),
         mediaType,
         size: info.size,
@@ -111,6 +113,7 @@ export class AttachmentStore {
 
     return {
       id,
+      fingerprint: fingerprint(bytes),
       name: path.basename(filePath),
       mediaType: isPdf ? "application/pdf" : "text/markdown",
       size: info.size,
@@ -123,6 +126,10 @@ export class AttachmentStore {
   private folder(id: string): string {
     return path.join(this.root, id);
   }
+}
+
+function fingerprint(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
 }
 
 async function extractMarkdown(filePath: string): Promise<string> {

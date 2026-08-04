@@ -6,6 +6,7 @@ import type { ModelStreamEvent } from "../src/providers/provider.js";
 
 test("OpenAI-compatible provider sends attachment content without storing payloads in messages", async (t) => {
   let content: unknown;
+  let resolutions = 0;
   const server = createServer((request, response) => {
     let body = "";
     request.setEncoding("utf8");
@@ -25,7 +26,10 @@ test("OpenAI-compatible provider sends attachment content without storing payloa
   const provider = new OpenAICompatibleProvider({
     baseUrl: `http://127.0.0.1:${address.port}`,
     model: "test-model",
-    resolveAttachment: async () => ({ type: "image", mediaType: "image/png", data: "cG5n" }),
+    resolveAttachment: async () => {
+      resolutions += 1;
+      return { type: "image", mediaType: "image/png", data: "cG5n" };
+    },
   });
   await provider.complete(
     [{
@@ -39,6 +43,15 @@ test("OpenAI-compatible provider sends attachment content without storing payloa
         kind: "image",
         delivery: "image",
         estimatedTokens: 1500,
+      }, {
+        id: "00000000-0000-0000-0000-000000000001",
+        name: "old-notes.md",
+        mediaType: "text/markdown",
+        size: 100,
+        kind: "document",
+        delivery: "markdown",
+        estimatedTokens: 25,
+        includeInContext: false,
       }],
     }],
     [],
@@ -48,7 +61,9 @@ test("OpenAI-compatible provider sends attachment content without storing payloa
   assert.deepEqual(content, [
     { type: "text", text: "Describe this" },
     { type: "image_url", image_url: { url: "data:image/png;base64,cG5n" } },
+    { type: "text", text: '<attachment name="old-notes.md" available="false" />' },
   ]);
+  assert.equal(resolutions, 1);
 });
 
 test("OpenAI-compatible provider repairs a common double-encoded tool call", async (t) => {

@@ -137,9 +137,12 @@ export interface DesktopApi {
   removeWorkspace(workspaceId: string): Promise<DesktopState>;
   listOpenRouterModels(): Promise<OpenRouterModel[]>;
   chooseAttachments(): Promise<AttachmentPreview[]>;
+  importDroppedFiles(files: File[]): Promise<AttachmentPreview[]>;
   importClipboardImage(): Promise<AttachmentPreview>;
   readClipboardText(): Promise<string>;
+  readClipboardHtml(): Promise<string>;
   removeAttachment(id: string): Promise<void>;
+  setAttachmentContext(threadId: string, sequence: number, attachmentId: string, include: boolean): Promise<void>;
   startRun(input: StartRunInput): Promise<void>;
   steerRun(threadId: string, message: string): Promise<boolean>;
   stopRun(threadId: string): Promise<boolean>;

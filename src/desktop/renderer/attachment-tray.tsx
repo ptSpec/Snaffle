@@ -1,41 +1,60 @@
-import type { AttachmentPreview } from "../../attachments/types.js";
+import type { AttachmentPreview, AttachmentRef } from "../../attachments/types.js";
 import type { CSSProperties } from "react";
 
+type DisplayAttachment = AttachmentRef & { thumbnail?: string };
+
 export function AttachmentTray({
-  attachments,
+  activeAttachments,
+  pendingAttachments,
   estimatedTokens,
   tooLarge,
-  onRemove,
+  onRemoveActive,
+  onRemovePending,
 }: {
-  attachments: AttachmentPreview[];
+  activeAttachments: AttachmentRef[];
+  pendingAttachments: AttachmentPreview[];
   estimatedTokens: number;
   tooLarge: boolean;
-  onRemove: (attachment: AttachmentPreview) => void;
+  onRemoveActive: (attachment: AttachmentRef) => void;
+  onRemovePending: (attachment: AttachmentPreview) => void;
 }): JSX.Element | null {
+  const attachments: Array<{ attachment: DisplayAttachment; active: boolean }> = [
+    ...activeAttachments.map((attachment) => ({ attachment, active: true })),
+    ...pendingAttachments.map((attachment) => ({ attachment, active: false })),
+  ];
   if (!attachments.length) return null;
-  const visible = attachments.slice(0, 4);
+  const visible = attachments.slice(-4);
+  const hidden = attachments.length - visible.length;
+  const fanWidth = 112 + (visible.length - 1) * 34 + (hidden ? 34 : 8);
 
   return (
     <section className={tooLarge ? "attachment-tray too-large" : "attachment-tray"}>
-      <div className="attachment-fan">
-        {visible.map((attachment, index) => (
+      <div className="attachment-fan" style={{ width: fanWidth }}>
+        {visible.map(({ attachment, active }, index) => (
           <article
-            className="attachment-card"
+            className={active ? "attachment-card active" : "attachment-card"}
             key={attachment.id}
             style={{ "--attachment-index": index } as CSSProperties}
-            title={attachment.name}
+            title={active ? `${attachment.name} · in context` : attachment.name}
           >
             {attachment.thumbnail ? (
               <img src={attachment.thumbnail} alt="" />
             ) : (
               <span className="attachment-type">{fileLabel(attachment.name)}</span>
             )}
+            {active ? <span className="attachment-state">Context</span> : null}
             <strong>{attachment.name}</strong>
-            <button type="button" aria-label={`Remove ${attachment.name}`} onClick={() => onRemove(attachment)}>×</button>
+            <button
+              type="button"
+              aria-label={active ? `Remove ${attachment.name} from context` : `Remove ${attachment.name}`}
+              onClick={() => active
+                ? onRemoveActive(attachment)
+                : onRemovePending(attachment as AttachmentPreview)}
+            >×</button>
           </article>
         ))}
-        {attachments.length > visible.length ? (
-          <span className="attachment-more">+{attachments.length - visible.length}</span>
+        {hidden ? (
+          <span className="attachment-more">+{hidden}</span>
         ) : null}
       </div>
       <small>{tooLarge ? "Too large for this model" : `~${formatTokens(estimatedTokens)} tokens`}</small>

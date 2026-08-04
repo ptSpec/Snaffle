@@ -1,12 +1,13 @@
 import type { AttachmentRef, ResolvedAttachment } from "../attachments/types.js";
 import { OpenAICompatibleProvider } from "./openai-compatible.js";
+import { DEFAULT_MODEL_CONTEXT_LENGTH } from "./provider.js";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 export type OpenRouterModel = {
   id: string;
   name: string;
-  contextLength: number | null;
+  contextLength: number;
   promptPrice: string | null;
   completionPrice: string | null;
   inputModalities: string[];
@@ -59,7 +60,7 @@ export async function listOpenRouterModels(
   return body.data.filter(supportsTools).map((model) => ({
     id: model.id,
     name: model.name,
-    contextLength: model.context_length ?? null,
+    contextLength: model.context_length ?? DEFAULT_MODEL_CONTEXT_LENGTH,
     promptPrice: model.pricing?.prompt ?? null,
     completionPrice: model.pricing?.completion ?? null,
     inputModalities: model.architecture?.input_modalities ?? ["text"],
