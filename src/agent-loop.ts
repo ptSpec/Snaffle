@@ -2,7 +2,7 @@ import { initialMessages } from "./context.js";
 import type { ModelProvider, ModelStreamEvent } from "./providers/provider.js";
 import type { Message, RunEvent } from "./protocol.js";
 import { healToolCall } from "./tool-input.js";
-import type { Tool } from "./tools/tool.js";
+import { toolErrorContent, type Tool } from "./tools/tool.js";
 import type { Trace } from "./trace.js";
 import type { Workspace } from "./workspace.js";
 
@@ -105,7 +105,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           exitCode = result.exitCode;
         } catch (error) {
           isError = true;
-          content = `Error: ${errorMessage(error)}`;
+          content = tool ? toolErrorContent(tool, error) : `Error: ${errorMessage(error)}`;
         }
 
         content = content.slice(0, 12000);

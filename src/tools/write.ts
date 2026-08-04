@@ -3,7 +3,8 @@ import { contentLineCount, contentRevision, objectInput, stringField, type Tool 
 export const writeTool: Tool = {
   name: "write_file",
   description:
-    'Create a file or replace its complete contents, then return its version and exact total lines for a later edit_file call. Example: {"path":"src/config.ts","content":"export const port = 3000;\\n"}. Use edit_file for targeted changes.',
+    "Create a file or replace its complete contents, then return its version and exact total lines for a later edit_file call. Use edit_file for targeted changes.",
+  exampleInput: { path: "src/config.ts", content: "export const port = 3000;\n" },
   inputSchema: {
     type: "object",
     properties: {
@@ -16,9 +17,7 @@ export const writeTool: Tool = {
   async execute(workspace, rawInput) {
     const input = objectInput(rawInput);
     if (input.path === undefined) {
-      throw new Error(
-        'Required field "path" is missing. Retry write_file with {"path":"workspace-relative/path","content":"..."}.',
-      );
+      throw new Error('Required field "path" is missing.');
     }
     const filePath = stringField(input, "path") as string;
     const content = stringField(input, "content", { allowEmpty: true }) as string;
