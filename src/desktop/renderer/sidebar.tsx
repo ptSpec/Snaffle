@@ -519,6 +519,7 @@ function ThreadRow({
     <div className={className}>
       {selecting ? (
         <input
+          className="selection-checkbox"
           type="checkbox"
           checked={selected}
           onChange={onToggleSelected}
