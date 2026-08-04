@@ -3,7 +3,15 @@ import { contentLineCount, contentRevision, objectInput, stringField, type Tool 
 export const editTool: Tool = {
   name: "edit_file",
   description:
-    'Replace one or more inclusive line ranges using the latest version returned for that path by read_file, write_file, or edit_file. Example: {"path":"src/app.ts","version":"8e42c197a810","edits":[{"startLine":10,"endLine":10,"newText":"const port = 4000;"},{"startLine":40,"endLine":42,"newText":"replacement lines"}]}. To append after a file with N total lines, use startLine and endLine N+1. Returns the new version and exact total lines. Use one call for multiple non-overlapping ranges.',
+    "Replace one or more inclusive line ranges using the latest version returned for that path by read_file, write_file, or edit_file. To append after a file with N total lines, use startLine and endLine N+1. Returns the new version and exact total lines. Use one call for multiple non-overlapping ranges.",
+  exampleInput: {
+    path: "src/app.ts",
+    version: "8e42c197a810",
+    edits: [
+      { startLine: 10, endLine: 10, newText: "const port = 4000;" },
+      { startLine: 40, endLine: 42, newText: "replacement lines" },
+    ],
+  },
   inputSchema: {
     type: "object",
     properties: {
@@ -16,7 +24,7 @@ export const editTool: Tool = {
         type: "array",
         minItems: 1,
         description:
-          'Required. One or more non-overlapping JSON objects shaped like {"startLine":1,"endLine":2,"newText":"..."}. Ranges use the original version, not earlier edits in this array. To append after a file with N lines, use N+1 for both line fields.',
+          "Required. One or more non-overlapping edit objects. Each requires startLine, endLine, and newText. Ranges use the original version, not earlier edits in this array. To append after a file with N lines, use N+1 for both line fields.",
         items: {
           type: "object",
           properties: {
