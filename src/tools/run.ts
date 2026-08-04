@@ -3,7 +3,8 @@ import { integerField, objectInput, stringField, type Tool } from "./tool.js";
 export const runTool: Tool = {
   name: "run_command",
   description:
-    'Run one shell command in the workspace and return bounded output. Example: {"command":"npm test"}. For a long multiline program, use write_file to create a script, then run that file with a short command.',
+    "Run one shell command in the workspace and return bounded output. For a long multiline program, use write_file to create a script, then run that file with a short command.",
+  exampleInput: { command: "npm test" },
   inputSchema: {
     type: "object",
     properties: {
