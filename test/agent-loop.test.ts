@@ -155,3 +155,42 @@ test("agent loop applies steering after the current model output", async (t) => 
     { role: "user", content: "Change direction." },
   ]);
 });
+
+test("tool examples are shown after failure, not sent in every tool description", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "agent-tool-example-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  assert.ok(defaultTools().every((tool) => tool.exampleInput));
+  let call = 0;
+  const provider: ModelProvider = {
+    model: "tool-example-test-model",
+    async complete(messages, tools) {
+      call += 1;
+      if (call === 1) {
+        assert.ok(tools.every((tool) => !tool.description.includes("Example:")));
+        assert.ok(tools.every((tool) => !("exampleInput" in tool)));
+        return {
+          text: "",
+          toolCalls: [{ id: "bad-write", name: "write_file", input: { content: "missing path" } }],
+        };
+      }
+
+      const failure = messages.at(-1);
+      assert.equal(failure?.role, "tool");
+      assert.match(failure?.content ?? "", /Here is a valid example input for the write_file tool/);
+      assert.match(failure?.content ?? "", /"path": "src\/config.ts"/);
+      return { text: "Corrected the tool input.", toolCalls: [] };
+    },
+  };
+
+  const result = await runAgent({
+    task: "Write a file.",
+    provider,
+    tools: defaultTools(),
+    workspace: new LocalWorkspace(root, "disabled"),
+    trace: new MemoryTrace(),
+    signal: new AbortController().signal,
+  });
+
+  assert.equal(result.text, "Corrected the tool input.");
+  assert.equal(call, 2);
+});

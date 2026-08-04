@@ -3,7 +3,8 @@ import { integerField, objectInput, stringField, type Tool } from "./tool.js";
 export const searchTool: Tool = {
   name: "search_files",
   description:
-    'Search file contents with ripgrep inside the workspace. Example: {"query":"functionName","path":"src","glob":"*.ts","maxResults":20}.',
+    "Search file contents with ripgrep inside the workspace.",
+  exampleInput: { query: "functionName", path: "src", glob: "*.ts", maxResults: 20 },
   inputSchema: {
     type: "object",
     properties: {

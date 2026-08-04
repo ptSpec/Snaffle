@@ -9,7 +9,19 @@ export type ToolResult = {
 
 export interface Tool extends ToolSpec {
   inputSchema: JsonSchema;
+  exampleInput?: Record<string, unknown>;
   execute(workspace: Workspace, input: unknown): Promise<ToolResult>;
+}
+
+export function toolErrorContent(tool: Tool, error: unknown): string {
+  const message = `Error: ${error instanceof Error ? error.message : String(error)}`;
+  if (!tool.exampleInput) return message;
+  return (
+    `${message}\n\n` +
+    `Here is a valid example input for the ${tool.name} tool. ` +
+    `Replace the sample values with values for the current task:\n` +
+    JSON.stringify(tool.exampleInput, null, 2)
+  );
 }
 
 export function contentRevision(content: string): string {

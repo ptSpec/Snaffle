@@ -3,7 +3,8 @@ import { contentLineCount, contentRevision, integerField, objectInput, stringFie
 export const readTool: Tool = {
   name: "read_file",
   description:
-    'Read a UTF-8 file or a bounded range of numbered lines. The result includes a version for this exact path; use it only when editing the same file. Example: {"path":"src/app.ts","startLine":40,"lineCount":80}.',
+    "Read a UTF-8 file or a bounded range of numbered lines. The result includes a version for this exact path; use it only when editing the same file.",
+  exampleInput: { path: "src/app.ts", startLine: 40, lineCount: 80 },
   inputSchema: {
     type: "object",
     properties: {
