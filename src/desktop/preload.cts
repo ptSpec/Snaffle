@@ -21,6 +21,10 @@ const api: DesktopApi = {
   removeWorkspace: (workspaceId: string) =>
     ipcRenderer.invoke("desktop:remove-workspace", workspaceId),
   listOpenRouterModels: () => ipcRenderer.invoke("desktop:list-openrouter-models"),
+  chooseAttachments: () => ipcRenderer.invoke("desktop:choose-attachments"),
+  importClipboardImage: () => ipcRenderer.invoke("desktop:import-clipboard-image"),
+  readClipboardText: () => ipcRenderer.invoke("desktop:read-clipboard-text"),
+  removeAttachment: (id: string) => ipcRenderer.invoke("desktop:remove-attachment", id),
   startRun: (input: StartRunInput) => ipcRenderer.invoke("desktop:start-run", input),
   steerRun: (threadId: string, message: string) =>
     ipcRenderer.invoke("desktop:steer-run", threadId, message),

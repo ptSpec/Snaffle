@@ -1,0 +1,176 @@
+.attachment-tray {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  min-height: 56px;
+  margin: 0 28px 7px calc(28px + 10%);
+  color: var(--text-muted);
+}
+
+.attachment-fan {
+  position: relative;
+  display: flex;
+  align-items: end;
+  min-width: 150px;
+  height: 58px;
+}
+
+.attachment-card {
+  --attachment-index: 0;
+  position: absolute;
+  left: calc(var(--attachment-index) * 34px);
+  bottom: 0;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  width: 104px;
+  height: 54px;
+  overflow: hidden;
+  color: var(--text-primary);
+  background: var(--card-background);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 18%);
+  transform: rotate(calc((var(--attachment-index) - 1.5) * 1.5deg));
+  transform-origin: bottom left;
+  transition: transform 140ms ease;
+}
+
+.attachment-card:hover {
+  z-index: 6;
+  transform: translateY(-4px) rotate(0);
+}
+
+.attachment-card img {
+  width: 100%;
+  height: 34px;
+  object-fit: cover;
+}
+
+.attachment-card strong {
+  padding: 3px 6px;
+  overflow: hidden;
+  font-size: calc(9px * var(--interface-font-scale));
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-type {
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  font-family: var(--font-secondary);
+  font-size: 13px;
+}
+
+.attachment-card button {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--background) 82%, transparent);
+  border: 0;
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.attachment-card:hover button,
+.attachment-card:focus-within button {
+  opacity: 1;
+}
+
+.attachment-more {
+  position: absolute;
+  left: 142px;
+  bottom: 4px;
+  font-size: calc(11px * var(--interface-font-scale));
+}
+
+.attachment-tray > small {
+  padding-bottom: 3px;
+  font-size: calc(10px * var(--interface-font-scale));
+}
+
+.attachment-tray.too-large > small {
+  color: var(--status-error-text);
+}
+
+.composer-add {
+  position: relative;
+  flex: 0 0 30px;
+}
+
+.composer-add > summary {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font-size: 19px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.composer-add > summary::-webkit-details-marker {
+  display: none;
+}
+
+.composer-add > summary:hover,
+.composer-add[open] > summary {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
+.composer-add-menu {
+  position: absolute;
+  left: 0;
+  bottom: 35px;
+  z-index: 8;
+  display: grid;
+  width: 190px;
+  padding: 5px;
+  background: var(--card-background);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
+}
+
+.composer-add-menu button {
+  padding: 7px 9px;
+  color: var(--text-primary);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  text-align: left;
+}
+
+.composer-add-menu button:hover {
+  background: var(--hover-background);
+}
+
+.message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.message-attachments span {
+  max-width: 220px;
+  padding: 4px 7px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  background: var(--control-background);
+  border-radius: 6px;
+  font-size: calc(10px * var(--conversation-font-scale));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
