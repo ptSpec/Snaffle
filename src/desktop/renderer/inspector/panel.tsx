@@ -11,6 +11,7 @@ export function InspectorPanel({
   running,
   tab,
   onTab,
+  onEditorOpen,
   onCollapse,
 }: {
   workspace: DesktopWorkspace | null;
@@ -18,6 +19,7 @@ export function InspectorPanel({
   running: boolean;
   tab: InspectorTab;
   onTab(tab: InspectorTab): void;
+  onEditorOpen(open: boolean): void;
   onCollapse(): void;
 }): JSX.Element {
   return (
@@ -37,7 +39,7 @@ export function InspectorPanel({
           {selectedItem ? <Inspector item={selectedItem} /> : <p className="inspector-empty">Select a tool call to inspect it.</p>}
         </div>
       ) : (
-        <GitPanel workspace={workspace} running={running} />
+        <GitPanel workspace={workspace} running={running} onEditorOpen={onEditorOpen} />
       )}
     </>
   );
