@@ -9,6 +9,7 @@ export function FileChange({
   previewVersion,
   onToggle,
   onSelect,
+  onAction,
 }: {
   workspaceId: string;
   file: GitFileChange;
@@ -16,19 +17,38 @@ export function FileChange({
   previewVersion: number;
   onToggle(): void;
   onSelect(): void;
+  onAction(action: "open" | "reveal" | "copy" | "copy-relative"): void;
 }): JSX.Element {
   const [preview, setPreview] = useState<GitDiffPreview | null>(null);
   const [visible, setVisible] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
+  const [menu, setMenu] = useState<{ top: number; left: number } | null>(null);
   const showTimer = useRef<number>();
   const hideTimer = useRef<number>();
   const showing = useRef(false);
+  const menuElement = useRef<HTMLDivElement>(null);
 
   useEffect(() => setPreview(null), [previewVersion]);
   useEffect(() => () => {
     window.clearTimeout(showTimer.current);
     window.clearTimeout(hideTimer.current);
   }, []);
+
+  useEffect(() => {
+    if (!menu) return;
+    const closeMenu = (event: PointerEvent): void => {
+      if (event.target instanceof Node && !menuElement.current?.contains(event.target)) setMenu(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") setMenu(null);
+    };
+    document.addEventListener("pointerdown", closeMenu);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenu);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [menu]);
 
   function show(event: React.PointerEvent<HTMLDivElement>): void {
     window.clearTimeout(showTimer.current);
@@ -61,11 +81,44 @@ export function FileChange({
   }
 
   return (
-    <div className="change-file" onPointerEnter={show} onPointerLeave={hide}>
-      <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Include ${file.path} in commit`} />
+    <div
+      className={`change-file${selected ? " selected" : ""}`}
+      onClick={(event) => {
+        if (!(event.target as Element).closest("button, input, .git-hover-preview")) onToggle();
+      }}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        window.clearTimeout(showTimer.current);
+        close();
+        setMenu({
+          top: Math.min(event.clientY, window.innerHeight - 132),
+          left: Math.min(event.clientX, window.innerWidth - 210),
+        });
+      }}
+      onPointerEnter={show}
+      onPointerLeave={hide}
+    >
+      <input
+        className="selection-checkbox"
+        type="checkbox"
+        checked={selected}
+        onChange={onToggle}
+        aria-label={`Include ${file.path} in commit`}
+      />
       <span className={`change-status status-${file.status === "?" ? "new" : file.status.toLowerCase()}`}>{file.status}</span>
-      <button className="change-file-open" type="button" onClick={onSelect} title={file.path}><FileName path={file.path} /></button>
-      <small><b>+{file.additions}</b> <i>−{file.deletions}</i></small>
+      <FileName path={file.path} />
+      <button
+        className="change-file-open-zone"
+        type="button"
+        onClick={onSelect}
+        title={`Open ${file.path}`}
+        aria-label={`Open ${file.path}`}
+      >
+        <span className="change-file-stats"><b>+{file.additions}</b> <i>−{file.deletions}</i></span>
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="m6 3 5 5-5 5" />
+        </svg>
+      </button>
       {visible ? (
         <DiffPreview
           path={file.path}
@@ -78,6 +131,20 @@ export function FileChange({
             onSelect();
           }}
         />
+      ) : null}
+      {menu ? (
+        <div
+          className="change-file-menu"
+          ref={menuElement}
+          role="menu"
+          style={menu}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <button type="button" role="menuitem" disabled={!file.exists} onClick={() => { setMenu(null); onAction("open"); }}>Open in editor</button>
+          <button type="button" role="menuitem" disabled={!file.exists} onClick={() => { setMenu(null); onAction("reveal"); }}>{revealLabel()}</button>
+          <button type="button" role="menuitem" onClick={() => { setMenu(null); onAction("copy"); }}>Copy path</button>
+          <button type="button" role="menuitem" onClick={() => { setMenu(null); onAction("copy-relative"); }}>Copy relative path</button>
+        </div>
       ) : null}
     </div>
   );
@@ -130,4 +197,10 @@ function lineClass(line: string): string {
   if (line.startsWith("-")) return "removed";
   if (line.startsWith("@@")) return "hunk";
   return "context";
+}
+
+function revealLabel(): string {
+  if (window.desktop.platform === "darwin") return "Reveal in Finder";
+  if (window.desktop.platform === "win32") return "Reveal in Explorer";
+  return "Reveal in file manager";
 }

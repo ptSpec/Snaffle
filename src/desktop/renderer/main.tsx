@@ -9,6 +9,7 @@ document.title = PRODUCT.name;
 const requestedTheme = new URLSearchParams(window.location.search).get("theme") ?? "";
 const initialTheme = themeById(requestedTheme) ?? DEFAULT_THEME;
 document.documentElement.dataset.theme = initialTheme.id;
+document.documentElement.dataset.appearance = initialTheme.appearance;
 document.documentElement.style.colorScheme = initialTheme.appearance;
 for (const [name, value] of Object.entries(initialTheme.colors)) {
   document.documentElement.style.setProperty(`--${name}`, value);

@@ -94,7 +94,7 @@
   opacity: 0.72;
 }
 
-html[data-theme="light"] .thinking-orb {
+html[data-appearance="light"] .thinking-orb {
   --thinking-orb-deep-blue: var(--thinking-orb-blue);
   --thinking-orb-pale-blue: color-mix(in srgb, var(--thinking-orb-blue) 34%, white);
   --thinking-orb-pale-red: color-mix(in srgb, var(--thinking-orb-red) 30%, white);
@@ -108,7 +108,7 @@ html[data-theme="light"] .thinking-orb {
     drop-shadow(0 1px 2px color-mix(in srgb, var(--thinking-orb-red) 18%, transparent));
 }
 
-html[data-theme="light"] .thinking-orb.preview {
+html[data-appearance="light"] .thinking-orb.preview {
   filter:
     drop-shadow(0 0 8px color-mix(in srgb, var(--thinking-orb-blue) 24%, transparent))
     drop-shadow(0 2px 9px color-mix(in srgb, var(--thinking-orb-red) 18%, transparent));

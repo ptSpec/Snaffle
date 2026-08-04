@@ -9,9 +9,11 @@ const GitEditor = lazy(() => import("./editor.js"));
 export function GitPanel({
   workspace,
   running,
+  onEditorOpen,
 }: {
   workspace: DesktopWorkspace | null;
   running: boolean;
+  onEditorOpen(open: boolean): void;
 }): JSX.Element {
   const [changes, setChanges] = useState<GitChanges | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -84,12 +86,19 @@ export function GitPanel({
     setPathCopied(false);
   }, [selectedPath]);
 
+  useEffect(() => {
+    onEditorOpen(Boolean(selectedPath));
+  }, [onEditorOpen, selectedPath]);
+
+  useEffect(() => () => onEditorOpen(false), [onEditorOpen]);
+
   const visibleFiles = useMemo(() => {
     const query = filter.trim().toLowerCase();
     return query ? changes?.files.filter((file) => file.path.toLowerCase().includes(query)) ?? [] : changes?.files ?? [];
   }, [changes, filter]);
   const selectedFile = changes?.files.find((file) => file.path === selectedPath);
   const selectedCommitPaths = changes?.files.filter((file) => commitPaths.has(file.path)).map((file) => file.path) ?? [];
+  const allFilesSelected = changes?.files.length === selectedCommitPaths.length && selectedCommitPaths.length > 0;
 
   async function initialize(): Promise<void> {
     if (!workspace || running) return;
@@ -105,12 +114,12 @@ export function GitPanel({
     }
   }
 
-  async function fileAction(action: "open" | "reveal"): Promise<void> {
-    if (!workspace || !selectedFile?.exists) return;
+  async function fileAction(action: "open" | "reveal", filePath = selectedFile?.path): Promise<void> {
+    if (!workspace || !filePath) return;
     setFailure(null);
     try {
-      if (action === "open") await window.desktop.openWorkspaceFile(workspace.id, selectedFile.path);
-      else await window.desktop.revealWorkspaceFile(workspace.id, selectedFile.path);
+      if (action === "open") await window.desktop.openWorkspaceFile(workspace.id, filePath);
+      else await window.desktop.revealWorkspaceFile(workspace.id, filePath);
     } catch (error) {
       setFailure(errorMessage(error));
     }
@@ -132,12 +141,14 @@ export function GitPanel({
     }
   }
 
-  async function copyPath(): Promise<void> {
-    if (!selectedPath) return;
+  async function copyPath(filePath = selectedPath, relative = false): Promise<void> {
+    if (!workspace || !filePath) return;
     try {
-      await navigator.clipboard.writeText(selectedPath);
-      setPathCopied(true);
-      window.setTimeout(() => setPathCopied(false), 1200);
+      await navigator.clipboard.writeText(relative ? filePath : absoluteWorkspacePath(workspace.path, filePath));
+      if (filePath === selectedPath) {
+        setPathCopied(true);
+        window.setTimeout(() => setPathCopied(false), 1200);
+      }
     } catch (error) {
       setFailure(errorMessage(error));
     }
@@ -195,7 +206,10 @@ export function GitPanel({
             <SearchPicker
               className="change-file-picker"
               value={selectedFile.path}
-              options={changes.files.map((file) => ({ value: file.path }))}
+              options={changes.files.map((file) => ({
+                value: file.path,
+                label: file.path.slice(file.path.lastIndexOf("/") + 1),
+              }))}
               placeholder="Select changed file"
               searchPlaceholder="Search changed files…"
               onChange={setSelectedPath}
@@ -204,8 +218,8 @@ export function GitPanel({
             <div className="change-actions">
               <div>
                 <button type="button" onClick={() => void copyPath()}>{pathCopied ? "Copied" : "Copy path"}</button>
-                <button type="button" disabled={!selectedFile.exists} onClick={() => void fileAction("open")}>Open</button>
-                <button type="button" disabled={!selectedFile.exists} onClick={() => void fileAction("reveal")}>Reveal</button>
+                <button type="button" disabled={!selectedFile.exists} onClick={() => void fileAction("open")}>Open in editor</button>
+                <button type="button" disabled={!selectedFile.exists} onClick={() => void fileAction("reveal")}>{revealLabel()}</button>
               </div>
               <button className="change-save" type="button" disabled={!fileContents || !dirty || saving} onClick={() => void save()}>{saving ? "Saving…" : "Save"}</button>
             </div>
@@ -227,7 +241,10 @@ export function GitPanel({
       ) : (
         <>
           <div className="changes-summary">
-            <span>Working tree</span>
+            <span className="change-branch" title={changes.branch ?? "Detached HEAD"}>
+              <BranchIcon />
+              <strong>{changes.branch ?? "Detached HEAD"}</strong>
+            </span>
             <span className="change-counts"><b>+{changes.additions}</b> <i>−{changes.deletions}</i></span>
             <button type="button" onClick={() => void refresh()} disabled={loading} title="Refresh changes">↻</button>
           </div>
@@ -235,19 +252,9 @@ export function GitPanel({
             <details className="commit-panel">
               <summary className="commit-summary">
                 <span>Commit changes</span>
-                <span className="commit-branch"><small>Branch</small><strong>{changes.branch ?? "Unknown"}</strong></span>
                 <small>{selectedCommitPaths.length} selected</small>
               </summary>
               <div className="commit-body">
-                <div className="commit-selection">
-                  <span>Files to commit</span>
-                  <button
-                    type="button"
-                    onClick={() => setCommitPaths(selectedCommitPaths.length ? new Set() : new Set(changes.files.map((file) => file.path)))}
-                  >
-                    {selectedCommitPaths.length ? "Clear selection" : "Select all changed files"}
-                  </button>
-                </div>
                 <div className="commit-entry">
                   <input
                     value={commitMessage}
@@ -259,25 +266,27 @@ export function GitPanel({
                     placeholder="Commit message"
                     aria-label="Commit message"
                   />
-                  <small className="commit-limit">{commitMessage.length}/72</small>
+                  {commitMessage.length >= 70 ? <small className="commit-limit">{commitMessage.length}/72</small> : null}
+                </div>
+                <textarea
+                  value={commitDescription}
+                  onChange={(event) => setCommitDescription(event.target.value)}
+                  maxLength={5000}
+                  rows={3}
+                  placeholder="Description (optional)"
+                  aria-label="Commit description"
+                />
+                <div className="commit-footer">
+                  {running ? <small className="commit-hint">Wait for the active run to finish before committing.</small> : null}
                   <button
                     className="primary"
                     type="button"
                     disabled={!commitMessage.trim() || selectedCommitPaths.length === 0 || committing || running}
                     onClick={() => void commit()}
                   >
-                    {committing ? "Committing…" : `Commit ${selectedCommitPaths.length || ""}`.trim()}
+                    {committing ? "Committing…" : "Commit"}
                   </button>
                 </div>
-                <textarea
-                  value={commitDescription}
-                  onChange={(event) => setCommitDescription(event.target.value)}
-                  maxLength={5000}
-                  rows={2}
-                  placeholder="Description (optional)"
-                  aria-label="Commit description"
-                />
-                {running ? <small className="commit-hint">Wait for the active run to finish before committing.</small> : null}
               </div>
             </details>
           ) : null}
@@ -290,6 +299,18 @@ export function GitPanel({
           ) : null}
           <div className="change-files">
             {changes.files.length === 0 ? <p className="inspector-empty">No working-tree changes.</p> : null}
+            {changes.files.length ? (
+              <label className="change-select-all">
+                <input
+                  className="selection-checkbox"
+                  type="checkbox"
+                  checked={allFilesSelected}
+                  onChange={() => setCommitPaths(allFilesSelected ? new Set() : new Set(changes.files.map((file) => file.path)))}
+                />
+                <span>{allFilesSelected ? "Clear selection" : "Select all"}</span>
+                <small>{changes.files.length} files</small>
+              </label>
+            ) : null}
             {visibleFiles.map((file) => (
               <FileChange
                 key={file.path}
@@ -299,6 +320,11 @@ export function GitPanel({
                 previewVersion={previewVersion}
                 onToggle={() => toggleCommitPath(file.path)}
                 onSelect={() => setSelectedPath(file.path)}
+                onAction={(action) => {
+                  if (action === "copy") void copyPath(file.path);
+                  else if (action === "copy-relative") void copyPath(file.path, true);
+                  else void fileAction(action, file.path);
+                }}
               />
             ))}
           </div>
@@ -306,6 +332,17 @@ export function GitPanel({
       )}
     </div>
   );
+}
+
+function revealLabel(): string {
+  if (window.desktop.platform === "darwin") return "Reveal in Finder";
+  if (window.desktop.platform === "win32") return "Reveal in Explorer";
+  return "Reveal in file manager";
+}
+
+function absoluteWorkspacePath(workspacePath: string, filePath: string): string {
+  const separator = window.desktop.platform === "win32" ? "\\" : "/";
+  return `${workspacePath.replace(/[\\/]+$/, "")}${separator}${filePath.replaceAll("/", separator)}`;
 }
 
 function GitState({
@@ -342,6 +379,17 @@ function SearchIcon(): JSX.Element {
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <circle cx="7" cy="7" r="4" />
       <path d="m10 10 3 3" />
+    </svg>
+  );
+}
+
+function BranchIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="4" cy="3" r="1.5" />
+      <circle cx="4" cy="13" r="1.5" />
+      <circle cx="12" cy="5" r="1.5" />
+      <path d="M4 4.5v7M5.5 10C9 10 12 8.5 12 6.5" />
     </svg>
   );
 }

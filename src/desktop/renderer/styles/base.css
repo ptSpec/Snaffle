@@ -63,6 +63,39 @@
   box-sizing: border-box;
 }
 
+.selection-checkbox {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  border: 0;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text-muted) 20%, transparent);
+  cursor: pointer;
+}
+
+.selection-checkbox:checked {
+  background: var(--success);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='m3 7 2.5 2.5L11 4' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  box-shadow: 0 0 6px color-mix(in srgb, var(--success) 45%, transparent);
+}
+
+html[data-appearance="dark"] .selection-checkbox:checked {
+  background-color: color-mix(in srgb, var(--success) 58%, var(--background));
+  box-shadow: 0 0 4px color-mix(in srgb, var(--success) 25%, transparent);
+}
+
+.selection-checkbox:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.selection-checkbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+  box-shadow: none;
+}
+
 body {
   margin: 0;
   min-width: 900px;
