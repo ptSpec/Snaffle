@@ -64,6 +64,7 @@ const GitEditor = forwardRef<GitEditorHandle, {
             indentOnInput(),
             bracketMatching(),
             highlightActiveLine(),
+            EditorView.lineWrapping,
             syntaxHighlighting(eschHighlighting),
             keymap.of([
               { key: "Mod-s", run: (target) => { handlers.current.onSave(target.state.doc.toString()); return true; } },

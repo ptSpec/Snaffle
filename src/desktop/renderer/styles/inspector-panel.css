@@ -81,6 +81,30 @@
   font-size: 14px;
 }
 
+.change-branch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.change-branch svg {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.change-branch strong {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .commit-panel {
   --commit-surface: color-mix(in srgb, var(--text) 76%, var(--surface));
   --commit-ink: var(--background);
@@ -132,59 +156,13 @@
 }
 
 .commit-body {
-  padding: 0 12px 9px;
+  padding: 4px 12px 9px;
 }
 
-.commit-selection,
 .commit-entry {
   display: flex;
   align-items: center;
   gap: 7px;
-}
-
-.commit-selection {
-  min-height: 30px;
-  color: var(--commit-ink);
-  font-size: 12px;
-}
-
-.commit-selection > span {
-  font-weight: 600;
-}
-
-.commit-branch {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.commit-branch small {
-  color: var(--commit-ink);
-  opacity: 0.62;
-}
-
-.commit-branch strong {
-  overflow: hidden;
-  color: var(--commit-ink);
-  font-size: 14px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.commit-selection button {
-  margin-left: auto;
-  padding: 3px 7px;
-  color: var(--commit-ink);
-  background: transparent;
-  border: 1px solid color-mix(in srgb, var(--commit-ink) 32%, transparent);
-  border-radius: 6px;
-}
-
-.commit-selection button:hover {
-  color: var(--commit-surface);
-  background: var(--commit-ink);
 }
 
 .commit-entry input {
@@ -203,6 +181,14 @@
   font-size: 11px;
   opacity: 0.62;
   white-space: nowrap;
+  animation: commit-limit-in 120ms ease-out;
+}
+
+@keyframes commit-limit-in {
+  from {
+    opacity: 0;
+    transform: translateX(3px);
+  }
 }
 
 .commit-body > textarea {
@@ -218,7 +204,15 @@
   line-height: 1.35;
 }
 
-.commit-entry button {
+.commit-footer {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  margin-top: 7px;
+}
+
+.commit-footer button {
+  margin-left: auto;
   padding: 7px 9px;
   color: var(--commit-surface);
   white-space: nowrap;
@@ -228,7 +222,7 @@
   font-weight: 600;
 }
 
-.commit-entry button:disabled {
+.commit-footer button:disabled {
   opacity: 0.68;
 }
 
@@ -245,14 +239,14 @@
 }
 
 .change-counts b,
-.change-file small b {
+.change-file-stats b {
   color: var(--diff-added-text);
   font-style: normal;
   font-weight: 500;
 }
 
 .change-counts i,
-.change-file small i {
+.change-file-stats i {
   color: var(--diff-removed-text);
   font-style: normal;
 }
@@ -295,6 +289,21 @@
   padding-bottom: 8px;
 }
 
+.change-select-all {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  padding: 7px 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.change-select-all small {
+  color: var(--text-faint);
+}
+
 .change-file {
   display: grid;
   grid-template-columns: 16px 18px minmax(0, 1fr) auto;
@@ -308,13 +317,7 @@
   border: 0;
   border-radius: 6px;
   font-size: 14px;
-}
-
-.change-file > input {
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 .change-file:hover {
@@ -322,13 +325,72 @@
   background: var(--selected-background);
 }
 
-.change-file-open {
-  min-width: 0;
-  padding: 0;
-  color: inherit;
+.change-file.selected {
+  background: color-mix(in srgb, var(--success) 8%, transparent);
+}
+
+.change-file-open-zone {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: -7px -6px -7px -7px;
+  padding: 7px 6px 7px 11px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 0 6px 6px 0;
+  cursor: pointer;
+}
+
+.change-file-open-zone svg {
+  width: 15px;
+  height: 15px;
+  opacity: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.change-file:hover .change-file-open-zone svg,
+.change-file-open-zone:focus-visible svg {
+  opacity: 1;
+}
+
+.change-file-open-zone:hover {
+  color: var(--text-strong);
+  background: var(--hover-background);
+}
+
+.change-file-menu {
+  position: fixed;
+  z-index: 100;
+  display: grid;
+  width: 200px;
+  padding: 5px;
+  background: var(--panel);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 30%);
+}
+
+.change-file-menu button {
+  padding: 7px 9px;
+  color: var(--text-primary);
   text-align: left;
   background: transparent;
   border: 0;
+  border-radius: 5px;
+}
+
+.change-file-menu button:hover:not(:disabled) {
+  background: var(--hover-background);
+}
+
+.change-file-menu button:disabled {
+  opacity: 0.42;
 }
 
 .change-file-name {
@@ -348,7 +410,7 @@
   font-weight: 500;
 }
 
-.change-file small {
+.change-file-stats {
   color: var(--text-faint);
   white-space: nowrap;
 }
@@ -390,14 +452,35 @@
 }
 
 .change-file-picker {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: calc(100% - 130px);
 }
 
 .change-file-picker .search-picker-trigger {
-  padding: 4px 3px;
+  padding: 5px 3px 4px;
+  color: var(--text-strong);
   font: inherit;
-  font-weight: 500;
+  font-weight: 600;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-default);
+  border-radius: 0;
+}
+
+.change-file-picker .search-picker-trigger:hover,
+.change-file-picker .search-picker-trigger[aria-expanded="true"] {
+  background: transparent;
+  border-color: var(--text-muted);
+}
+
+.change-file-picker .search-picker-menu {
+  width: min(720px, calc(100vw - 40px));
+  max-width: calc(100vw - 40px);
+}
+
+.change-file-picker .search-picker-options span {
+  font-weight: 600;
 }
 
 .change-actions {
@@ -413,8 +496,21 @@
   align-items: center;
 }
 
+html[data-appearance="light"] .change-actions > div button:hover:not(:disabled),
+html[data-appearance="light"] .change-detail-heading .change-back:hover {
+  color: var(--text-strong);
+  background: var(--control-background);
+}
+
 .change-actions .change-save {
   margin-left: auto;
+}
+
+.change-actions .change-save:not(:disabled) {
+  color: var(--accent-contrast);
+  background: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .change-detail-heading button {
@@ -422,12 +518,19 @@
 }
 
 .change-detail-heading .change-back {
-  width: 30px;
+  width: 28px;
+  height: 28px;
   margin-left: 4px;
   padding: 0;
-  font-size: 22px;
+  color: var(--text-strong);
+  background: transparent;
+  font-size: 26px;
   line-height: 1;
-  transform: translateY(-2px);
+  transform: translateY(-1px);
+}
+
+.change-detail-heading > .change-counts {
+  padding-right: 12px;
 }
 
 .change-error {

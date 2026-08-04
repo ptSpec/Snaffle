@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -77,14 +78,49 @@ export function App(): JSX.Element {
   const executionMode = useRef<HTMLDetailsElement>(null);
   const followTimeline = useRef(true);
   const leftAutoCollapsed = useRef(false);
+  const fileEditorExpanded = useRef(false);
+  const layoutBeforeFileEditor = useRef<{
+    rightWidth: number;
+    leftCollapsed: boolean;
+    leftAutoCollapsed: boolean;
+  } | null>(null);
+  const rightWidthValue = useRef(rightWidth);
+  const leftCollapsedValue = useRef(leftCollapsed);
   const activeThreadId = useRef<string | null>(null);
   const threadTimelines = useRef(new Map<string, TimelineItem[]>());
+  rightWidthValue.current = rightWidth;
+  leftCollapsedValue.current = leftCollapsed;
   const running = desktopState.activeThreadId
     ? desktopState.runningThreadIds.includes(desktopState.activeThreadId)
     : false;
   const unsafeHostExecution = desktopState.activeThreadId
     ? desktopState.unsafeThreadIds.includes(desktopState.activeThreadId)
     : false;
+
+  const expandFileEditor = useCallback((expanded: boolean): void => {
+    if (fileEditorExpanded.current === expanded) return;
+    fileEditorExpanded.current = expanded;
+
+    if (expanded) {
+      layoutBeforeFileEditor.current = {
+        rightWidth: rightWidthValue.current,
+        leftCollapsed: leftCollapsedValue.current,
+        leftAutoCollapsed: leftAutoCollapsed.current,
+      };
+      leftAutoCollapsed.current = false;
+      setLeftCollapsed(true);
+      setRightCollapsed(false);
+      setRightWidth(focusedEditorWidth());
+      return;
+    }
+
+    const previous = layoutBeforeFileEditor.current;
+    layoutBeforeFileEditor.current = null;
+    if (!previous) return;
+    leftAutoCollapsed.current = previous.leftAutoCollapsed;
+    setRightWidth(previous.rightWidth);
+    setLeftCollapsed(previous.leftCollapsed);
+  }, []);
 
   useLayoutEffect(() => {
     const input = taskInput.current;
@@ -131,6 +167,12 @@ export function App(): JSX.Element {
         reopenTimer = undefined;
       }
       if (view !== "conversation" || rightCollapsed) return;
+
+      if (fileEditorExpanded.current) {
+        const expandedWidth = focusedEditorWidth();
+        if (rightWidth !== expandedWidth) setRightWidth(expandedWidth);
+        return;
+      }
 
       if (rightWidth > window.innerWidth / 2) {
         setLeftCollapsed((collapsed) => {
@@ -763,7 +805,11 @@ export function App(): JSX.Element {
               running={running}
               tab={inspectorTab}
               onTab={setInspectorTab}
-              onCollapse={() => setRightCollapsed(true)}
+              onEditorOpen={expandFileEditor}
+              onCollapse={() => {
+                expandFileEditor(false);
+                setRightCollapsed(true);
+              }}
             />
           ) : null}
         </aside>
@@ -773,6 +819,7 @@ export function App(): JSX.Element {
             className="panel-reopen left"
             type="button"
             onClick={() => {
+              expandFileEditor(false);
               leftAutoCollapsed.current = false;
               setLeftCollapsed(false);
             }}
@@ -801,7 +848,7 @@ export function App(): JSX.Element {
           >
             <span className="pane-icon right" aria-hidden="true" />
           </button>
-        ) : (
+        ) : fileEditorExpanded.current ? null : (
           <div
             className="column-resizer right-resizer"
             style={{ right: rightWidth }}
@@ -814,6 +861,10 @@ export function App(): JSX.Element {
       </section>
     </main>
   );
+}
+
+function focusedEditorWidth(): number {
+  return Math.max(320, Math.min(window.innerWidth * 0.65, window.innerWidth - 360));
 }
 
 function mergeStreamEvent(previous: DesktopRunEvent, next: DesktopRunEvent): boolean {
@@ -849,6 +900,7 @@ function mergeStreamEvent(previous: DesktopRunEvent, next: DesktopRunEvent): boo
 
 function applyTheme(theme: Theme): void {
   document.documentElement.dataset.theme = theme.id;
+  document.documentElement.dataset.appearance = theme.appearance;
   document.documentElement.style.colorScheme = theme.appearance;
   for (const [name, value] of Object.entries(theme.colors)) {
     document.documentElement.style.setProperty(`--${name}`, value);
