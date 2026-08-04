@@ -1,5 +1,6 @@
 import type { OpenRouterModel } from "../providers/openrouter.js";
 import type { CommandApprovalDecision, Message, RunEvent } from "../protocol.js";
+import type { FontId } from "./typography.js";
 
 export type GitFileChange = {
   path: string;
@@ -95,6 +96,13 @@ export type DesktopState = {
   restrictedHostAvailable: boolean;
   restrictedHostDetail: string;
   themeId: string;
+  interfaceFont: FontId;
+  primaryFont: FontId;
+  secondaryFont: FontId;
+  codeFont: FontId;
+  interfaceFontScale: number;
+  conversationFontScale: number;
+  codeBlockFontSize: number;
   editorFontSize: number;
   editorCommand: string;
   editorArguments: string;
@@ -132,6 +140,9 @@ export interface DesktopApi {
   setThreadUnsafe(threadId: string, unsafe: boolean): Promise<DesktopState>;
   resolveCommandApproval(id: string, decision: CommandApprovalDecision): Promise<DesktopState>;
   setTheme(themeId: string): Promise<void>;
+  setTypography(interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId): Promise<void>;
+  setTypographyScale(role: "interface" | "conversation", value: number): Promise<void>;
+  setCodeBlockFontSize(size: number): Promise<void>;
   setEditorFontSize(size: number): Promise<void>;
   setEditorLauncher(command: string, argumentsTemplate: string): Promise<void>;
   chooseEditorApplication(): Promise<string | null>;

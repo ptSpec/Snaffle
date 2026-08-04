@@ -12,6 +12,14 @@ import type { CommandApprovalDecision } from "../../protocol.js";
 import type { DesktopApi, DesktopRunEvent, DesktopState, SavedMessage } from "../api.js";
 import type { OpenRouterModel } from "../../providers/openrouter.js";
 import { DEFAULT_THEME, themeById, type Theme } from "../themes/index.js";
+import {
+  CONVERSATION_FONT_BASE,
+  DEFAULT_FONTS,
+  DEFAULT_FONT_SCALE,
+  fontById,
+  validFontScale,
+  type FontId,
+} from "../typography.js";
 import { Settings } from "./settings.js";
 import { SavedMessages } from "./saved-messages.js";
 import { Sidebar, type AppView, type SettingsPage } from "./sidebar.js";
@@ -47,6 +55,13 @@ const initialState: DesktopState = {
   restrictedHostAvailable: false,
   restrictedHostDetail: "Checking restricted execution…",
   themeId: document.documentElement.dataset.theme ?? DEFAULT_THEME.id,
+  interfaceFont: fontById(document.documentElement.dataset.interfaceFont)?.id ?? DEFAULT_FONTS.interface,
+  primaryFont: fontById(document.documentElement.dataset.primaryFont)?.id ?? DEFAULT_FONTS.primary,
+  secondaryFont: fontById(document.documentElement.dataset.secondaryFont)?.id ?? DEFAULT_FONTS.secondary,
+  codeFont: fontById(document.documentElement.dataset.codeFont)?.id ?? DEFAULT_FONTS.code,
+  interfaceFontScale: validFontScale(document.documentElement.dataset.interfaceFontScale) ?? DEFAULT_FONT_SCALE,
+  conversationFontScale: validFontScale(document.documentElement.dataset.conversationFontScale) ?? DEFAULT_FONT_SCALE,
+  codeBlockFontSize: 15,
   editorFontSize: 13,
   editorCommand: "",
   editorArguments: "",
@@ -155,8 +170,21 @@ export function App(): JSX.Element {
   }, [sendOrbMotion]);
 
   useEffect(() => {
+    document.documentElement.style.setProperty("--code-block-font-size", `${desktopState.codeBlockFontSize}px`);
+  }, [desktopState.codeBlockFontSize]);
+
+  useEffect(() => {
     document.documentElement.style.setProperty("--editor-font-size", `${desktopState.editorFontSize}px`);
   }, [desktopState.editorFontSize]);
+
+  useEffect(() => {
+    applyTypography(desktopState.interfaceFont, desktopState.primaryFont, desktopState.secondaryFont, desktopState.codeFont);
+  }, [desktopState.interfaceFont, desktopState.primaryFont, desktopState.secondaryFont, desktopState.codeFont]);
+
+  useEffect(() => {
+    applyTypographyScale("interface", desktopState.interfaceFontScale);
+    applyTypographyScale("conversation", desktopState.conversationFontScale);
+  }, [desktopState.interfaceFontScale, desktopState.conversationFontScale]);
 
   useEffect(() => {
     let reopenTimer: number | undefined;
@@ -558,6 +586,41 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setCodeBlockFontSize(codeBlockFontSize: number): Promise<void> {
+    try {
+      await window.desktop.setCodeBlockFontSize(codeBlockFontSize);
+      setDesktopState((state) => ({ ...state, codeBlockFontSize }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function setTypography(interfaceFont: FontId, primaryFont: FontId, secondaryFont: FontId, codeFont: FontId): Promise<void> {
+    try {
+      await window.desktop.setTypography(interfaceFont, primaryFont, secondaryFont, codeFont);
+      applyTypography(interfaceFont, primaryFont, secondaryFont, codeFont);
+      setDesktopState((state) => ({ ...state, interfaceFont, primaryFont, secondaryFont, codeFont }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function setTypographyScale(role: "interface" | "conversation", value: number): Promise<void> {
+    try {
+      await window.desktop.setTypographyScale(role, value);
+      applyTypographyScale(role, value);
+      setDesktopState((state) => ({
+        ...state,
+        ...(role === "interface" ? { interfaceFontScale: value } : { conversationFontScale: value }),
+      }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   async function setEditorLauncher(editorCommand: string, editorArguments: string): Promise<void> {
     try {
       await window.desktop.setEditorLauncher(editorCommand, editorArguments);
@@ -659,6 +722,13 @@ export function App(): JSX.Element {
           <Settings
             page={settingsPage}
             themeId={desktopState.themeId}
+            interfaceFont={desktopState.interfaceFont}
+            primaryFont={desktopState.primaryFont}
+            secondaryFont={desktopState.secondaryFont}
+            codeFont={desktopState.codeFont}
+            interfaceFontScale={desktopState.interfaceFontScale}
+            conversationFontScale={desktopState.conversationFontScale}
+            codeBlockFontSize={desktopState.codeBlockFontSize}
             editorFontSize={desktopState.editorFontSize}
             editorCommand={desktopState.editorCommand}
             editorArguments={desktopState.editorArguments}
@@ -667,6 +737,9 @@ export function App(): JSX.Element {
             providerRetries={desktopState.providerRetries}
             error={error}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
+            onTypography={(interfaceFont, primary, secondary, code) => void setTypography(interfaceFont, primary, secondary, code)}
+            onTypographyScale={(role, value) => void setTypographyScale(role, value)}
+            onCodeBlockFontSize={(size) => void setCodeBlockFontSize(size)}
             onEditorFontSize={(size) => void setEditorFontSize(size)}
             onEditorLauncher={(command, argumentsTemplate) => void setEditorLauncher(command, argumentsTemplate)}
             onChooseEditor={() => void chooseEditorApplication()}
@@ -925,10 +998,26 @@ function mergeStreamEvent(previous: DesktopRunEvent, next: DesktopRunEvent): boo
 function applyTheme(theme: Theme): void {
   document.documentElement.dataset.theme = theme.id;
   document.documentElement.dataset.appearance = theme.appearance;
+  document.documentElement.dataset.accentedTheme = String(Boolean(theme.accented));
   document.documentElement.style.colorScheme = theme.appearance;
   for (const [name, value] of Object.entries(theme.colors)) {
     document.documentElement.style.setProperty(`--${name}`, value);
   }
+}
+
+function applyTypography(interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId): void {
+  for (const [role, id] of Object.entries({ interface: interfaceFont, primary, secondary, code })) {
+    const font = fontById(id);
+    if (!font) continue;
+    document.documentElement.dataset[`${role}Font`] = font.id;
+    document.documentElement.style.setProperty(`--font-${role}`, font.family);
+  }
+}
+
+function applyTypographyScale(role: "interface" | "conversation", value: number): void {
+  document.documentElement.dataset[`${role}FontScale`] = String(value);
+  const baseline = role === "conversation" ? CONVERSATION_FONT_BASE : 1;
+  document.documentElement.style.setProperty(`--${role}-font-scale`, String(value / 100 * baseline));
 }
 
 function errorMessage(cause: unknown): string {

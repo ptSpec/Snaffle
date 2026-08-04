@@ -15,6 +15,11 @@ textarea {
   outline: none;
 }
 
+.composer > textarea {
+  font-family: var(--font-primary);
+  font-size: calc(16px * var(--conversation-font-scale));
+}
+
 textarea {
   min-height: 52px;
   max-height: 220px;
@@ -36,7 +41,7 @@ textarea {
   position: relative;
   flex: 0 0 auto;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: calc(11px * var(--interface-font-scale));
 }
 
 .model-search {
@@ -50,7 +55,7 @@ textarea {
   max-width: 100%;
   height: 32px;
   padding: 5px 7px;
-  font-size: 12px;
+  font-size: calc(12px * var(--interface-font-scale));
 }
 
 .model-search.empty .search-picker-trigger {
@@ -129,7 +134,7 @@ textarea {
 
 .execution-details strong {
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: calc(12px * var(--interface-font-scale));
 }
 
 .execution-details-close {
@@ -172,7 +177,7 @@ textarea {
   color: var(--text-primary);
   background: var(--control-background);
   border: 1px solid var(--border-default);
-  font-size: 12px;
+  font-size: calc(12px * var(--interface-font-scale));
   font-weight: 600;
 }
 
@@ -244,13 +249,23 @@ textarea {
   z-index: 1;
 }
 
+html[data-accented-theme="true"] .send-button:not(.stop) {
+  color: var(--primary-text);
+  background: var(--primary);
+}
+
+html[data-accented-theme="true"] .send-button:not(.stop) .send-button-orb {
+  filter: none;
+  opacity: 0.34;
+}
+
 .send-button.stop {
   padding: 0;
 }
 
 .steer-hint {
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: calc(10px * var(--interface-font-scale));
   white-space: nowrap;
   animation: steer-hint-pulse 1.8s ease-in-out infinite;
 }
@@ -302,5 +317,5 @@ textarea {
 .composer-error {
   padding: 0 14px 10px;
   color: var(--status-danger-text);
-  font-size: 12px;
+  font-size: calc(12px * var(--interface-font-scale));
 }
