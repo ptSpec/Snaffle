@@ -1,9 +1,9 @@
-import { contentRevision, objectInput, stringField, type Tool } from "./tool.js";
+import { contentLineCount, contentRevision, objectInput, stringField, type Tool } from "./tool.js";
 
 export const editTool: Tool = {
   name: "edit_file",
   description:
-    'Replace one or more inclusive line ranges using the latest version returned for that path by read_file, write_file, or edit_file. Example: {"path":"src/app.ts","version":"8e42c197a810","edits":[{"startLine":10,"endLine":10,"newText":"const port = 4000;"},{"startLine":40,"endLine":42,"newText":"replacement lines"}]}. Returns the new version. Use one call for multiple non-overlapping ranges.',
+    'Replace one or more inclusive line ranges using the latest version returned for that path by read_file, write_file, or edit_file. Example: {"path":"src/app.ts","version":"8e42c197a810","edits":[{"startLine":10,"endLine":10,"newText":"const port = 4000;"},{"startLine":40,"endLine":42,"newText":"replacement lines"}]}. To append after a file with N total lines, use startLine and endLine N+1. Returns the new version and exact total lines. Use one call for multiple non-overlapping ranges.',
   inputSchema: {
     type: "object",
     properties: {
@@ -16,14 +16,14 @@ export const editTool: Tool = {
         type: "array",
         minItems: 1,
         description:
-          'Required. One or more non-overlapping JSON objects shaped like {"startLine":1,"endLine":2,"newText":"..."}. Ranges use the original version, not earlier edits in this array.',
+          'Required. One or more non-overlapping JSON objects shaped like {"startLine":1,"endLine":2,"newText":"..."}. Ranges use the original version, not earlier edits in this array. To append after a file with N lines, use N+1 for both line fields.',
         items: {
           type: "object",
           properties: {
             startLine: {
               type: "integer",
               minimum: 1,
-              description: "Required. First line to replace, inclusive.",
+              description: "Required. First line to replace, inclusive; use current total lines + 1 to append.",
             },
             endLine: {
               type: "integer",
@@ -56,16 +56,21 @@ export const editTool: Tool = {
     }
 
     const lineEnding = content.includes("\r\n") ? "\r\n" : "\n";
-    const lines = content.replaceAll("\r\n", "\n").split("\n");
+    const lines = content ? content.replaceAll("\r\n", "\n").split("\n") : [];
+    const lineCount = contentLineCount(content);
     const edits = input.edits.map((rawEdit, index) => {
       const edit = objectInput(rawEdit);
       const startLine = requiredLine(edit, "startLine", index);
       const endLine = requiredLine(edit, "endLine", index);
       const newText = stringField(edit, "newText", { allowEmpty: true }) as string;
-      if (endLine < startLine || endLine > lines.length) {
-        throw new Error(`Edit ${index + 1}: line range must be within 1-${lines.length}`);
+      const appends = startLine === lineCount + 1 && endLine === startLine;
+      if (endLine < startLine || (endLine > lineCount && !appends)) {
+        throw new Error(
+          `Edit ${index + 1} requested lines ${startLine}-${endLine}, but this version has ${lineCount} lines. ` +
+          `To append, use startLine ${lineCount + 1} and endLine ${lineCount + 1}; otherwise read the relevant range and retry.`,
+        );
       }
-      return { startLine, endLine, newText };
+      return { startLine, endLine, newText, appends };
     });
 
     const ordered = [...edits].sort((left, right) => left.startLine - right.startLine);
@@ -79,13 +84,22 @@ export const editTool: Tool = {
       const replacement = edit.newText
         ? edit.newText.replaceAll("\r\n", "\n").split("\n")
         : [];
-      lines.splice(edit.startLine - 1, edit.endLine - edit.startLine + 1, ...replacement);
+      const appendAfterFinalNewline = edit.appends && content.endsWith("\n");
+      const index = edit.appends
+        ? lines.length - (appendAfterFinalNewline ? 1 : 0)
+        : edit.startLine - 1;
+      const deleteCount = edit.appends
+        ? (appendAfterFinalNewline ? 1 : 0)
+        : edit.endLine - edit.startLine + 1;
+      lines.splice(index, deleteCount, ...replacement);
     }
 
     const updated = lines.join(lineEnding);
     await workspace.write(filePath, updated);
     return {
-      content: `Updated ${filePath} with ${edits.length} edit(s); version: ${contentRevision(updated)}.`,
+      content:
+        `Updated ${filePath} with ${edits.length} edit(s); version: ${contentRevision(updated)}; ` +
+        `total lines: ${contentLineCount(updated)}.`,
     };
   },
 };
