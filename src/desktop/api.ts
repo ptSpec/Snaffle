@@ -1,3 +1,4 @@
+import type { AttachmentPreview, AttachmentRef } from "../attachments/types.js";
 import type { OpenRouterModel } from "../providers/openrouter.js";
 import type { CommandApprovalDecision, Message, RunEvent } from "../protocol.js";
 import type { FontId } from "./typography.js";
@@ -115,6 +116,7 @@ export type StartRunInput = {
   threadId: string;
   task: string;
   model: string;
+  attachments?: AttachmentRef[];
 };
 
 export type DesktopRunEvent = {
@@ -134,6 +136,10 @@ export interface DesktopApi {
   deleteThreads(threadIds: string[]): Promise<DesktopState>;
   removeWorkspace(workspaceId: string): Promise<DesktopState>;
   listOpenRouterModels(): Promise<OpenRouterModel[]>;
+  chooseAttachments(): Promise<AttachmentPreview[]>;
+  importClipboardImage(): Promise<AttachmentPreview>;
+  readClipboardText(): Promise<string>;
+  removeAttachment(id: string): Promise<void>;
   startRun(input: StartRunInput): Promise<void>;
   steerRun(threadId: string, message: string): Promise<boolean>;
   stopRun(threadId: string): Promise<boolean>;

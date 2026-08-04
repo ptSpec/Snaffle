@@ -11,12 +11,13 @@ import {
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import hljs from "highlight.js/lib/common";
+import type { AttachmentRef } from "../../attachments/types.js";
 import type { CommandApprovalDecision, RunEvent, ToolCall, Usage } from "../../protocol.js";
 import type { DesktopEntry } from "../api.js";
 import { JsonInspector } from "./json-inspector.js";
 
 export type TimelineItem =
-  | { id: string; kind: "user"; text: string; sequence: number; entryId?: string }
+  | { id: string; kind: "user"; text: string; attachments?: AttachmentRef[]; sequence: number; entryId?: string }
   | { id: string; kind: "error"; text: string }
   | { id: string; kind: "assistant"; text: string; streaming: boolean; intermediate?: boolean; model?: string; usage?: Usage; durationMs?: number; sequence?: number; entryId?: string }
   | { id: string; kind: "activity-group"; items: TimelineItem[] }
@@ -240,7 +241,14 @@ function UserMessage({
   return (
     <article className="message user" {...(item.entryId ? { "data-entry-id": item.entryId } : {})}>
       <div className={collapsible && !expanded ? "message-body collapsed" : "message-body"}>
-        <p>{item.text}</p>
+        {item.text ? <p>{item.text}</p> : null}
+        {item.attachments?.length ? (
+          <div className="message-attachments">
+            {item.attachments.map((attachment) => (
+              <span key={attachment.id} title={attachment.name}>{attachment.name}</span>
+            ))}
+          </div>
+        ) : null}
       </div>
       <MessageFooter
         text={item.text}
@@ -736,7 +744,14 @@ export function timelineFromEntries(entries: DesktopEntry[]): TimelineItem[] {
   entries.forEach(({ id: entryId, sequence, message }, index) => {
     if (message.role === "system") return;
     if (message.role === "user") {
-      items.push({ id: `entry-${entryId}`, kind: "user", text: message.content, sequence, entryId });
+      items.push({
+        id: `entry-${entryId}`,
+        kind: "user",
+        text: message.content,
+        sequence,
+        entryId,
+        ...(message.attachments?.length ? { attachments: message.attachments } : {}),
+      });
       return;
     }
     if (message.role === "assistant") {

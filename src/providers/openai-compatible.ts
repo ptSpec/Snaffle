@@ -1,3 +1,4 @@
+import type { AttachmentRef, ResolvedAttachment } from "../attachments/types.js";
 import type { Message, ModelResponse, ToolCall, ToolSpec } from "../protocol.js";
 import { healToolInput } from "../tool-input.js";
 import type { ModelProvider, ModelStreamEvent } from "./provider.js";
@@ -15,6 +16,7 @@ export type OpenAICompatibleOptions = {
   maxRetries?: number;
   temperature?: number;
   seed?: number;
+  resolveAttachment?: (attachment: AttachmentRef) => Promise<ResolvedAttachment>;
 };
 
 export class OpenAICompatibleProvider implements ModelProvider {
@@ -25,6 +27,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
   private readonly maxRetries: number;
   private readonly temperature: number | undefined;
   private readonly seed: number | undefined;
+  private readonly resolveAttachment: OpenAICompatibleOptions["resolveAttachment"];
 
   constructor(options: OpenAICompatibleOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
@@ -34,6 +37,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
     this.maxRetries = options.maxRetries ?? DEFAULT_PROVIDER_RETRIES;
     this.temperature = options.temperature;
     this.seed = options.seed;
+    this.resolveAttachment = options.resolveAttachment;
   }
 
   async complete(
@@ -58,7 +62,9 @@ export class OpenAICompatibleProvider implements ModelProvider {
           },
           body: JSON.stringify({
             model: this.model,
-            messages: requestMessages.map(toOpenAIMessage),
+            messages: await Promise.all(
+              requestMessages.map((message) => toOpenAIMessage(message, this.resolveAttachment)),
+            ),
             tools: tools.map((tool) => ({
               type: "function",
               function: {
@@ -292,7 +298,10 @@ function appendStreamText(current: string, delta: string, label: string): string
   return current + delta;
 }
 
-function toOpenAIMessage(message: Message): Record<string, unknown> {
+async function toOpenAIMessage(
+  message: Message,
+  resolveAttachment?: (attachment: AttachmentRef) => Promise<ResolvedAttachment>,
+): Promise<Record<string, unknown>> {
   if (message.role === "tool") {
     return {
       role: "tool",
@@ -316,7 +325,35 @@ function toOpenAIMessage(message: Message): Record<string, unknown> {
     };
   }
 
-  return { role: message.role, content: message.content };
+  if (message.role !== "user" || !message.attachments?.length) {
+    return { role: message.role, content: message.content };
+  }
+  if (!resolveAttachment) throw new Error("This provider cannot load attachments");
+
+  const content: Record<string, unknown>[] = [{ type: "text", text: message.content }];
+  for (const attachment of message.attachments) {
+    const resolved = await resolveAttachment(attachment);
+    if (resolved.type === "markdown") {
+      content.push({
+        type: "text",
+        text: `<attachment name=${JSON.stringify(attachment.name)}>\n${resolved.text}\n</attachment>`,
+      });
+    } else if (resolved.type === "image") {
+      content.push({
+        type: "image_url",
+        image_url: { url: `data:${resolved.mediaType};base64,${resolved.data}` },
+      });
+    } else {
+      content.push({
+        type: "file",
+        file: {
+          filename: attachment.name,
+          file_data: `data:application/pdf;base64,${resolved.data}`,
+        },
+      });
+    }
+  }
+  return { role: "user", content };
 }
 
 function parseResponse(input: unknown): ModelResponse {

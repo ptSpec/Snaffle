@@ -1,3 +1,4 @@
+import type { AttachmentRef, ResolvedAttachment } from "../attachments/types.js";
 import { OpenAICompatibleProvider } from "./openai-compatible.js";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
@@ -8,6 +9,7 @@ export type OpenRouterModel = {
   contextLength: number | null;
   promptPrice: string | null;
   completionPrice: string | null;
+  inputModalities: string[];
 };
 
 export class OpenRouterProvider extends OpenAICompatibleProvider {
@@ -18,6 +20,7 @@ export class OpenRouterProvider extends OpenAICompatibleProvider {
     maxRetries?: number;
     temperature?: number;
     seed?: number;
+    resolveAttachment?: (attachment: AttachmentRef) => Promise<ResolvedAttachment>;
   }) {
     super({
       baseUrl: OPENROUTER_BASE_URL,
@@ -29,6 +32,9 @@ export class OpenRouterProvider extends OpenAICompatibleProvider {
       ...(options.maxRetries === undefined ? {} : { maxRetries: options.maxRetries }),
       ...(options.temperature === undefined ? {} : { temperature: options.temperature }),
       ...(options.seed === undefined ? {} : { seed: options.seed }),
+      ...(options.resolveAttachment === undefined
+        ? {}
+        : { resolveAttachment: options.resolveAttachment }),
     });
   }
 }
@@ -56,6 +62,7 @@ export async function listOpenRouterModels(
     contextLength: model.context_length ?? null,
     promptPrice: model.pricing?.prompt ?? null,
     completionPrice: model.pricing?.completion ?? null,
+    inputModalities: model.architecture?.input_modalities ?? ["text"],
   }));
 }
 
@@ -72,4 +79,7 @@ type OpenRouterModelResponse = {
     completion?: string;
   };
   supported_parameters?: string[];
+  architecture?: {
+    input_modalities?: string[];
+  };
 };
