@@ -5,12 +5,16 @@ import {
   useMemo,
   useRef,
   useState,
+  type ClipboardEvent as ReactClipboardEvent,
+  type DragEvent as ReactDragEvent,
   type FormEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import type { AttachmentPreview, AttachmentRef } from "../../attachments/types.js";
 import type { CommandApprovalDecision } from "../../protocol.js";
 import type { DesktopApi, DesktopRunEvent, DesktopState, SavedMessage } from "../api.js";
 import type { OpenRouterModel } from "../../providers/openrouter.js";
+import { DEFAULT_MODEL_CONTEXT_LENGTH } from "../../providers/provider.js";
 import { DEFAULT_THEME, themeById, type Theme } from "../themes/index.js";
 import {
   CONVERSATION_FONT_BASE,
@@ -20,6 +24,8 @@ import {
   validFontScale,
   type FontId,
 } from "../typography.js";
+import { AttachmentTray } from "./attachment-tray.js";
+import { htmlToMarkdown } from "./attachment-markdown.js";
 import { Settings } from "./settings.js";
 import { SavedMessages } from "./saved-messages.js";
 import { Sidebar, type AppView, type SettingsPage } from "./sidebar.js";
@@ -76,6 +82,8 @@ export function App(): JSX.Element {
   const [models, setModels] = useState<OpenRouterModel[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [task, setTask] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<AttachmentPreview[]>([]);
+  const [draggingAttachments, setDraggingAttachments] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
@@ -91,6 +99,7 @@ export function App(): JSX.Element {
   const taskInput = useRef<HTMLTextAreaElement>(null);
   const timelineView = useRef<HTMLDivElement>(null);
   const executionMode = useRef<HTMLDetailsElement>(null);
+  const composerAdd = useRef<HTMLDetailsElement>(null);
   const followTimeline = useRef(true);
   const leftAutoCollapsed = useRef(false);
   const fileEditorExpanded = useRef(false);
@@ -103,6 +112,7 @@ export function App(): JSX.Element {
   const leftCollapsedValue = useRef(leftCollapsed);
   const activeThreadId = useRef<string | null>(null);
   const threadTimelines = useRef(new Map<string, TimelineItem[]>());
+  const threadAttachments = useRef(new Map<string, AttachmentPreview[]>());
   rightWidthValue.current = rightWidth;
   leftCollapsedValue.current = leftCollapsed;
   const running = desktopState.activeThreadId
@@ -225,15 +235,16 @@ export function App(): JSX.Element {
   }, [rightCollapsed, rightWidth, view]);
 
   useEffect(() => {
-    function closeExecutionMode(event: PointerEvent): void {
-      const details = executionMode.current;
-      if (details?.open && event.target instanceof Node && !details.contains(event.target)) {
-        details.open = false;
+    function closeOpenMenus(event: PointerEvent): void {
+      for (const details of [executionMode.current, composerAdd.current]) {
+        if (details?.open && event.target instanceof Node && !details.contains(event.target)) {
+          details.open = false;
+        }
       }
     }
 
-    document.addEventListener("pointerdown", closeExecutionMode);
-    return () => document.removeEventListener("pointerdown", closeExecutionMode);
+    document.addEventListener("pointerdown", closeOpenMenus);
+    return () => document.removeEventListener("pointerdown", closeOpenMenus);
   }, []);
 
   useEffect(() => {
@@ -328,15 +339,40 @@ export function App(): JSX.Element {
   );
   const visibleLeftWidth = leftCollapsed ? 0 : leftWidth;
   const visibleRightWidth = view !== "conversation" || rightCollapsed ? 0 : rightWidth;
+  const activeContextAttachments = useMemo(() => {
+    const active = new Map<string, AttachmentRef>();
+    for (const item of timeline) {
+      if (item.kind !== "user") continue;
+      for (const attachment of item.attachments ?? []) {
+        if (attachment.includeInContext !== false) active.set(attachment.id, attachment);
+      }
+    }
+    return [...active.values()];
+  }, [timeline]);
+  const contextAttachments = [...activeContextAttachments, ...pendingAttachments];
+  const attachmentTokens = contextAttachments.reduce(
+    (total, attachment) => total + attachment.estimatedTokens,
+    0,
+  );
+  const selectedContextLength = models.find((model) => model.id === selectedModel)?.contextLength ??
+    DEFAULT_MODEL_CONTEXT_LENGTH;
+  const selectedModalities = models.find((model) => model.id === selectedModel)?.inputModalities;
+  const imageUnsupported = contextAttachments.some((attachment) => attachment.kind === "image") &&
+    selectedModalities !== undefined && !selectedModalities.includes("image");
+  const attachmentsTooLarge = attachmentTokens > selectedContextLength * 0.7;
   const runBlocker = !desktopState.workspace
     ? "Open a workspace before sending."
-    : !task.trim()
-      ? "Describe a task before sending."
+    : !task.trim() && pendingAttachments.length === 0
+      ? "Describe a task or attach a file before sending."
       : !selectedModel
         ? "Select a model before sending."
-        : !unsafeHostExecution && !desktopState.restrictedHostAvailable
-          ? desktopState.restrictedHostDetail
-          : null;
+        : attachmentsTooLarge
+          ? "Attachments are too large for the selected model context."
+          : imageUnsupported
+            ? "The selected model does not accept images."
+            : !unsafeHostExecution && !desktopState.restrictedHostAvailable
+              ? desktopState.restrictedHostDetail
+              : null;
 
   async function loadModels(): Promise<void> {
     setError(null);
@@ -383,11 +419,17 @@ export function App(): JSX.Element {
       threadId,
       task: task.trim(),
       model: selectedModel,
+      ...(pendingAttachments.length
+        ? { attachments: pendingAttachments.map(attachmentRef) }
+        : {}),
     };
 
     followTimeline.current = true;
-    appendUserMessage(request.threadId, request.task);
+    appendUserMessage(request.threadId, request.task, pendingAttachments);
+    const sentAttachments = pendingAttachments;
     setTask("");
+    setPendingAttachments([]);
+    threadAttachments.current.delete(request.threadId);
     setDesktopState((state) => ({
       ...state,
       runningThreadIds: [...new Set([...state.runningThreadIds, request.threadId])],
@@ -400,11 +442,17 @@ export function App(): JSX.Element {
         ...state,
         runningThreadIds: state.runningThreadIds.filter((id) => id !== request.threadId),
       }));
+      setPendingAttachments(sentAttachments);
+      threadAttachments.current.set(request.threadId, sentAttachments);
       setError(errorMessage(cause));
     }
   }
 
-  function appendUserMessage(threadId: string, text: string): void {
+  function appendUserMessage(
+    threadId: string,
+    text: string,
+    attachments: AttachmentPreview[] = [],
+  ): void {
     followTimeline.current = true;
     setTimeline((items) => {
       const next = [
@@ -413,11 +461,162 @@ export function App(): JSX.Element {
           id: newTimelineId(),
           kind: "user" as const,
           text,
+          ...(attachments.length ? { attachments: attachments.map(attachmentRef) } : {}),
           sequence: nextMessageSequence(items),
         },
       ];
       threadTimelines.current.set(threadId, next);
       return next;
+    });
+  }
+
+  async function chooseAttachments(): Promise<void> {
+    setError(null);
+    try {
+      await addAttachments(await window.desktop.chooseAttachments());
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function addAttachments(imported: AttachmentPreview[]): Promise<void> {
+    const fingerprints = new Set(pendingAttachments.map((attachment) => attachment.fingerprint));
+    const unique = imported.filter((attachment) => {
+      if (fingerprints.has(attachment.fingerprint)) return false;
+      fingerprints.add(attachment.fingerprint);
+      return true;
+    });
+    const duplicates = imported.filter((attachment) => !unique.includes(attachment));
+    const remaining = Math.max(0, 8 - pendingAttachments.length);
+    const accepted = unique.slice(0, remaining);
+    const rejected = [...duplicates, ...unique.slice(remaining)];
+    await Promise.all(
+      rejected.map((item) => window.desktop.removeAttachment(item.id)),
+    );
+    if (unique.length > remaining) setError("Attach at most 8 files to one message");
+    else if (duplicates.length) setError("That file is already attached");
+    setPendingAttachments((current) => {
+      const next = [...current, ...accepted];
+      const threadId = desktopState.activeThreadId;
+      if (threadId) threadAttachments.current.set(threadId, next);
+      return next;
+    });
+  }
+
+  async function dropAttachments(event: ReactDragEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    setDraggingAttachments(false);
+    if (running || event.dataTransfer.files.length === 0) return;
+    setError(null);
+    try {
+      await addAttachments(
+        await window.desktop.importDroppedFiles([...event.dataTransfer.files]),
+      );
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function pasteIntoTask(event: ReactClipboardEvent<HTMLTextAreaElement>): Promise<void> {
+    if ([...event.clipboardData.items].some((item) => item.type.startsWith("image/"))) {
+      event.preventDefault();
+      setError(null);
+      try {
+        if (pendingAttachments.length >= 8) throw new Error("Attach at most 8 files to one message");
+        await addAttachments([await window.desktop.importClipboardImage()]);
+      } catch (cause) {
+        setError(errorMessage(cause));
+      }
+      return;
+    }
+
+    if (!event.clipboardData.getData("text/html")) return;
+    event.preventDefault();
+    const plain = event.clipboardData.getData("text/plain");
+    insertTaskText(plain, event.currentTarget);
+  }
+
+  async function removeAttachment(attachment: AttachmentPreview): Promise<void> {
+    setPendingAttachments((current) => {
+      const next = current.filter((item) => item.id !== attachment.id);
+      const threadId = desktopState.activeThreadId;
+      if (threadId) threadAttachments.current.set(threadId, next);
+      return next;
+    });
+    try {
+      await window.desktop.removeAttachment(attachment.id);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function toggleAttachmentContext(
+    item: Extract<TimelineItem, { kind: "user" }>,
+    attachment: AttachmentRef,
+  ): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId || running) return;
+    const include = attachment.includeInContext === false;
+
+    try {
+      await window.desktop.setAttachmentContext(threadId, item.sequence, attachment.id, include);
+      setTimeline((items) => {
+        const next = items.map((candidate) => {
+          if (candidate.id !== item.id || candidate.kind !== "user" || !candidate.attachments) {
+            return candidate;
+          }
+          return {
+            ...candidate,
+            attachments: candidate.attachments.map((current) => {
+              if (current.id !== attachment.id) return current;
+              if (!include) return { ...current, includeInContext: false as const };
+              const { includeInContext: _removed, ...restored } = current;
+              return restored;
+            }),
+          };
+        });
+        threadTimelines.current.set(threadId, next);
+        return next;
+      });
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  function removeActiveAttachment(attachment: AttachmentRef): void {
+    const item = timeline.find((candidate) => candidate.kind === "user" &&
+      candidate.attachments?.some((current) => current.id === attachment.id));
+    if (item?.kind === "user") void toggleAttachmentContext(item, attachment);
+  }
+
+  async function pastePlainText(): Promise<void> {
+    const input = taskInput.current;
+    if (!input) return;
+    const plain = await window.desktop.readClipboardText();
+    insertTaskText(plain, input);
+  }
+
+  async function pasteMarkdown(): Promise<void> {
+    const input = taskInput.current;
+    if (!input) return;
+    setError(null);
+    try {
+      const html = await window.desktop.readClipboardHtml();
+      const markdown = html ? await htmlToMarkdown(html) : await window.desktop.readClipboardText();
+      insertTaskText(markdown, input);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  function insertTaskText(text: string, input: HTMLTextAreaElement): void {
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    setTask((current) => `${current.slice(0, start)}${text}${current.slice(end)}`);
+    window.requestAnimationFrame(() => {
+      input.focus();
+      input.setSelectionRange(start + text.length, start + text.length);
     });
   }
 
@@ -458,6 +657,9 @@ export function App(): JSX.Element {
 
   function showDesktopState(state: DesktopState): void {
     followTimeline.current = true;
+    if (activeThreadId.current) {
+      threadAttachments.current.set(activeThreadId.current, pendingAttachments);
+    }
     trimThreadTimelines(threadTimelines.current, state.activeThreadId, state.runningThreadIds);
     activeThreadId.current = state.activeThreadId;
     const storedTimeline = state.activeThreadId
@@ -471,6 +673,9 @@ export function App(): JSX.Element {
     setTimeline(nextTimeline);
     setSelectedItemId(null);
     setTask(activeDraft(state));
+    setPendingAttachments(
+      state.activeThreadId ? threadAttachments.current.get(state.activeThreadId) ?? [] : [],
+    );
     setError(null);
     setView("conversation");
   }
@@ -782,6 +987,9 @@ export function App(): JSX.Element {
                     : undefined
                 }
                 onToggleSaved={(message, savedId) => void toggleSavedMessage(message, savedId)}
+                {...(!running
+                  ? { onToggleAttachmentContext: (message, attachment) => void toggleAttachmentContext(message, attachment) }
+                  : {})}
                 onEditUser={(text) => {
                   setTask(text);
                   window.requestAnimationFrame(() => {
@@ -794,12 +1002,47 @@ export function App(): JSX.Element {
             ))}
           </div>
 
-          <form className="composer" onSubmit={(event) => void startRun(event)}>
+          <AttachmentTray
+            activeAttachments={activeContextAttachments}
+            pendingAttachments={pendingAttachments}
+            estimatedTokens={attachmentTokens}
+            tooLarge={attachmentsTooLarge}
+            onRemoveActive={removeActiveAttachment}
+            onRemovePending={(attachment) => void removeAttachment(attachment)}
+          />
+          <form
+            className={draggingAttachments ? "composer dragging" : "composer"}
+            onSubmit={(event) => void startRun(event)}
+            onDragEnter={(event) => {
+              if (event.dataTransfer.types.includes("Files")) setDraggingAttachments(true);
+            }}
+            onDragOver={(event) => {
+              if (!event.dataTransfer.types.includes("Files")) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+            }}
+            onDragLeave={(event) => {
+              const nextTarget = event.relatedTarget;
+              if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+                setDraggingAttachments(false);
+              }
+            }}
+            onDrop={(event) => void dropAttachments(event)}
+          >
             <textarea
               ref={taskInput}
               value={task}
               onChange={(event) => setTask(event.target.value)}
+              onPaste={(event) => void pasteIntoTask(event)}
               onKeyDown={(event) => {
+                const pastePlain = event.key.toLowerCase() === "v" &&
+                  event.shiftKey &&
+                  (window.desktop.platform === "darwin" ? event.metaKey : event.ctrlKey);
+                if (pastePlain) {
+                  event.preventDefault();
+                  void pastePlainText();
+                  return;
+                }
                 if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
                 event.preventDefault();
                 event.currentTarget.form?.requestSubmit();
@@ -809,6 +1052,33 @@ export function App(): JSX.Element {
             />
 
             <div className="composer-controls">
+              <details ref={composerAdd} className="composer-add">
+                <summary aria-label="Add to message" title="Add to message">＋</summary>
+                <div className="composer-add-menu">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      void chooseAttachments();
+                      event.currentTarget.closest("details")?.removeAttribute("open");
+                    }}
+                    disabled={running || pendingAttachments.length >= 8}
+                  >Attach files</button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      void pasteMarkdown();
+                      event.currentTarget.closest("details")?.removeAttribute("open");
+                    }}
+                  >Paste as Markdown</button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      void pastePlainText();
+                      event.currentTarget.closest("details")?.removeAttribute("open");
+                    }}
+                  >Paste without formatting</button>
+                </div>
+              </details>
               <SearchPicker
                 className={selectedModel ? "model-search" : "model-search empty"}
                 value={selectedModel}
@@ -1054,4 +1324,9 @@ function nextMessageSequence(items: TimelineItem[]): number {
     }
   }
   return highest + 1;
+}
+
+function attachmentRef(attachment: AttachmentPreview): AttachmentRef {
+  const { fingerprint: _fingerprint, thumbnail: _thumbnail, ...reference } = attachment;
+  return reference;
 }

@@ -1,4 +1,5 @@
 import { initialMessages } from "./context.js";
+import type { AttachmentRef } from "./attachments/types.js";
 import type { ModelProvider, ModelStreamEvent } from "./providers/provider.js";
 import type { Message, RunEvent } from "./protocol.js";
 import { healToolCall } from "./tool-input.js";
@@ -14,6 +15,7 @@ export type RunAgentOptions = {
   trace: Trace;
   signal: AbortSignal;
   history?: Message[];
+  attachments?: AttachmentRef[];
   maxSteps?: number;
   onEvent?: (event: RunEvent) => void | Promise<void>;
   takeSteering?: () => string[];
@@ -30,8 +32,15 @@ export const DEFAULT_MAX_STEPS = 50;
 export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
   const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
   const messages = options.history?.length
-    ? [...options.history, { role: "user" as const, content: options.task }]
-    : initialMessages(options.task, options.workspace.environment);
+    ? [
+        ...options.history,
+        {
+          role: "user" as const,
+          content: options.task,
+          ...(options.attachments?.length ? { attachments: options.attachments } : {}),
+        },
+      ]
+    : initialMessages(options.task, options.workspace.environment, options.attachments);
   const toolSpecs = options.tools.map(({ name, description, inputSchema }) => ({
     name,
     description,

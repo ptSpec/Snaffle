@@ -4,6 +4,68 @@ import test from "node:test";
 import { OpenAICompatibleProvider } from "../src/providers/openai-compatible.js";
 import type { ModelStreamEvent } from "../src/providers/provider.js";
 
+test("OpenAI-compatible provider sends attachment content without storing payloads in messages", async (t) => {
+  let content: unknown;
+  let resolutions = 0;
+  const server = createServer((request, response) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk: string) => (body += chunk));
+    request.on("end", () => {
+      content = (JSON.parse(body) as { messages: Array<{ content: unknown }> }).messages[0]?.content;
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ choices: [{ message: { content: "Done" } }] }));
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Test server did not start");
+
+  const provider = new OpenAICompatibleProvider({
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    model: "test-model",
+    resolveAttachment: async () => {
+      resolutions += 1;
+      return { type: "image", mediaType: "image/png", data: "cG5n" };
+    },
+  });
+  await provider.complete(
+    [{
+      role: "user",
+      content: "Describe this",
+      attachments: [{
+        id: "00000000-0000-0000-0000-000000000000",
+        name: "screen.png",
+        mediaType: "image/png",
+        size: 3,
+        kind: "image",
+        delivery: "image",
+        estimatedTokens: 1500,
+      }, {
+        id: "00000000-0000-0000-0000-000000000001",
+        name: "old-notes.md",
+        mediaType: "text/markdown",
+        size: 100,
+        kind: "document",
+        delivery: "markdown",
+        estimatedTokens: 25,
+        includeInContext: false,
+      }],
+    }],
+    [],
+    new AbortController().signal,
+  );
+
+  assert.deepEqual(content, [
+    { type: "text", text: "Describe this" },
+    { type: "image_url", image_url: { url: "data:image/png;base64,cG5n" } },
+    { type: "text", text: '<attachment name="old-notes.md" available="false" />' },
+  ]);
+  assert.equal(resolutions, 1);
+});
+
 test("OpenAI-compatible provider repairs a common double-encoded tool call", async (t) => {
   let requestCount = 0;
   const server = createServer((request, response) => {
