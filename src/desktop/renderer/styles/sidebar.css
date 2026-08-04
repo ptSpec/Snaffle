@@ -276,10 +276,6 @@
   background: var(--hover-background);
 }
 
-html[data-accented-theme="true"] .thread-row.active {
-  background: color-mix(in srgb, var(--primary) 9%, var(--composer-background));
-}
-
 html[data-accented-theme="true"] .thread-row.active .thread-item {
   color: var(--primary);
 }
