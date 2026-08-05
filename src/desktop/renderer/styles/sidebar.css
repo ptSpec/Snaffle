@@ -537,14 +537,6 @@ html[data-accented-theme="true"] .thread-row.active .thread-item {
   right: 2px;
 }
 
-.thread-item small {
-  overflow: hidden;
-  color: var(--text-faint);
-  font-size: calc(10px * var(--interface-font-scale));
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .thread-title-row {
   display: flex;
   min-width: 0;
@@ -596,34 +588,6 @@ html[data-accented-theme="true"] .thread-row.active .thread-item {
 .thread-selection-actions button:hover {
   color: var(--text-primary);
   background: var(--hover-background);
-}
-
-.bookmarked-threads {
-  flex: 0 0 auto;
-  max-height: 150px;
-  margin-top: 12px;
-  overflow-y: auto;
-}
-
-.bookmarked-threads .section-heading {
-  min-height: 22px;
-  margin-bottom: 2px;
-}
-
-.bookmarked-threads .thread-item {
-  display: grid;
-  gap: 1px;
-  padding: 4px 6px;
-}
-
-.bookmarked-threads .thread-title-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.bookmarked-threads .thread-item small {
-  margin: 0;
 }
 
 .inactive-workspaces {

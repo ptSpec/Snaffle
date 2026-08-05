@@ -1,47 +1,52 @@
-.saved-messages {
+.bookmarks {
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
   background: var(--app-background);
 }
 
-.saved-messages-content {
+.bookmarks-content {
   width: min(720px, calc(100% - 56px));
   margin: 0 auto;
   padding: 68px 0 40px;
 }
 
-.saved-messages h1 {
+.bookmarks h1 {
   margin: 0 0 24px;
   color: var(--text-strong);
   font-size: calc(28px * var(--interface-font-scale));
   letter-spacing: -0.03em;
 }
 
-.saved-empty,
-.saved-message-meta,
-.saved-message-source {
+.bookmark-empty,
+.bookmark-meta,
+.bookmark-source,
+.bookmark-thread small {
   color: var(--text-muted);
 }
 
-.saved-message-list {
+.bookmark-thread-list,
+.bookmark-message-list {
   display: grid;
   gap: 10px;
 }
 
-.saved-message {
+.bookmark-thread,
+.bookmark-message {
   position: relative;
   border: 1px solid var(--border-default);
   border-radius: 10px;
 }
 
-.saved-message:hover {
+.bookmark-thread:hover,
+.bookmark-message:hover {
   background: var(--hover-background);
 }
 
-.saved-message-body {
+.bookmark-thread > button:first-child,
+.bookmark-message-body {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   padding: 14px 42px 14px 14px;
   color: var(--text-primary);
@@ -51,22 +56,50 @@
   cursor: pointer;
 }
 
-.saved-message-body:not([role="button"]) {
-  cursor: default;
+.bookmark-thread > button:first-child span {
+  color: var(--text-strong);
+  font-size: calc(15px * var(--interface-font-scale));
 }
 
-.saved-message-source,
-.saved-message-meta {
+.bookmark-thread small,
+.bookmark-source,
+.bookmark-meta {
   font-size: calc(11px * var(--interface-font-scale));
 }
 
-.saved-message-text {
+.bookmark-message-text {
   max-height: 180px;
   overflow: hidden;
   mask-image: linear-gradient(to bottom, black calc(100% - 28px), transparent);
 }
 
-.saved-message-delete {
+.bookmark-message.expanded .bookmark-message-text {
+  max-height: none;
+  mask-image: none;
+}
+
+.bookmark-message-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 0 10px 10px;
+}
+
+.bookmark-message-actions button {
+  padding: 4px 6px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  font-size: calc(11px * var(--interface-font-scale));
+}
+
+.bookmark-message-actions button:hover {
+  color: var(--text-primary);
+  background: var(--selected-background);
+}
+
+.bookmark-remove {
   position: absolute;
   top: 10px;
   right: 10px;
@@ -79,7 +112,7 @@
   border-radius: 5px;
 }
 
-.saved-message-delete:hover {
+.bookmark-remove:hover {
   color: var(--text-primary);
   background: var(--selected-background);
 }

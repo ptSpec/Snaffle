@@ -8,6 +8,7 @@ import {
 import logoSvg from "../../../assets/logo_svg.svg?raw";
 import { PRODUCT } from "../../identity.js";
 import type { DesktopState, DesktopThread } from "../api.js";
+import type { BookmarksPage } from "./bookmarks.js";
 import { ThinkingOrb } from "./thinking-orb.js";
 
 export type AppView = "conversation" | "saved" | "settings";
@@ -18,6 +19,7 @@ export function Sidebar({
   runningThreadIds,
   view,
   settingsPage,
+  bookmarksPage,
   collapsed,
   beforeNavigate,
   onNavigate,
@@ -25,12 +27,14 @@ export function Sidebar({
   onError,
   onView,
   onSettingsPage,
+  onBookmarksPage,
   onCollapse,
 }: {
   state: DesktopState;
   runningThreadIds: string[];
   view: AppView;
   settingsPage: SettingsPage;
+  bookmarksPage: BookmarksPage;
   collapsed: boolean;
   beforeNavigate: () => Promise<void>;
   onNavigate: (state: DesktopState) => void;
@@ -38,6 +42,7 @@ export function Sidebar({
   onError: (message: string | null) => void;
   onView: (view: AppView) => void;
   onSettingsPage: (page: SettingsPage) => void;
+  onBookmarksPage: (page: BookmarksPage) => void;
   onCollapse: () => void;
 }): JSX.Element {
   const [selecting, setSelecting] = useState(false);
@@ -58,12 +63,6 @@ export function Sidebar({
   const inactiveWorkspaces = state.workspaces.filter(
     (workspace) => workspace.id !== state.workspace?.id,
   );
-  const bookmarks = inactiveWorkspaces.flatMap((workspace) =>
-    workspace.threads
-      .filter((thread) => thread.bookmarked)
-      .map((thread) => ({ thread, workspace })),
-  );
-
   useEffect(() => {
     setSelecting(false);
     setSelectedIds([]);
@@ -242,13 +241,13 @@ export function Sidebar({
           ? "Workspaces and threads"
           : view === "settings"
             ? "Settings navigation"
-            : "Saved messages"
+            : "Bookmarks"
       }
       aria-hidden={collapsed}
     >
       <header className="sidebar-brand">
         {view !== "conversation" ? (
-          <span>{view === "settings" ? "Settings" : "Saved"}</span>
+          <span>{view === "settings" ? "Settings" : "Bookmarks"}</span>
         ) : (
           <span className="brand-wordmark" aria-label={PRODUCT.name}>
             <span
@@ -303,7 +302,23 @@ export function Sidebar({
             <div className="settings-navigation-space" aria-hidden="true" />
           </>
         ) : view === "saved" ? (
-          <div className="settings-navigation-space" aria-hidden="true" />
+          <>
+            <button
+              className={bookmarksPage === "threads" ? "sidebar-action active" : "sidebar-action"}
+              type="button"
+              onClick={() => onBookmarksPage("threads")}
+            >
+              <span>Threads</span>
+            </button>
+            <button
+              className={bookmarksPage === "messages" ? "sidebar-action active" : "sidebar-action"}
+              type="button"
+              onClick={() => onBookmarksPage("messages")}
+            >
+              <span>Messages</span>
+            </button>
+            <div className="settings-navigation-space" aria-hidden="true" />
+          </>
         ) : (
           <div key={state.workspace?.id ?? "empty"} className="workspace-navigation workspace-enter">
             <div className="workspace-create-actions">
@@ -434,32 +449,6 @@ export function Sidebar({
                   </div>
                 </div>
 
-                {bookmarks.length ? (
-                  <div className="bookmarked-threads">
-                    <div className="section-heading">
-                      <h2>Bookmarked</h2>
-                    </div>
-                    {bookmarks.map(({ thread, workspace }) => (
-                      <ThreadRow
-                        key={thread.id}
-                        thread={thread}
-                        workspaceName={workspace.name}
-                        active={false}
-                        bridged={false}
-                        promotionDistance={0}
-                        selecting={false}
-                        selected={false}
-                        focused={false}
-                        running={isRunning(thread.id)}
-                        onSelect={() => void selectThread(thread.id)}
-                        onToggleSelected={() => undefined}
-                        onToggleBookmark={() => void toggleBookmark(thread.id, false)}
-                        onDelete={() => void deleteThread(thread)}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-
                 {inactiveWorkspaces.length ? (
                   <div className="inactive-workspaces">
                     <div className="section-heading">
@@ -513,7 +502,7 @@ export function Sidebar({
               }}
             >
               <SavedIcon />
-              <span>Saved messages</span>
+              <span>Bookmarks</span>
             </button>
             <button
               className="sidebar-action"
@@ -535,7 +524,6 @@ export function Sidebar({
 
 function ThreadRow({
   thread,
-  workspaceName,
   active,
   bridged,
   promotionDistance,
@@ -549,7 +537,6 @@ function ThreadRow({
   onDelete,
 }: {
   thread: DesktopThread;
-  workspaceName?: string;
   active: boolean;
   bridged: boolean;
   promotionDistance: number;
@@ -597,7 +584,6 @@ function ThreadRow({
           ) : null}
           <span className="thread-title-text">{thread.title}</span>
         </span>
-        {workspaceName ? <small>{workspaceName}</small> : null}
       </button>
       {!selecting ? (
         <>
