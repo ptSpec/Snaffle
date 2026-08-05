@@ -14,6 +14,7 @@ export function findKetch(): string | undefined {
   const candidates = [
     process.env.KETCH_PATH,
     resources ? join(resources, "bin", executableName) : undefined,
+    join(process.cwd(), "resources", "bin", executableName),
     ...((process.env.PATH ?? "").split(delimiter).filter(Boolean).map((part) => join(part, executableName))),
   ];
   return candidates.find((candidate) => {
