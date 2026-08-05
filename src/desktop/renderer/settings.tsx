@@ -8,6 +8,7 @@ import {
   type FontId,
 } from "../typography.js";
 import type { SettingsPage } from "./sidebar.js";
+import type { KetchSearchBackend, WebSearchBackend } from "../../tools/web/types.js";
 
 export function Settings({
   page,
@@ -25,8 +26,11 @@ export function Settings({
   maxSteps,
   providerTimeoutMinutes,
   providerRetries,
-  tavilyConfigured,
+  ketchAvailable,
+  openRouterAvailable,
   webSearchEnabled,
+  webSearchBackend,
+  webSearchKeyBackends,
   error,
   onSelectTheme,
   onTypography,
@@ -39,7 +43,8 @@ export function Settings({
   onProviderTimeoutMinutes,
   onProviderRetries,
   onWebSearchEnabled,
-  onTavilyApiKey,
+  onWebSearchBackend,
+  onWebSearchApiKey,
 }: {
   page: SettingsPage;
   themeId: string;
@@ -56,8 +61,11 @@ export function Settings({
   maxSteps: number;
   providerTimeoutMinutes: number;
   providerRetries: number;
-  tavilyConfigured: boolean;
+  ketchAvailable: boolean;
+  openRouterAvailable: boolean;
   webSearchEnabled: boolean;
+  webSearchBackend: WebSearchBackend;
+  webSearchKeyBackends: KetchSearchBackend[];
   error: string | null;
   onSelectTheme: (themeId: string) => void;
   onTypography: (interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId) => void;
@@ -70,16 +78,21 @@ export function Settings({
   onProviderTimeoutMinutes: (minutes: number) => void;
   onProviderRetries: (retries: number) => void;
   onWebSearchEnabled: (enabled: boolean) => void;
-  onTavilyApiKey: (apiKey: string) => void;
+  onWebSearchBackend: (backend: WebSearchBackend) => void;
+  onWebSearchApiKey: (backend: KetchSearchBackend, apiKey: string) => void;
 }): JSX.Element {
   if (page === "web") {
     return (
       <WebSettings
-        configured={tavilyConfigured}
+        backend={webSearchBackend}
+        configuredBackends={webSearchKeyBackends}
         enabled={webSearchEnabled}
+        ketchAvailable={ketchAvailable}
+        openRouterAvailable={openRouterAvailable}
         error={error}
         onEnabled={onWebSearchEnabled}
-        onSave={onTavilyApiKey}
+        onBackend={onWebSearchBackend}
+        onSave={onWebSearchApiKey}
       />
     );
   }
@@ -209,31 +222,44 @@ export function Settings({
 }
 
 function WebSettings({
-  configured,
+  backend,
+  configuredBackends,
   enabled,
+  ketchAvailable,
+  openRouterAvailable,
   error,
   onEnabled,
+  onBackend,
   onSave,
 }: {
-  configured: boolean;
+  backend: WebSearchBackend;
+  configuredBackends: KetchSearchBackend[];
   enabled: boolean;
+  ketchAvailable: boolean;
+  openRouterAvailable: boolean;
   error: string | null;
   onEnabled: (enabled: boolean) => void;
-  onSave: (apiKey: string) => void;
+  onBackend: (backend: WebSearchBackend) => void;
+  onSave: (backend: KetchSearchBackend, apiKey: string) => void;
 }): JSX.Element {
   const [apiKey, setApiKey] = useState("");
+  const info = WEB_BACKENDS.find((item) => item.id === backend)!;
+  const ketchBackend = backend === "openrouter" ? undefined : backend;
+  const configured = ketchBackend ? configuredBackends.includes(ketchBackend) : openRouterAvailable;
+
+  useEffect(() => setApiKey(""), [backend]);
 
   return (
     <section className="settings view-enter" aria-label="Web settings">
       <div className="settings-content">
         <p className="eyebrow">Settings</p>
         <h1>Web</h1>
-        <p className="settings-description">When enabled, web search prefers Tavily when configured, then bundled Ketch when available, and otherwise OpenRouter with Luna. Tavily and OpenRouter may incur provider charges; Ketch, direct web fetches, and YouTube transcripts do not invoke a paid API.</p>
+        <p className="settings-description">Choose one search connection. Direct providers run through bundled Ketch and return source results. OpenRouter Research returns a smaller synthesized answer and uses additional model tokens.</p>
 
         <label className="setting-field text-setting">
           <span>
             <strong>Web search</strong>
-            <small>Expose the paid web_search tool to the model.</small>
+            <small>Expose web_search to the model. The selected connection decides cost and output style.</small>
           </span>
           <input
             className="selection-checkbox"
@@ -243,16 +269,37 @@ function WebSettings({
           />
         </label>
 
+        <label className="setting-field">
+          <span>
+            <strong>Search connection</strong>
+            <small>{info.description}</small>
+          </span>
+          <select value={backend} onChange={(event) => onBackend(event.target.value as WebSearchBackend)}>
+            {WEB_BACKENDS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select>
+        </label>
+
+        <p className="editor-current">
+          <span>Connection status</span>
+          <strong>{backend === "openrouter"
+            ? openRouterAvailable ? "Ready · uses the existing OpenRouter key" : "OpenRouter key is unavailable"
+            : ketchAvailable ? info.needsKey && !configured ? "API key required" : "Ready · powered by Ketch"
+            : "Ketch is unavailable in this build"}</strong>
+        </p>
+
+        {ketchBackend && ketchBackend !== "ddg" ? <>
         <label className="setting-field text-setting">
           <span>
-            <strong>Tavily API key</strong>
-            <small>{configured ? "Configured. Enter a new key to replace it." : "Optional. The renderer and model never receive it."}</small>
+            <strong>{info.label} API key</strong>
+            <small>{configured
+              ? "Configured. Enter a new key to replace it."
+              : info.needsKey ? "Required. The renderer and model never receive it." : "Optional. Public Exa search can work without one."}</small>
           </span>
           <input
             type="password"
             value={apiKey}
             autoComplete="off"
-            placeholder={configured ? "••••••••••••" : "tvly-…"}
+            placeholder={configured ? "••••••••••••" : info.placeholder}
             onChange={(event) => setApiKey(event.target.value)}
           />
         </label>
@@ -262,18 +309,34 @@ function WebSettings({
             type="button"
             disabled={!apiKey.trim()}
             onClick={() => {
-              onSave(apiKey.trim());
+              onSave(ketchBackend, apiKey.trim());
               setApiKey("");
             }}
           >Save key</button>
-          <button type="button" disabled={!configured} onClick={() => onSave("")}>Remove key</button>
+          <button type="button" disabled={!configured} onClick={() => onSave(ketchBackend, "")}>Remove key</button>
         </div>
+        </> : null}
 
         {error ? <p className="settings-error">{error}</p> : null}
       </div>
     </section>
   );
 }
+
+const WEB_BACKENDS: {
+  id: WebSearchBackend;
+  label: string;
+  description: string;
+  needsKey?: boolean;
+  placeholder?: string;
+}[] = [
+  { id: "ddg", label: "DuckDuckGo", description: "Free direct results through Ketch. No API key required." },
+  { id: "exa", label: "Exa", description: "Direct semantic search through Ketch. An API key is optional.", placeholder: "Exa API key" },
+  { id: "tavily", label: "Tavily", description: "Direct search results through Ketch. Provider charges may apply.", needsKey: true, placeholder: "tvly-…" },
+  { id: "brave", label: "Brave", description: "Direct web results through Ketch. Provider charges may apply.", needsKey: true, placeholder: "Brave API key" },
+  { id: "firecrawl", label: "Firecrawl", description: "Direct search results through Ketch. Provider charges may apply.", needsKey: true, placeholder: "fc-…" },
+  { id: "openrouter", label: "OpenRouter Research", description: "A small research model searches and returns a concise cited answer. Additional model charges apply." },
+];
 
 function FontSetting({
   label,

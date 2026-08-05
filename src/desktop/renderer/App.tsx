@@ -14,6 +14,7 @@ import type { AttachmentPreview, AttachmentRef } from "../../attachments/types.j
 import type { CommandApprovalDecision } from "../../protocol.js";
 import type { DesktopApi, DesktopRunEvent, DesktopState, DesktopThread, SavedMessage } from "../api.js";
 import type { OpenRouterModel } from "../../providers/openrouter.js";
+import type { KetchSearchBackend, WebSearchBackend } from "../../tools/web/types.js";
 import { DEFAULT_MODEL_CONTEXT_LENGTH } from "../../providers/provider.js";
 import { DEFAULT_THEME, themeById, type Theme } from "../themes/index.js";
 import {
@@ -57,8 +58,10 @@ const initialState: DesktopState = {
   conversation: [],
   savedMessages: [],
   openRouterAvailable: false,
-  tavilyConfigured: false,
+  ketchAvailable: false,
   webSearchEnabled: true,
+  webSearchBackend: "ddg",
+  webSearchKeyBackends: [],
   runningThreadIds: [],
   unsafeThreadIds: [],
   defaultModel: null,
@@ -892,10 +895,20 @@ export function App(): JSX.Element {
     }
   }
 
-  async function setTavilyApiKey(apiKey: string): Promise<void> {
+  async function setWebSearchBackend(webSearchBackend: WebSearchBackend): Promise<void> {
     try {
-      const state = await window.desktop.setTavilyApiKey(apiKey);
-      setDesktopState((current) => ({ ...current, tavilyConfigured: state.tavilyConfigured }));
+      await window.desktop.setWebSearchBackend(webSearchBackend);
+      setDesktopState((current) => ({ ...current, webSearchBackend }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function setWebSearchApiKey(backend: KetchSearchBackend, apiKey: string): Promise<void> {
+    try {
+      const state = await window.desktop.setWebSearchApiKey(backend, apiKey);
+      setDesktopState((current) => ({ ...current, webSearchKeyBackends: state.webSearchKeyBackends }));
       setError(null);
     } catch (cause) {
       setError(errorMessage(cause));
@@ -992,8 +1005,11 @@ export function App(): JSX.Element {
             maxSteps={desktopState.maxSteps}
             providerTimeoutMinutes={desktopState.providerTimeoutMinutes}
             providerRetries={desktopState.providerRetries}
-            tavilyConfigured={desktopState.tavilyConfigured}
+            ketchAvailable={desktopState.ketchAvailable}
+            openRouterAvailable={desktopState.openRouterAvailable}
             webSearchEnabled={desktopState.webSearchEnabled}
+            webSearchBackend={desktopState.webSearchBackend}
+            webSearchKeyBackends={desktopState.webSearchKeyBackends}
             error={error}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
             onTypography={(interfaceFont, primary, secondary, code) => void setTypography(interfaceFont, primary, secondary, code)}
@@ -1006,7 +1022,8 @@ export function App(): JSX.Element {
             onProviderTimeoutMinutes={(minutes) => void setProviderTimeoutMinutes(minutes)}
             onProviderRetries={(retries) => void setProviderRetries(retries)}
             onWebSearchEnabled={(enabled) => void setWebSearchEnabled(enabled)}
-            onTavilyApiKey={(apiKey) => void setTavilyApiKey(apiKey)}
+            onWebSearchBackend={(backend) => void setWebSearchBackend(backend)}
+            onWebSearchApiKey={(backend, apiKey) => void setWebSearchApiKey(backend, apiKey)}
           />
         ) : view === "saved" ? (
           <Bookmarks

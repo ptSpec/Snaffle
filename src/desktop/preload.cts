@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { CommandApprovalDecision } from "../protocol.js";
 import type { DesktopApi, DesktopRunEvent, GitFileContents, SaveMessageInput, StartRunInput } from "./api.js";
 import type { FontId } from "./typography.js";
+import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js";
 
 const api: DesktopApi = {
   platform: process.platform,
@@ -56,7 +57,10 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:set-provider-retries", retries),
   setWebSearchEnabled: (enabled: boolean) =>
     ipcRenderer.invoke("desktop:set-web-search-enabled", enabled),
-  setTavilyApiKey: (apiKey: string) => ipcRenderer.invoke("desktop:set-tavily-api-key", apiKey),
+  setWebSearchBackend: (backend: WebSearchBackend) =>
+    ipcRenderer.invoke("desktop:set-web-search-backend", backend),
+  setWebSearchApiKey: (backend: KetchSearchBackend, apiKey: string) =>
+    ipcRenderer.invoke("desktop:set-web-search-api-key", backend, apiKey),
   saveMessage: (input: SaveMessageInput) => ipcRenderer.invoke("desktop:save-message", input),
   deleteSavedMessage: (id: string) => ipcRenderer.invoke("desktop:delete-saved-message", id),
   listSavedMessages: () => ipcRenderer.invoke("desktop:list-saved-messages"),

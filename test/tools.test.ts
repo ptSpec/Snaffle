@@ -93,7 +93,11 @@ test("OpenRouter web search has one bounded server-side search", async (t) => {
     }), { status: 200, headers: { "Content-Type": "application/json" } });
   };
 
-  const tool = webSearchTool({ openRouterApiKey: "test-key" });
+  const tool = webSearchTool({
+    webSearchEnabled: true,
+    backend: "openrouter",
+    openRouterApiKey: "test-key",
+  });
   assert.ok(tool);
   await tool.execute(workspace, { query: "current Node.js release", maxResults: 3 });
 
@@ -120,7 +124,7 @@ test("Ketch search and extraction use its structured CLI output", {
   t.after(() => rm(root, { recursive: true, force: true }));
   await writeFile(executable, `#!/bin/sh
 if [ "$1" = "search" ]; then
-  printf '[{"title":"Example","url":"https://example.com","description":"A result"}]'
+  printf '[{"title":"Example","url":"https://example.com","description":"%s:%s"}]' "$4" "$KETCH_TAVILY_API_KEY"
 else
   cat >/dev/null
   printf '{"url":"https://example.com","title":"Example page","markdown":"# Extracted","words":1}'
@@ -128,10 +132,10 @@ fi
 `);
   await chmod(executable, 0o755);
 
-  assert.deepEqual(await searchWithKetch(executable, "example query", 3), [{
+  assert.deepEqual(await searchWithKetch(executable, "tavily", "secret", "example query", 3), [{
     title: "Example",
     url: "https://example.com",
-    content: "A result",
+    content: "tavily:secret",
   }]);
   assert.deepEqual(await extractWithKetch(executable, "<h1>Ignored</h1>", "https://example.com", 4_000), {
     title: "Example page",
