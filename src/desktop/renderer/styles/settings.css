@@ -147,7 +147,7 @@
   color: var(--text-muted);
 }
 
-.setting-field input,
+.setting-field input:not(.selection-checkbox),
 .setting-field select {
   width: 84px;
   padding: 7px 9px;
@@ -162,7 +162,7 @@
   width: 180px;
 }
 
-.setting-field.text-setting input {
+.setting-field.text-setting input:not(.selection-checkbox) {
   width: min(310px, 52%);
 }
 
@@ -205,7 +205,7 @@
   border-color: transparent;
 }
 
-.setting-field input:focus,
+.setting-field input:not(.selection-checkbox):focus,
 .setting-field select:focus {
   border-color: var(--border-focus);
 }
