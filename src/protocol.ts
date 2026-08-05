@@ -2,6 +2,11 @@ import type { AttachmentRef } from "./attachments/types.js";
 
 export type JsonSchema = Record<string, unknown>;
 
+export type SourceReference = {
+  title: string;
+  url: string;
+};
+
 export type ToolCall = {
   id: string;
   name: string;
@@ -20,6 +25,7 @@ export type Message =
       model?: string;
       usage?: Usage;
       durationMs?: number;
+      sources?: SourceReference[];
     }
   | {
       role: "tool";
@@ -50,6 +56,7 @@ export type ModelResponse = {
   toolCalls: ToolCall[];
   finishReason?: string;
   usage?: Usage;
+  sources?: SourceReference[];
 };
 
 export type RunEvent =

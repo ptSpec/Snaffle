@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -73,6 +73,7 @@ let editorArguments = "";
 let maxSteps = DEFAULT_MAX_STEPS;
 let providerTimeoutMinutes = DEFAULT_PROVIDER_TIMEOUT_MS / 60_000;
 let providerRetries = DEFAULT_PROVIDER_RETRIES;
+let storedTavilyApiKey = "";
 const DEVELOPMENT_MODEL = "openai/gpt-5.6-luna";
 let selectedModel = DEVELOPMENT_MODEL;
 
@@ -103,6 +104,7 @@ async function start(): Promise<void> {
   providerTimeoutMinutes = validProviderTimeout(settings.providerTimeoutMinutes) ?? providerTimeoutMinutes;
   providerRetries = validProviderRetries(settings.providerRetries) ?? DEFAULT_PROVIDER_RETRIES;
   selectedModel = typeof settings.selectedModel === "string" ? settings.selectedModel : DEVELOPMENT_MODEL;
+  storedTavilyApiKey = decodeSecret(settings.tavilyApiKey);
   store = await openStore(path.join(app.getPath("userData"), `${PRODUCT.slug}.db`));
   attachments = new AttachmentStore(path.join(app.getPath("userData"), "attachments"));
   if (process.platform === "darwin" && !app.isPackaged) app.dock?.setIcon(applicationIcon());
@@ -354,7 +356,10 @@ function registerIpc(): void {
         maxRetries: providerRetries,
         resolveAttachment: (attachment) => attachments.resolve(attachment),
       }),
-      tools: defaultTools(),
+      tools: defaultTools({
+        tavilyApiKey: tavilyApiKey(),
+        openRouterApiKey: apiKey,
+      }),
       workspace,
       trace: memoryTrace,
       signal: controller.signal,
@@ -520,6 +525,13 @@ function registerIpc(): void {
     saveSettings({ providerRetries });
   });
 
+  ipcMain.handle("desktop:set-tavily-api-key", async (_event, value: unknown): Promise<DesktopState> => {
+    if (typeof value !== "string") throw new Error("Tavily API key must be text");
+    storedTavilyApiKey = value.trim();
+    saveSettings({ tavilyApiKey: storedTavilyApiKey ? encodeSecret(storedTavilyApiKey) : undefined });
+    return desktopState(false);
+  });
+
   ipcMain.handle("desktop:save-message", async (_event, value: unknown) => {
     return store.savedMessages.save(parseSaveMessageInput(value));
   });
@@ -638,6 +650,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     conversation: includeConversation ? await store.entries(state.activeThreadId) : [],
     savedMessages: await store.savedMessages.summaries(),
     openRouterAvailable: Boolean(process.env.OPENROUTER_API_KEY),
+    tavilyConfigured: Boolean(tavilyApiKey()),
     runningThreadIds: [...activeRuns.keys()],
     unsafeThreadIds: [...unsafeThreads],
     defaultModel: selectedModel || null,
@@ -680,6 +693,7 @@ type SavedSettings = {
   providerTimeoutMinutes?: unknown;
   providerRetries?: unknown;
   selectedModel?: unknown;
+  tavilyApiKey?: unknown;
 };
 
 function loadSettings(): SavedSettings {
@@ -711,6 +725,7 @@ function saveSettings(update: {
   providerTimeoutMinutes?: number;
   providerRetries?: number;
   selectedModel?: string;
+  tavilyApiKey?: string | undefined;
 }): void {
   const file = settingsPath();
   mkdirSync(path.dirname(file), { recursive: true });
@@ -877,6 +892,29 @@ function openRouterApiKey(): string {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("Set OPENROUTER_API_KEY in the development environment");
   return apiKey;
+}
+
+function tavilyApiKey(): string | undefined {
+  return process.env.TAVILY_API_KEY || storedTavilyApiKey || undefined;
+}
+
+function encodeSecret(value: string): string {
+  return safeStorage.isEncryptionAvailable()
+    ? `encrypted:${safeStorage.encryptString(value).toString("base64")}`
+    : `plain:${Buffer.from(value).toString("base64")}`;
+}
+
+function decodeSecret(value: unknown): string {
+  if (typeof value !== "string") return "";
+  try {
+    if (value.startsWith("encrypted:")) {
+      return safeStorage.decryptString(Buffer.from(value.slice(10), "base64"));
+    }
+    if (value.startsWith("plain:")) return Buffer.from(value.slice(6), "base64").toString();
+  } catch {
+    return "";
+  }
+  return "";
 }
 
 function sendRunEvent(threadId: string, event: RunEvent): void {

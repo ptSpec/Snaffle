@@ -55,7 +55,12 @@ async function main(): Promise<void> {
   const result = await runAgent({
     task: options.task,
     provider: createProvider(options),
-    tools: defaultTools(),
+    tools: defaultTools({
+      tavilyApiKey: process.env.TAVILY_API_KEY,
+      ...(options.provider === "openrouter"
+        ? { openRouterApiKey: options.apiKey }
+        : {}),
+    }),
     workspace: new LocalWorkspace(options.workspace, options.unsafeHost ? "unsafe" : "restricted"),
     trace: new JsonlTrace(options.tracePath),
     signal: controller.signal,

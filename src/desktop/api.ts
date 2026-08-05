@@ -91,6 +91,7 @@ export type DesktopState = {
   conversation: DesktopEntry[];
   savedMessages: SavedMessageSummary[];
   openRouterAvailable: boolean;
+  tavilyConfigured: boolean;
   runningThreadIds: string[];
   unsafeThreadIds: string[];
   defaultModel: string | null;
@@ -159,6 +160,7 @@ export interface DesktopApi {
   setMaxSteps(maxSteps: number): Promise<void>;
   setProviderTimeoutMinutes(minutes: number): Promise<void>;
   setProviderRetries(retries: number): Promise<void>;
+  setTavilyApiKey(apiKey: string): Promise<DesktopState>;
   saveMessage(input: SaveMessageInput): Promise<SavedMessageSummary[]>;
   deleteSavedMessage(id: string): Promise<SavedMessageSummary[]>;
   listSavedMessages(): Promise<SavedMessage[]>;

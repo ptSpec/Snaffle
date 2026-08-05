@@ -57,6 +57,7 @@ const initialState: DesktopState = {
   conversation: [],
   savedMessages: [],
   openRouterAvailable: false,
+  tavilyConfigured: false,
   runningThreadIds: [],
   unsafeThreadIds: [],
   defaultModel: null,
@@ -890,6 +891,16 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setTavilyApiKey(apiKey: string): Promise<void> {
+    try {
+      const state = await window.desktop.setTavilyApiKey(apiKey);
+      setDesktopState((current) => ({ ...current, tavilyConfigured: state.tavilyConfigured }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   function beginResize(
     side: "left" | "right",
     event: ReactPointerEvent<HTMLDivElement>,
@@ -970,6 +981,7 @@ export function App(): JSX.Element {
             maxSteps={desktopState.maxSteps}
             providerTimeoutMinutes={desktopState.providerTimeoutMinutes}
             providerRetries={desktopState.providerRetries}
+            tavilyConfigured={desktopState.tavilyConfigured}
             error={error}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
             onTypography={(interfaceFont, primary, secondary, code) => void setTypography(interfaceFont, primary, secondary, code)}
@@ -981,6 +993,7 @@ export function App(): JSX.Element {
             onMaxSteps={(maxSteps) => void setMaxSteps(maxSteps)}
             onProviderTimeoutMinutes={(minutes) => void setProviderTimeoutMinutes(minutes)}
             onProviderRetries={(retries) => void setProviderRetries(retries)}
+            onTavilyApiKey={(apiKey) => void setTavilyApiKey(apiKey)}
           />
         ) : view === "saved" ? (
           <Bookmarks

@@ -11,5 +11,5 @@
     "noEmit": true,
     "types": ["vite/client"]
   },
-  "include": ["src/desktop/api.ts", "src/desktop/renderer/**/*"]
+  "include": ["src/desktop/api.ts", "src/desktop/renderer/**/*", "src/turndown-plugin-gfm.d.ts"]
 }

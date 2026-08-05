@@ -1,7 +1,7 @@
 import { initialMessages } from "./context.js";
 import type { AttachmentRef } from "./attachments/types.js";
 import type { ModelProvider, ModelStreamEvent } from "./providers/provider.js";
-import type { Message, RunEvent } from "./protocol.js";
+import type { Message, RunEvent, SourceReference } from "./protocol.js";
 import { healToolCall } from "./tool-input.js";
 import { toolErrorContent, type Tool } from "./tools/tool.js";
 import type { Trace } from "./trace.js";
@@ -47,6 +47,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
     inputSchema,
   }));
   const toolsByName = new Map(options.tools.map((tool) => [tool.name, tool]));
+  const sources = new Map<string, SourceReference>();
 
   await emit(options, {
     type: "run.started",
@@ -74,6 +75,9 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           const tool = toolsByName.get(call.name);
           return tool ? healToolCall(call, tool.inputSchema) : call;
         }),
+        ...(rawResponse.toolCalls.length === 0 && sources.size
+          ? { sources: [...sources.values()] }
+          : {}),
       };
       await emit(options, {
         type: "model.completed",
@@ -91,6 +95,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         model: options.provider.model,
         ...(response.usage ? { usage: response.usage } : {}),
         durationMs,
+        ...(response.sources?.length ? { sources: response.sources } : {}),
       });
 
       if (response.toolCalls.length === 0) {
@@ -105,6 +110,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         const tool = toolsByName.get(call.name);
         let content: string;
         let exitCode: number | null | undefined;
+        let resultSources: SourceReference[] | undefined;
         let isError = false;
 
         try {
@@ -112,6 +118,8 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           const result = await tool.execute(options.workspace, call.input);
           content = result.content;
           exitCode = result.exitCode;
+          resultSources = result.sources;
+          for (const source of resultSources ?? []) sources.set(source.url, source);
         } catch (error) {
           isError = true;
           content = tool ? toolErrorContent(tool, error) : `Error: ${errorMessage(error)}`;

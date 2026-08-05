@@ -54,6 +54,7 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:set-provider-timeout", minutes),
   setProviderRetries: (retries: number) =>
     ipcRenderer.invoke("desktop:set-provider-retries", retries),
+  setTavilyApiKey: (apiKey: string) => ipcRenderer.invoke("desktop:set-tavily-api-key", apiKey),
   saveMessage: (input: SaveMessageInput) => ipcRenderer.invoke("desktop:save-message", input),
   deleteSavedMessage: (id: string) => ipcRenderer.invoke("desktop:delete-saved-message", id),
   listSavedMessages: () => ipcRenderer.invoke("desktop:list-saved-messages"),
