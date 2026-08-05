@@ -90,7 +90,7 @@ export function App(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [leftWidth, setLeftWidth] = useState(250);
+  const [leftWidth, setLeftWidth] = useState(270);
   const [rightWidth, setRightWidth] = useState(320);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
