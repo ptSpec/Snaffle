@@ -7,6 +7,8 @@ import { runAgent } from "../src/agent-loop.js";
 import type { ModelProvider } from "../src/providers/provider.js";
 import type { Message, ModelResponse, RunEvent, ToolSpec } from "../src/protocol.js";
 import { defaultTools } from "../src/tools/default-tools.js";
+import { toolErrorContent, type Tool } from "../src/tools/tool.js";
+import { writeTool } from "../src/tools/write.js";
 import type { Trace } from "../src/trace.js";
 import { LocalWorkspace } from "../src/workspace.js";
 
@@ -193,4 +195,57 @@ test("tool examples are shown after failure, not sent in every tool description"
 
   assert.equal(result.text, "Corrected the tool input.");
   assert.equal(call, 2);
+  assert.equal(toolErrorContent(writeTool, new Error("Disk is full")), "Error: Disk is full");
+});
+
+test("web fetch guidance follows web search availability", () => {
+  const withoutSearch = defaultTools().find((tool) => tool.name === "web_fetch");
+  const withSearch = defaultTools({ openRouterApiKey: "test" }).find((tool) => tool.name === "web_fetch");
+
+  assert.match(withoutSearch?.description ?? "", /Web discovery is unavailable/);
+  assert.doesNotMatch(withSearch?.description ?? "", /Web discovery is unavailable/);
+});
+
+test("only explicitly cited tool sources reach the final answer", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "agent-source-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const sourceTool: Tool = {
+    name: "lookup",
+    description: "Return sources.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    async execute() {
+      return {
+        content: "Sources A and B",
+        sources: [
+          { title: "A", url: "https://a.example/source" },
+          { title: "B", url: "https://b.example/source" },
+        ],
+      };
+    },
+  };
+  let call = 0;
+  const provider: ModelProvider = {
+    model: "source-test-model",
+    async complete() {
+      call += 1;
+      return call === 1
+        ? { text: "", toolCalls: [{ id: "lookup-1", name: "lookup", input: {} }] }
+        : { text: "Supported by [A](https://a.example/source).", toolCalls: [] };
+    },
+  };
+
+  const result = await runAgent({
+    task: "Research this.",
+    provider,
+    tools: [sourceTool],
+    workspace: new LocalWorkspace(root, "disabled"),
+    trace: new MemoryTrace(),
+    signal: new AbortController().signal,
+  });
+  const final = result.messages.at(-1);
+
+  assert.equal(final?.role, "assistant");
+  assert.deepEqual(final?.role === "assistant" ? final.sources : undefined, [
+    { title: "A", url: "https://a.example/source" },
+  ]);
 });

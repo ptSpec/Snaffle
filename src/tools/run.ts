@@ -1,4 +1,4 @@
-import { integerField, objectInput, stringField, type Tool } from "./tool.js";
+import { integerField, objectInput, stringField, ToolInputError, type Tool } from "./tool.js";
 
 export const runTool: Tool = {
   name: "run_command",
@@ -22,7 +22,7 @@ export const runTool: Tool = {
     const timeoutMs = integerField(input, "timeoutMs", 30000);
 
     if (timeoutMs < 1000 || timeoutMs > 120000) {
-      throw new Error("timeoutMs must be between 1000 and 120000");
+      throw new ToolInputError("timeoutMs must be between 1000 and 120000");
     }
 
     const result = await workspace.run(command, cwd, timeoutMs);

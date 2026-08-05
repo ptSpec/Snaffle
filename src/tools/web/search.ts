@@ -1,4 +1,4 @@
-import { integerField, objectInput, stringField, type Tool } from "../tool.js";
+import { integerField, objectInput, stringField, ToolInputError, type Tool } from "../tool.js";
 
 type TavilyResult = { title?: unknown; url?: unknown; content?: unknown };
 type SearchResult = { content: string; sources: { title: string; url: string }[] };
@@ -28,7 +28,7 @@ export function webSearchTool(options: WebSearchOptions): Tool | undefined {
 
   return {
     name: "web_search",
-    description: "Search the public web for current information. Results include source URLs; cite relevant sources inline immediately after the supported text.",
+    description: "Search the public web through a paid provider when a direct URL is not known. Results include source URLs; cite relevant sources inline immediately after the supported text.",
     inputSchema: {
       type: "object",
       properties: {
@@ -43,7 +43,7 @@ export function webSearchTool(options: WebSearchOptions): Tool | undefined {
       const input = objectInput(rawInput);
       const query = stringField(input, "query")!;
       const maxResults = integerField(input, "maxResults", 5);
-      if (maxResults < 1 || maxResults > 10) throw new Error("maxResults must be from 1 to 10");
+      if (maxResults < 1 || maxResults > 10) throw new ToolInputError("maxResults must be from 1 to 10");
 
       return search(query, maxResults);
     },
@@ -90,7 +90,19 @@ async function searchOpenRouter(
         },
         { role: "user", content: query },
       ],
-      plugins: [{ id: "web", max_results: maxResults }],
+      tools: [{
+        type: "openrouter:web_search",
+        parameters: {
+          engine: "exa",
+          max_results: maxResults,
+          max_total_results: maxResults,
+          max_uses: 1,
+          max_characters: 3_000,
+        },
+      }],
+      tool_choice: "required",
+      max_tool_calls: 1,
+      max_tokens: 1_000,
     }),
   });
   if (!response.ok) throw new Error(`OpenRouter web search failed (${response.status}): ${(await response.text()).slice(0, 500)}`);

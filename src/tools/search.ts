@@ -1,4 +1,4 @@
-import { integerField, objectInput, stringField, type Tool } from "./tool.js";
+import { integerField, objectInput, stringField, ToolInputError, type Tool } from "./tool.js";
 
 export const searchTool: Tool = {
   name: "search_files",
@@ -24,7 +24,7 @@ export const searchTool: Tool = {
     const maxResults = integerField(input, "maxResults", 50);
 
     if (maxResults < 1 || maxResults > 200) {
-      throw new Error("maxResults must be between 1 and 200");
+      throw new ToolInputError("maxResults must be between 1 and 200");
     }
 
     const matches = await workspace.search(query, {

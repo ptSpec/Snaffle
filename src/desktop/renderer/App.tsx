@@ -58,6 +58,7 @@ const initialState: DesktopState = {
   savedMessages: [],
   openRouterAvailable: false,
   tavilyConfigured: false,
+  webSearchEnabled: true,
   runningThreadIds: [],
   unsafeThreadIds: [],
   defaultModel: null,
@@ -901,6 +902,16 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setWebSearchEnabled(webSearchEnabled: boolean): Promise<void> {
+    try {
+      await window.desktop.setWebSearchEnabled(webSearchEnabled);
+      setDesktopState((state) => ({ ...state, webSearchEnabled }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   function beginResize(
     side: "left" | "right",
     event: ReactPointerEvent<HTMLDivElement>,
@@ -982,6 +993,7 @@ export function App(): JSX.Element {
             providerTimeoutMinutes={desktopState.providerTimeoutMinutes}
             providerRetries={desktopState.providerRetries}
             tavilyConfigured={desktopState.tavilyConfigured}
+            webSearchEnabled={desktopState.webSearchEnabled}
             error={error}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
             onTypography={(interfaceFont, primary, secondary, code) => void setTypography(interfaceFont, primary, secondary, code)}
@@ -993,6 +1005,7 @@ export function App(): JSX.Element {
             onMaxSteps={(maxSteps) => void setMaxSteps(maxSteps)}
             onProviderTimeoutMinutes={(minutes) => void setProviderTimeoutMinutes(minutes)}
             onProviderRetries={(retries) => void setProviderRetries(retries)}
+            onWebSearchEnabled={(enabled) => void setWebSearchEnabled(enabled)}
             onTavilyApiKey={(apiKey) => void setTavilyApiKey(apiKey)}
           />
         ) : view === "saved" ? (

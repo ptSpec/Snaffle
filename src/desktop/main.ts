@@ -74,6 +74,7 @@ let maxSteps = DEFAULT_MAX_STEPS;
 let providerTimeoutMinutes = DEFAULT_PROVIDER_TIMEOUT_MS / 60_000;
 let providerRetries = DEFAULT_PROVIDER_RETRIES;
 let storedTavilyApiKey = "";
+let webSearchEnabled = true;
 const DEVELOPMENT_MODEL = "openai/gpt-5.6-luna";
 let selectedModel = DEVELOPMENT_MODEL;
 
@@ -105,6 +106,7 @@ async function start(): Promise<void> {
   providerRetries = validProviderRetries(settings.providerRetries) ?? DEFAULT_PROVIDER_RETRIES;
   selectedModel = typeof settings.selectedModel === "string" ? settings.selectedModel : DEVELOPMENT_MODEL;
   storedTavilyApiKey = decodeSecret(settings.tavilyApiKey);
+  webSearchEnabled = settings.webSearchEnabled !== false;
   store = await openStore(path.join(app.getPath("userData"), `${PRODUCT.slug}.db`));
   attachments = new AttachmentStore(path.join(app.getPath("userData"), "attachments"));
   if (process.platform === "darwin" && !app.isPackaged) app.dock?.setIcon(applicationIcon());
@@ -356,10 +358,9 @@ function registerIpc(): void {
         maxRetries: providerRetries,
         resolveAttachment: (attachment) => attachments.resolve(attachment),
       }),
-      tools: defaultTools({
-        tavilyApiKey: tavilyApiKey(),
-        openRouterApiKey: apiKey,
-      }),
+      tools: defaultTools(webSearchEnabled
+        ? { tavilyApiKey: tavilyApiKey(), openRouterApiKey: apiKey }
+        : {}),
       workspace,
       trace: memoryTrace,
       signal: controller.signal,
@@ -532,6 +533,12 @@ function registerIpc(): void {
     return desktopState(false);
   });
 
+  ipcMain.handle("desktop:set-web-search-enabled", (_event, value: unknown): void => {
+    if (typeof value !== "boolean") throw new Error("Web search setting must be true or false");
+    webSearchEnabled = value;
+    saveSettings({ webSearchEnabled });
+  });
+
   ipcMain.handle("desktop:save-message", async (_event, value: unknown) => {
     return store.savedMessages.save(parseSaveMessageInput(value));
   });
@@ -651,6 +658,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     savedMessages: await store.savedMessages.summaries(),
     openRouterAvailable: Boolean(process.env.OPENROUTER_API_KEY),
     tavilyConfigured: Boolean(tavilyApiKey()),
+    webSearchEnabled,
     runningThreadIds: [...activeRuns.keys()],
     unsafeThreadIds: [...unsafeThreads],
     defaultModel: selectedModel || null,
@@ -694,6 +702,7 @@ type SavedSettings = {
   providerRetries?: unknown;
   selectedModel?: unknown;
   tavilyApiKey?: unknown;
+  webSearchEnabled?: unknown;
 };
 
 function loadSettings(): SavedSettings {
@@ -726,6 +735,7 @@ function saveSettings(update: {
   providerRetries?: number;
   selectedModel?: string;
   tavilyApiKey?: string | undefined;
+  webSearchEnabled?: boolean;
 }): void {
   const file = settingsPath();
   mkdirSync(path.dirname(file), { recursive: true });

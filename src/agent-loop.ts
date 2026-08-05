@@ -69,16 +69,18 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         },
       );
       const durationMs = Math.max(1, Date.now() - (generationStartedAt ?? requestStartedAt));
+      const citedSources = rawResponse.toolCalls.length === 0
+        ? [...sources.values()].filter((source) => rawResponse.text.includes(source.url))
+        : [];
       const response = {
         ...rawResponse,
         toolCalls: rawResponse.toolCalls.map((call) => {
           const tool = toolsByName.get(call.name);
           return tool ? healToolCall(call, tool.inputSchema) : call;
         }),
-        ...(rawResponse.toolCalls.length === 0 && sources.size
-          ? { sources: [...sources.values()] }
-          : {}),
+        ...(citedSources.length ? { sources: citedSources } : {}),
       };
+      if (!citedSources.length) delete response.sources;
       await emit(options, {
         type: "model.completed",
         step,

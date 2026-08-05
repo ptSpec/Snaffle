@@ -92,6 +92,7 @@ export type DesktopState = {
   savedMessages: SavedMessageSummary[];
   openRouterAvailable: boolean;
   tavilyConfigured: boolean;
+  webSearchEnabled: boolean;
   runningThreadIds: string[];
   unsafeThreadIds: string[];
   defaultModel: string | null;
@@ -160,6 +161,7 @@ export interface DesktopApi {
   setMaxSteps(maxSteps: number): Promise<void>;
   setProviderTimeoutMinutes(minutes: number): Promise<void>;
   setProviderRetries(retries: number): Promise<void>;
+  setWebSearchEnabled(enabled: boolean): Promise<void>;
   setTavilyApiKey(apiKey: string): Promise<DesktopState>;
   saveMessage(input: SaveMessageInput): Promise<SavedMessageSummary[]>;
   deleteSavedMessage(id: string): Promise<SavedMessageSummary[]>;

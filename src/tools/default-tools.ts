@@ -17,7 +17,7 @@ export function defaultTools(options: WebSearchOptions = {}): Tool[] {
     editTool,
     writeTool,
     ...(webSearch ? [webSearch] : []),
-    webFetchTool,
+    webFetchTool(Boolean(webSearch)),
     youtubeTranscriptTool,
   ];
 }
