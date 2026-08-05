@@ -21,6 +21,7 @@ const api: DesktopApi = {
   removeWorkspace: (workspaceId: string) =>
     ipcRenderer.invoke("desktop:remove-workspace", workspaceId),
   listOpenRouterModels: () => ipcRenderer.invoke("desktop:list-openrouter-models"),
+  setSelectedModel: (model: string) => ipcRenderer.invoke("desktop:set-selected-model", model),
   chooseAttachments: () => ipcRenderer.invoke("desktop:choose-attachments"),
   importDroppedFiles: (files: File[]) =>
     ipcRenderer.invoke("desktop:import-dropped-files", files.map((file) => webUtils.getPathForFile(file))),

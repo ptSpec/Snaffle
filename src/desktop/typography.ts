@@ -15,6 +15,21 @@ export const FONT_OPTIONS = [
     family: '"PT Serif", serif',
   },
   {
+    id: "crimson-text",
+    name: "Crimson Text",
+    family: '"Crimson Text", serif',
+  },
+  {
+    id: "crimson-pro",
+    name: "Crimson Pro",
+    family: '"Crimson Pro", serif',
+  },
+  {
+    id: "inter",
+    name: "Inter",
+    family: '"Inter", sans-serif',
+  },
+  {
     id: "geist",
     name: "Geist Sans",
     family: '"Geist", sans-serif',
@@ -44,9 +59,9 @@ export const FONT_OPTIONS = [
 export type FontId = (typeof FONT_OPTIONS)[number]["id"];
 
 export const DEFAULT_FONTS = {
-  interface: "ibm-plex-sans",
-  primary: "ibm-plex-sans",
-  secondary: "ibm-plex-mono",
+  interface: "system-sans",
+  primary: "inter",
+  secondary: "ibm-plex-sans",
   code: "ibm-plex-mono",
 } satisfies Record<"interface" | "primary" | "secondary" | "code", FontId>;
 
@@ -55,6 +70,8 @@ export const FONT_SCALE_MAX = 125;
 export const FONT_SCALE_STEP = 5;
 export const DEFAULT_FONT_SCALE = 100;
 export const CONVERSATION_FONT_BASE = 0.9;
+export const DEFAULT_CODE_BLOCK_FONT_SIZE = 14;
+export const DEFAULT_EDITOR_FONT_SIZE = 14;
 
 export function fontById(id: unknown): (typeof FONT_OPTIONS)[number] | undefined {
   return FONT_OPTIONS.find((font) => font.id === id);

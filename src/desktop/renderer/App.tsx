@@ -18,6 +18,8 @@ import { DEFAULT_MODEL_CONTEXT_LENGTH } from "../../providers/provider.js";
 import { DEFAULT_THEME, themeById, type Theme } from "../themes/index.js";
 import {
   CONVERSATION_FONT_BASE,
+  DEFAULT_CODE_BLOCK_FONT_SIZE,
+  DEFAULT_EDITOR_FONT_SIZE,
   DEFAULT_FONTS,
   DEFAULT_FONT_SCALE,
   fontById,
@@ -67,8 +69,8 @@ const initialState: DesktopState = {
   codeFont: fontById(document.documentElement.dataset.codeFont)?.id ?? DEFAULT_FONTS.code,
   interfaceFontScale: validFontScale(document.documentElement.dataset.interfaceFontScale) ?? DEFAULT_FONT_SCALE,
   conversationFontScale: validFontScale(document.documentElement.dataset.conversationFontScale) ?? DEFAULT_FONT_SCALE,
-  codeBlockFontSize: 15,
-  editorFontSize: 13,
+  codeBlockFontSize: DEFAULT_CODE_BLOCK_FONT_SIZE,
+  editorFontSize: DEFAULT_EDITOR_FONT_SIZE,
   editorCommand: "",
   editorArguments: "",
   maxSteps: 50,
@@ -801,6 +803,11 @@ export function App(): JSX.Element {
     }
   }
 
+  function selectModel(model: string): void {
+    setSelectedModel(model);
+    void window.desktop.setSelectedModel(model).catch((cause) => setError(errorMessage(cause)));
+  }
+
   async function setTypography(interfaceFont: FontId, primaryFont: FontId, secondaryFont: FontId, codeFont: FontId): Promise<void> {
     try {
       await window.desktop.setTypography(interfaceFont, primaryFont, secondaryFont, codeFont);
@@ -1087,7 +1094,7 @@ export function App(): JSX.Element {
                 searchPlaceholder="Search models…"
                 disabled={loadingModels || !desktopState.openRouterAvailable || running}
                 allowCustom
-                onChange={setSelectedModel}
+                onChange={selectModel}
               />
 
               <details
