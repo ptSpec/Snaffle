@@ -136,6 +136,7 @@ export interface DesktopApi {
   deleteThreads(threadIds: string[]): Promise<DesktopState>;
   removeWorkspace(workspaceId: string): Promise<DesktopState>;
   listOpenRouterModels(): Promise<OpenRouterModel[]>;
+  setSelectedModel(model: string): Promise<void>;
   chooseAttachments(): Promise<AttachmentPreview[]>;
   importDroppedFiles(files: File[]): Promise<AttachmentPreview[]>;
   importClipboardImage(): Promise<AttachmentPreview>;

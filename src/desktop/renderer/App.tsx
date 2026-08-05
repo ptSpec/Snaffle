@@ -12,12 +12,14 @@ import {
 } from "react";
 import type { AttachmentPreview, AttachmentRef } from "../../attachments/types.js";
 import type { CommandApprovalDecision } from "../../protocol.js";
-import type { DesktopApi, DesktopRunEvent, DesktopState, SavedMessage } from "../api.js";
+import type { DesktopApi, DesktopRunEvent, DesktopState, DesktopThread, SavedMessage } from "../api.js";
 import type { OpenRouterModel } from "../../providers/openrouter.js";
 import { DEFAULT_MODEL_CONTEXT_LENGTH } from "../../providers/provider.js";
 import { DEFAULT_THEME, themeById, type Theme } from "../themes/index.js";
 import {
   CONVERSATION_FONT_BASE,
+  DEFAULT_CODE_BLOCK_FONT_SIZE,
+  DEFAULT_EDITOR_FONT_SIZE,
   DEFAULT_FONTS,
   DEFAULT_FONT_SCALE,
   fontById,
@@ -27,7 +29,7 @@ import {
 import { AttachmentTray } from "./attachment-tray.js";
 import { htmlToMarkdown } from "./attachment-markdown.js";
 import { Settings } from "./settings.js";
-import { SavedMessages } from "./saved-messages.js";
+import { Bookmarks, type BookmarksPage } from "./bookmarks.js";
 import { Sidebar, type AppView, type SettingsPage } from "./sidebar.js";
 import { InspectorPanel, type InspectorTab } from "./inspector/panel.js";
 import { SearchPicker } from "./search-picker.js";
@@ -67,8 +69,8 @@ const initialState: DesktopState = {
   codeFont: fontById(document.documentElement.dataset.codeFont)?.id ?? DEFAULT_FONTS.code,
   interfaceFontScale: validFontScale(document.documentElement.dataset.interfaceFontScale) ?? DEFAULT_FONT_SCALE,
   conversationFontScale: validFontScale(document.documentElement.dataset.conversationFontScale) ?? DEFAULT_FONT_SCALE,
-  codeBlockFontSize: 15,
-  editorFontSize: 13,
+  codeBlockFontSize: DEFAULT_CODE_BLOCK_FONT_SIZE,
+  editorFontSize: DEFAULT_EDITOR_FONT_SIZE,
   editorCommand: "",
   editorArguments: "",
   maxSteps: 50,
@@ -88,13 +90,14 @@ export function App(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [leftWidth, setLeftWidth] = useState(250);
+  const [leftWidth, setLeftWidth] = useState(270);
   const [rightWidth, setRightWidth] = useState(320);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("inspect");
   const [view, setView] = useState<AppView>("conversation");
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("appearance");
+  const [bookmarksPage, setBookmarksPage] = useState<BookmarksPage>("threads");
   const [sendOrbMotion, setSendOrbMotion] = useState<OrbMotion>("stopped");
   const taskInput = useRef<HTMLTextAreaElement>(null);
   const timelineView = useRef<HTMLDivElement>(null);
@@ -757,6 +760,23 @@ export function App(): JSX.Element {
     }
   }
 
+  async function openBookmarkedThread(thread: DesktopThread): Promise<void> {
+    try {
+      await saveDraft();
+      showDesktopState(await window.desktop.selectThread(thread.id));
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function removeThreadBookmark(thread: DesktopThread): Promise<void> {
+    try {
+      setDesktopState(withoutConversation(await window.desktop.setThreadBookmarked(thread.id, false)));
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   async function selectTheme(themeId: string): Promise<void> {
     const theme = themeById(themeId);
     if (!theme) return;
@@ -799,6 +819,11 @@ export function App(): JSX.Element {
     } catch (cause) {
       setError(errorMessage(cause));
     }
+  }
+
+  function selectModel(model: string): void {
+    setSelectedModel(model);
+    void window.desktop.setSelectedModel(model).catch((cause) => setError(errorMessage(cause)));
   }
 
   async function setTypography(interfaceFont: FontId, primaryFont: FontId, secondaryFont: FontId, codeFont: FontId): Promise<void> {
@@ -907,6 +932,7 @@ export function App(): JSX.Element {
           runningThreadIds={desktopState.runningThreadIds}
           view={view}
           settingsPage={settingsPage}
+          bookmarksPage={bookmarksPage}
           collapsed={leftCollapsed}
           beforeNavigate={saveDraft}
           onNavigate={showDesktopState}
@@ -915,6 +941,10 @@ export function App(): JSX.Element {
           onView={setView}
           onSettingsPage={(page) => {
             setSettingsPage(page);
+            setError(null);
+          }}
+          onBookmarksPage={(page) => {
+            setBookmarksPage(page);
             setError(null);
           }}
           onCollapse={() => {
@@ -953,11 +983,15 @@ export function App(): JSX.Element {
             onProviderRetries={(retries) => void setProviderRetries(retries)}
           />
         ) : view === "saved" ? (
-          <SavedMessages
+          <Bookmarks
+            workspaces={desktopState.workspaces}
             messages={savedMessages ?? []}
-            loading={savedMessages === null}
-            onOpen={(message) => void openSavedMessage(message)}
-            onDelete={(id) => void deleteSavedMessage(id)}
+            page={bookmarksPage}
+            loadingMessages={savedMessages === null}
+            onOpenThread={(thread) => void openBookmarkedThread(thread)}
+            onRemoveThread={(thread) => void removeThreadBookmark(thread)}
+            onOpenMessage={(message) => void openSavedMessage(message)}
+            onDeleteMessage={(id) => void deleteSavedMessage(id)}
           />
         ) : (
           <section className="conversation view-enter" aria-label="Conversation">
@@ -1087,7 +1121,7 @@ export function App(): JSX.Element {
                 searchPlaceholder="Search models…"
                 disabled={loadingModels || !desktopState.openRouterAvailable || running}
                 allowCustom
-                onChange={setSelectedModel}
+                onChange={selectModel}
               />
 
               <details
