@@ -7,9 +7,14 @@ import { writeTool } from "./write.js";
 import { webFetchTool } from "./web/fetch.js";
 import { webSearchTool, type WebSearchOptions } from "./web/search.js";
 import { youtubeTranscriptTool } from "./web/youtube.js";
+import { findKetch } from "./web/ketch.js";
 
 export function defaultTools(options: WebSearchOptions = {}): Tool[] {
-  const webSearch = webSearchTool(options);
+  const ketchPath = options.ketchPath ?? findKetch();
+  const searchEnabled = options.webSearchEnabled ?? Boolean(
+    options.tavilyApiKey || options.openRouterApiKey || options.ketchPath,
+  );
+  const webSearch = webSearchTool(searchEnabled ? { ...options, ketchPath } : {});
   return [
     runTool,
     readTool,
@@ -17,7 +22,7 @@ export function defaultTools(options: WebSearchOptions = {}): Tool[] {
     editTool,
     writeTool,
     ...(webSearch ? [webSearch] : []),
-    webFetchTool(Boolean(webSearch)),
+    webFetchTool(Boolean(webSearch), ketchPath),
     youtubeTranscriptTool,
   ];
 }

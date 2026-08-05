@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -9,6 +9,7 @@ import { readTool } from "../src/tools/read.js";
 import { runTool } from "../src/tools/run.js";
 import { searchTool } from "../src/tools/search.js";
 import { webSearchTool } from "../src/tools/web/search.js";
+import { extractWithKetch, searchWithKetch } from "../src/tools/web/ketch.js";
 import { writeTool } from "../src/tools/write.js";
 import { LocalWorkspace } from "../src/workspace.js";
 import { nativeSandboxStatus } from "../src/sandbox.js";
@@ -109,6 +110,33 @@ test("OpenRouter web search has one bounded server-side search", async (t) => {
       max_characters: 3_000,
     },
   }]);
+});
+
+test("Ketch search and extraction use its structured CLI output", {
+  skip: process.platform === "win32",
+}, async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "ketch-test-"));
+  const executable = path.join(root, "ketch");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(executable, `#!/bin/sh
+if [ "$1" = "search" ]; then
+  printf '[{"title":"Example","url":"https://example.com","description":"A result"}]'
+else
+  cat >/dev/null
+  printf '{"url":"https://example.com","title":"Example page","markdown":"# Extracted","words":1}'
+fi
+`);
+  await chmod(executable, 0o755);
+
+  assert.deepEqual(await searchWithKetch(executable, "example query", 3), [{
+    title: "Example",
+    url: "https://example.com",
+    content: "A result",
+  }]);
+  assert.deepEqual(await extractWithKetch(executable, "<h1>Ignored</h1>", "https://example.com", 4_000), {
+    title: "Example page",
+    content: "# Extracted",
+  });
 });
 
 test("tool input healer repairs a quoted object with a malformed integer", () => {

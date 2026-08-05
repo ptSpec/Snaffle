@@ -4,8 +4,9 @@ import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
 import { integerField, objectInput, stringField, ToolInputError, type Tool } from "../tool.js";
 import { fetchPublicText } from "./request.js";
+import { extractWithKetch } from "./ketch.js";
 
-export function webFetchTool(searchAvailable: boolean): Tool {
+export function webFetchTool(searchAvailable: boolean, ketchPath?: string): Tool {
   return {
     name: "web_fetch",
     description: "Fetch a known direct public HTTP or HTTPS page and return readable text without invoking a paid search or model API. Do not use search-engine pages." + (searchAvailable
@@ -35,7 +36,7 @@ export function webFetchTool(searchAvailable: boolean): Tool {
         throw new Error(`Unsupported content type: ${page.contentType.split(";")[0]}`);
       }
       const html = /html|xhtml/i.test(page.contentType) || /<html[\s>]/i.test(page.text);
-      const readable = html ? readableMarkdown(page.text) : undefined;
+      const readable = html ? await extractReadable(page.text, page.url, maxChars, ketchPath) : undefined;
       const title = readable?.title || (html ? pageTitle(page.text) : new URL(page.url).hostname);
       const content = readable?.content || (html ? markdown(page.text) : page.text.trim());
       return {
@@ -44,6 +45,22 @@ export function webFetchTool(searchAvailable: boolean): Tool {
       };
     },
   };
+}
+
+async function extractReadable(
+  html: string,
+  url: string,
+  maxChars: number,
+  ketchPath?: string,
+): Promise<{ title?: string; content: string } | undefined> {
+  if (ketchPath) {
+    try {
+      return await extractWithKetch(ketchPath, html, url, maxChars);
+    } catch {
+      // The existing local extractor remains a dependable fallback.
+    }
+  }
+  return readableMarkdown(html);
 }
 
 function isSearchEngineUrl(rawUrl: string): boolean {

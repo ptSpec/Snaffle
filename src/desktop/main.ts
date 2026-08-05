@@ -359,7 +359,7 @@ function registerIpc(): void {
         resolveAttachment: (attachment) => attachments.resolve(attachment),
       }),
       tools: defaultTools(webSearchEnabled
-        ? { tavilyApiKey: tavilyApiKey(), openRouterApiKey: apiKey }
+        ? { webSearchEnabled: true, tavilyApiKey: tavilyApiKey(), openRouterApiKey: apiKey }
         : {}),
       workspace,
       trace: memoryTrace,

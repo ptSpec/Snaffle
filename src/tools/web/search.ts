@@ -1,4 +1,5 @@
 import { integerField, objectInput, stringField, ToolInputError, type Tool } from "../tool.js";
+import { searchWithKetch } from "./ketch.js";
 
 type TavilyResult = { title?: unknown; url?: unknown; content?: unknown };
 type SearchResult = { content: string; sources: { title: string; url: string }[] };
@@ -8,27 +9,28 @@ type OpenRouterAnnotation = {
 };
 
 export type WebSearchOptions = {
+  webSearchEnabled?: boolean | undefined;
   tavilyApiKey?: string | undefined;
   openRouterApiKey?: string | undefined;
+  ketchPath?: string | undefined;
 };
 
 const OPENROUTER_SEARCH_MODEL = "openai/gpt-5.6-luna";
 
 export function webSearchTool(options: WebSearchOptions): Tool | undefined {
+  const fallback = options.openRouterApiKey
+    ? (query: string, maxResults: number) => searchOpenRouter(options.openRouterApiKey!, query, maxResults)
+    : undefined;
   const search = options.tavilyApiKey
     ? (query: string, maxResults: number) => searchTavily(options.tavilyApiKey!, query, maxResults)
-    : options.openRouterApiKey
-      ? (query: string, maxResults: number) => searchOpenRouter(
-          options.openRouterApiKey!,
-          query,
-          maxResults,
-        )
-      : undefined;
+    : options.ketchPath
+      ? (query: string, maxResults: number) => searchKetch(options.ketchPath!, query, maxResults, fallback)
+      : fallback;
   if (!search) return undefined;
 
   return {
     name: "web_search",
-    description: "Search the public web through a paid provider when a direct URL is not known. Results include source URLs; cite relevant sources inline immediately after the supported text.",
+    description: "Search the public web when a direct URL is not known. Results include source URLs; cite relevant sources inline immediately after the supported text. Depending on configuration, search may use a free local backend or a paid provider.",
     inputSchema: {
       type: "object",
       properties: {
@@ -50,6 +52,22 @@ export function webSearchTool(options: WebSearchOptions): Tool | undefined {
   };
 }
 
+async function searchKetch(
+  executable: string,
+  query: string,
+  maxResults: number,
+  fallback?: (query: string, maxResults: number) => Promise<SearchResult>,
+): Promise<SearchResult> {
+  try {
+    const results = await searchWithKetch(executable, query, maxResults);
+    if (!results.length) throw new Error("Ketch returned no results");
+    return resultList(results);
+  } catch (error) {
+    if (fallback) return fallback(query, maxResults);
+    throw new Error(`Ketch search failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 async function searchTavily(apiKey: string, query: string, maxResults: number): Promise<SearchResult> {
   const response = await fetch("https://api.tavily.com/search", {
     method: "POST",
@@ -64,6 +82,10 @@ async function searchTavily(apiKey: string, query: string, maxResults: number): 
       ? [{ title: result.title, url: result.url, content: typeof result.content === "string" ? result.content : "" }]
       : [],
   );
+  return resultList(results);
+}
+
+function resultList(results: { title: string; url: string; content: string }[]): SearchResult {
   return {
     content: results.length
       ? results.map((result, index) => `[${index + 1}] ${result.title}\nURL: ${result.url}\n${result.content}`).join("\n\n")
