@@ -2,6 +2,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import logoSvg from "../../../assets/logo_svg.svg?raw";
@@ -43,8 +44,17 @@ export function Sidebar({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [cursor, setCursor] = useState(0);
   const [anchor, setAnchor] = useState(0);
+  const [promotedThreadId, setPromotedThreadId] = useState(state.activeThreadId);
+  const [promotion, setPromotion] = useState<{ id: string; distance: number } | null>(null);
+  const sidebarRoot = useRef<HTMLElement>(null);
   const threadList = useRef<HTMLDivElement>(null);
+  const promotedWorkspaceId = useRef(state.workspace?.id);
   const isRunning = (threadId: string): boolean => runningThreadIds.includes(threadId);
+  const threads = state.workspace?.threads ?? [];
+  const promotedThread = threads.find((thread) => thread.id === promotedThreadId);
+  const orderedThreads = promotedThread
+    ? [promotedThread, ...threads.filter((thread) => thread.id !== promotedThread.id)]
+    : threads;
   const inactiveWorkspaces = state.workspaces.filter(
     (workspace) => workspace.id !== state.workspace?.id,
   );
@@ -60,9 +70,42 @@ export function Sidebar({
   }, [state.workspace?.id, state.activeThreadId]);
 
   useEffect(() => {
+    const workspaceId = state.workspace?.id;
+    const threadId = state.activeThreadId;
+    if (promotedWorkspaceId.current !== workspaceId) {
+      promotedWorkspaceId.current = workspaceId;
+      setPromotedThreadId(threadId);
+      setPromotion(null);
+      return;
+    }
+    if (!threadId || threadId === promotedThreadId) return;
+    const pendingThreadId = threadId;
+
+    function promote(): void {
+      const index = orderedThreads.findIndex((thread) => thread.id === pendingThreadId);
+      setPromotion({ id: pendingThreadId, distance: Math.min(Math.max(index, 1) * 36, 280) });
+      setPromotedThreadId(pendingThreadId);
+    }
+
+    let promotionTimer: number | undefined;
+
+    function promoteFromOutside(event: Event): void {
+      if (sidebarRoot.current?.contains(event.target as Node) || promotionTimer !== undefined) return;
+      promotionTimer = window.setTimeout(promote, 650);
+    }
+
+    document.addEventListener("pointerdown", promoteFromOutside);
+    document.addEventListener("keydown", promoteFromOutside);
+    return () => {
+      document.removeEventListener("pointerdown", promoteFromOutside);
+      document.removeEventListener("keydown", promoteFromOutside);
+      if (promotionTimer !== undefined) window.clearTimeout(promotionTimer);
+    };
+  }, [state.workspace?.id, state.activeThreadId, promotedThreadId]);
+
+  useEffect(() => {
     if (!selecting) return;
-    const threads = state.workspace?.threads ?? [];
-    const activeIndex = threads.findIndex((thread) => thread.id === state.activeThreadId);
+    const activeIndex = orderedThreads.findIndex((thread) => thread.id === state.activeThreadId);
     const next = Math.max(0, activeIndex);
     setCursor(next);
     setAnchor(next);
@@ -153,7 +196,6 @@ export function Sidebar({
 
   function handleThreadKeys(event: ReactKeyboardEvent<HTMLDivElement>): void {
     if (!selecting) return;
-    const threads = state.workspace?.threads ?? [];
     if (event.key === "Escape") {
       setSelecting(false);
       setSelectedIds([]);
@@ -164,9 +206,9 @@ export function Sidebar({
       void deleteThreads(selectedIds);
       return;
     }
-    if (event.key === " " && event.target === event.currentTarget && threads[cursor]) {
+    if (event.key === " " && event.target === event.currentTarget && orderedThreads[cursor]) {
       event.preventDefault();
-      const id = threads[cursor].id;
+      const id = orderedThreads[cursor].id;
       if (isRunning(id)) return;
       setSelectedIds((ids) =>
         ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id],
@@ -178,13 +220,13 @@ export function Sidebar({
 
     event.preventDefault();
     const movement = event.key === "ArrowUp" ? -1 : 1;
-    const next = Math.max(0, Math.min(threads.length - 1, cursor + movement));
+    const next = Math.max(0, Math.min(orderedThreads.length - 1, cursor + movement));
     setCursor(next);
     if (event.shiftKey) {
       const start = Math.min(anchor, next);
       const end = Math.max(anchor, next);
       setSelectedIds(
-        threads.slice(start, end + 1).filter((thread) => !isRunning(thread.id)).map((thread) => thread.id),
+        orderedThreads.slice(start, end + 1).filter((thread) => !isRunning(thread.id)).map((thread) => thread.id),
       );
     } else {
       setAnchor(next);
@@ -193,6 +235,7 @@ export function Sidebar({
 
   return (
     <aside
+      ref={sidebarRoot}
       className={collapsed ? "left-sidebar collapsed" : "left-sidebar"}
       aria-label={
         view === "conversation"
@@ -231,7 +274,7 @@ export function Sidebar({
         className={
           view !== "conversation"
             ? "sidebar-navigation settings-navigation view-enter"
-            : "sidebar-navigation view-enter"
+            : "sidebar-navigation workspace-sidebar-navigation view-enter"
         }
       >
         {view === "settings" ? (
@@ -342,11 +385,13 @@ export function Sidebar({
                   aria-label={selecting ? "Manage threads" : undefined}
                 >
                   <div className="thread-list">
-                    {state.workspace.threads.map((thread, index) => (
+                    {orderedThreads.map((thread, index) => (
                       <ThreadRow
                         key={thread.id}
                         thread={thread}
                         active={thread.id === state.activeThreadId}
+                        bridged={thread.id === state.activeThreadId && thread.id === promotedThreadId}
+                        promotionDistance={promotion?.id === thread.id ? promotion.distance : 0}
                         selecting={selecting}
                         selected={selectedIds.includes(thread.id)}
                         focused={selecting && index === cursor}
@@ -400,6 +445,8 @@ export function Sidebar({
                         thread={thread}
                         workspaceName={workspace.name}
                         active={false}
+                        bridged={false}
+                        promotionDistance={0}
                         selecting={false}
                         selected={false}
                         focused={false}
@@ -490,6 +537,8 @@ function ThreadRow({
   thread,
   workspaceName,
   active,
+  bridged,
+  promotionDistance,
   selecting,
   selected,
   focused,
@@ -502,6 +551,8 @@ function ThreadRow({
   thread: DesktopThread;
   workspaceName?: string;
   active: boolean;
+  bridged: boolean;
+  promotionDistance: number;
   selecting: boolean;
   selected: boolean;
   focused: boolean;
@@ -513,10 +564,15 @@ function ThreadRow({
 }): JSX.Element {
   let className = "sidebar-row thread-row";
   if (active) className += " active";
+  if (bridged) className += " bridged";
+  if (promotionDistance) className += " promoted";
   if (focused) className += " focused";
 
   return (
-    <div className={className}>
+    <div
+      className={className}
+      style={promotionDistance ? { "--thread-rise-distance": `${promotionDistance}px` } as CSSProperties : undefined}
+    >
       {selecting ? (
         <input
           className="selection-checkbox"
