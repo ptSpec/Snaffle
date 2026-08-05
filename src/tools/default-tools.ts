@@ -11,10 +11,7 @@ import { findKetch } from "./web/ketch.js";
 
 export function defaultTools(options: WebSearchOptions = {}): Tool[] {
   const ketchPath = options.ketchPath ?? findKetch();
-  const searchEnabled = options.webSearchEnabled ?? Boolean(
-    options.tavilyApiKey || options.openRouterApiKey || options.ketchPath,
-  );
-  const webSearch = webSearchTool(searchEnabled ? { ...options, ketchPath } : {});
+  const webSearch = webSearchTool({ ...options, ketchPath });
   return [
     runTool,
     readTool,

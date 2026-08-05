@@ -9,6 +9,7 @@ import type { ModelProvider } from "./providers/provider.js";
 import type { RunEvent } from "./protocol.js";
 import { probeNativeSandbox } from "./sandbox.js";
 import { defaultTools } from "./tools/default-tools.js";
+import { WEB_SEARCH_BACKENDS, type WebSearchBackend } from "./tools/web/types.js";
 import { JsonlTrace } from "./trace.js";
 import { LocalWorkspace } from "./workspace.js";
 
@@ -55,13 +56,7 @@ async function main(): Promise<void> {
   const result = await runAgent({
     task: options.task,
     provider: createProvider(options),
-    tools: defaultTools({
-      webSearchEnabled: true,
-      tavilyApiKey: process.env.TAVILY_API_KEY,
-      ...(options.provider === "openrouter"
-        ? { openRouterApiKey: options.apiKey }
-        : {}),
-    }),
+    tools: defaultTools(webSearchOptions(options)),
     workspace: new LocalWorkspace(options.workspace, options.unsafeHost ? "unsafe" : "restricted"),
     trace: new JsonlTrace(options.tracePath),
     signal: controller.signal,
@@ -162,6 +157,25 @@ function createProvider(options: CliOptions): ModelProvider {
     model: options.model,
     ...(options.apiKey === undefined ? {} : { apiKey: options.apiKey }),
   });
+}
+
+function webSearchOptions(options: CliOptions) {
+  const requested = process.env[`${ENV_PREFIX}_WEB_SEARCH_BACKEND`];
+  const backend: WebSearchBackend = requested && WEB_SEARCH_BACKENDS.includes(requested as WebSearchBackend)
+    ? requested as WebSearchBackend
+    : "ddg";
+  const keys: Partial<Record<WebSearchBackend, string | undefined>> = {
+    exa: process.env.EXA_API_KEY || process.env.KETCH_EXA_API_KEY,
+    tavily: process.env.TAVILY_API_KEY || process.env.KETCH_TAVILY_API_KEY,
+    brave: process.env.BRAVE_API_KEY || process.env.KETCH_BRAVE_API_KEY,
+    firecrawl: process.env.FIRECRAWL_API_KEY || process.env.KETCH_FIRECRAWL_API_KEY,
+  };
+  return {
+    webSearchEnabled: true,
+    backend,
+    apiKey: keys[backend],
+    ...(options.provider === "openrouter" ? { openRouterApiKey: options.apiKey } : {}),
+  };
 }
 
 function printEvent(event: RunEvent): void {

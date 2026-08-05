@@ -200,7 +200,11 @@ test("tool examples are shown after failure, not sent in every tool description"
 
 test("web fetch guidance follows web search availability", () => {
   const withoutSearch = defaultTools().find((tool) => tool.name === "web_fetch");
-  const withSearch = defaultTools({ openRouterApiKey: "test" }).find((tool) => tool.name === "web_fetch");
+  const withSearch = defaultTools({
+    webSearchEnabled: true,
+    backend: "openrouter",
+    openRouterApiKey: "test",
+  }).find((tool) => tool.name === "web_fetch");
   const disabledSearch = defaultTools({ webSearchEnabled: false, openRouterApiKey: "test" });
 
   assert.match(withoutSearch?.description ?? "", /Web discovery is unavailable/);

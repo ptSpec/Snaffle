@@ -1,7 +1,7 @@
 import { integerField, objectInput, stringField, ToolInputError, type Tool } from "../tool.js";
 import { searchWithKetch } from "./ketch.js";
+import type { KetchSearchBackend, WebSearchBackend } from "./types.js";
 
-type TavilyResult = { title?: unknown; url?: unknown; content?: unknown };
 type SearchResult = { content: string; sources: { title: string; url: string }[] };
 type OpenRouterAnnotation = {
   type?: unknown;
@@ -10,7 +10,8 @@ type OpenRouterAnnotation = {
 
 export type WebSearchOptions = {
   webSearchEnabled?: boolean | undefined;
-  tavilyApiKey?: string | undefined;
+  backend?: WebSearchBackend | undefined;
+  apiKey?: string | undefined;
   openRouterApiKey?: string | undefined;
   ketchPath?: string | undefined;
 };
@@ -18,14 +19,17 @@ export type WebSearchOptions = {
 const OPENROUTER_SEARCH_MODEL = "openai/gpt-5.6-luna";
 
 export function webSearchTool(options: WebSearchOptions): Tool | undefined {
-  const fallback = options.openRouterApiKey
-    ? (query: string, maxResults: number) => searchOpenRouter(options.openRouterApiKey!, query, maxResults)
-    : undefined;
-  const search = options.tavilyApiKey
-    ? (query: string, maxResults: number) => searchTavily(options.tavilyApiKey!, query, maxResults)
-    : options.ketchPath
-      ? (query: string, maxResults: number) => searchKetch(options.ketchPath!, query, maxResults, fallback)
-      : fallback;
+  if (!options.webSearchEnabled) return undefined;
+  const backend = options.backend ?? "ddg";
+  const search = backend === "openrouter"
+    ? options.openRouterApiKey
+      ? (query: string, maxResults: number) => searchOpenRouter(options.openRouterApiKey!, query, maxResults)
+      : undefined
+    : options.ketchPath && (backend === "ddg" || backend === "exa" || options.apiKey)
+      ? (query: string, maxResults: number) => searchKetch(
+          options.ketchPath!, backend, options.apiKey, query, maxResults,
+        )
+      : undefined;
   if (!search) return undefined;
 
   return {
@@ -54,35 +58,18 @@ export function webSearchTool(options: WebSearchOptions): Tool | undefined {
 
 async function searchKetch(
   executable: string,
+  backend: KetchSearchBackend,
+  apiKey: string | undefined,
   query: string,
   maxResults: number,
-  fallback?: (query: string, maxResults: number) => Promise<SearchResult>,
 ): Promise<SearchResult> {
   try {
-    const results = await searchWithKetch(executable, query, maxResults);
+    const results = await searchWithKetch(executable, backend, apiKey, query, maxResults);
     if (!results.length) throw new Error("Ketch returned no results");
     return resultList(results);
   } catch (error) {
-    if (fallback) return fallback(query, maxResults);
     throw new Error(`Ketch search failed: ${error instanceof Error ? error.message : String(error)}`);
   }
-}
-
-async function searchTavily(apiKey: string, query: string, maxResults: number): Promise<SearchResult> {
-  const response = await fetch("https://api.tavily.com/search", {
-    method: "POST",
-    signal: AbortSignal.timeout(30_000),
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ query, search_depth: "basic", max_results: maxResults, include_answer: false }),
-  });
-  if (!response.ok) throw new Error(`Tavily search failed (${response.status}): ${(await response.text()).slice(0, 500)}`);
-  const data = await response.json() as { results?: TavilyResult[] };
-  const results = (data.results ?? []).flatMap((result) =>
-    typeof result.title === "string" && typeof result.url === "string"
-      ? [{ title: result.title, url: result.url, content: typeof result.content === "string" ? result.content : "" }]
-      : [],
-  );
-  return resultList(results);
 }
 
 function resultList(results: { title: string; url: string; content: string }[]): SearchResult {

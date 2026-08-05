@@ -23,6 +23,12 @@ import type { CommandApprovalDecision, Message, RunEvent } from "../protocol.js"
 import { probeNativeSandbox } from "../sandbox.js";
 import type { Trace } from "../trace.js";
 import { defaultTools } from "../tools/default-tools.js";
+import { findKetch } from "../tools/web/ketch.js";
+import {
+  WEB_SEARCH_BACKENDS,
+  type KetchSearchBackend,
+  type WebSearchBackend,
+} from "../tools/web/types.js";
 import { LocalWorkspace, type CommandApprovalRequest } from "../workspace.js";
 import type { DesktopState, SaveMessageInput, StartRunInput } from "./api.js";
 import { openStore, type DesktopStore } from "./store.js";
@@ -73,8 +79,9 @@ let editorArguments = "";
 let maxSteps = DEFAULT_MAX_STEPS;
 let providerTimeoutMinutes = DEFAULT_PROVIDER_TIMEOUT_MS / 60_000;
 let providerRetries = DEFAULT_PROVIDER_RETRIES;
-let storedTavilyApiKey = "";
 let webSearchEnabled = true;
+let webSearchBackend: WebSearchBackend = "ddg";
+const storedWebSearchApiKeys: Partial<Record<KetchSearchBackend, string>> = {};
 const DEVELOPMENT_MODEL = "openai/gpt-5.6-luna";
 let selectedModel = DEVELOPMENT_MODEL;
 
@@ -105,8 +112,14 @@ async function start(): Promise<void> {
   providerTimeoutMinutes = validProviderTimeout(settings.providerTimeoutMinutes) ?? providerTimeoutMinutes;
   providerRetries = validProviderRetries(settings.providerRetries) ?? DEFAULT_PROVIDER_RETRIES;
   selectedModel = typeof settings.selectedModel === "string" ? settings.selectedModel : DEVELOPMENT_MODEL;
-  storedTavilyApiKey = decodeSecret(settings.tavilyApiKey);
   webSearchEnabled = settings.webSearchEnabled !== false;
+  webSearchBackend = validWebSearchBackend(settings.webSearchBackend) ?? "ddg";
+  loadWebSearchApiKeys(settings.webSearchApiKeys);
+  const oldTavilyKey = decodeSecret(settings.tavilyApiKey);
+  if (oldTavilyKey && !storedWebSearchApiKeys.tavily) {
+    storedWebSearchApiKeys.tavily = oldTavilyKey;
+    saveWebSearchApiKeys();
+  }
   store = await openStore(path.join(app.getPath("userData"), `${PRODUCT.slug}.db`));
   attachments = new AttachmentStore(path.join(app.getPath("userData"), "attachments"));
   if (process.platform === "darwin" && !app.isPackaged) app.dock?.setIcon(applicationIcon());
@@ -359,7 +372,12 @@ function registerIpc(): void {
         resolveAttachment: (attachment) => attachments.resolve(attachment),
       }),
       tools: defaultTools(webSearchEnabled
-        ? { webSearchEnabled: true, tavilyApiKey: tavilyApiKey(), openRouterApiKey: apiKey }
+        ? {
+            webSearchEnabled: true,
+            backend: webSearchBackend,
+            apiKey: webSearchApiKey(webSearchBackend),
+            openRouterApiKey: apiKey,
+          }
         : {}),
       workspace,
       trace: memoryTrace,
@@ -526,10 +544,24 @@ function registerIpc(): void {
     saveSettings({ providerRetries });
   });
 
-  ipcMain.handle("desktop:set-tavily-api-key", async (_event, value: unknown): Promise<DesktopState> => {
-    if (typeof value !== "string") throw new Error("Tavily API key must be text");
-    storedTavilyApiKey = value.trim();
-    saveSettings({ tavilyApiKey: storedTavilyApiKey ? encodeSecret(storedTavilyApiKey) : undefined });
+  ipcMain.handle("desktop:set-web-search-backend", async (_event, value: unknown): Promise<DesktopState> => {
+    const backend = validWebSearchBackend(value);
+    if (!backend) throw new Error("Unknown web search backend");
+    webSearchBackend = backend;
+    saveSettings({ webSearchBackend });
+    return desktopState(false);
+  });
+
+  ipcMain.handle("desktop:set-web-search-api-key", async (
+    _event,
+    backendValue: unknown,
+    keyValue: unknown,
+  ): Promise<DesktopState> => {
+    const backend = validKetchSearchBackend(backendValue);
+    if (!backend || backend === "ddg") throw new Error("This backend does not accept an API key");
+    if (typeof keyValue !== "string") throw new Error("API key must be text");
+    storedWebSearchApiKeys[backend] = keyValue.trim();
+    saveWebSearchApiKeys();
     return desktopState(false);
   });
 
@@ -657,8 +689,12 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     conversation: includeConversation ? await store.entries(state.activeThreadId) : [],
     savedMessages: await store.savedMessages.summaries(),
     openRouterAvailable: Boolean(process.env.OPENROUTER_API_KEY),
-    tavilyConfigured: Boolean(tavilyApiKey()),
+    ketchAvailable: Boolean(findKetch()),
     webSearchEnabled,
+    webSearchBackend,
+    webSearchKeyBackends: WEB_SEARCH_BACKENDS.flatMap((backend) =>
+      backend !== "openrouter" && backend !== "ddg" && webSearchApiKey(backend) ? [backend] : []
+    ),
     runningThreadIds: [...activeRuns.keys()],
     unsafeThreadIds: [...unsafeThreads],
     defaultModel: selectedModel || null,
@@ -703,6 +739,8 @@ type SavedSettings = {
   selectedModel?: unknown;
   tavilyApiKey?: unknown;
   webSearchEnabled?: unknown;
+  webSearchBackend?: unknown;
+  webSearchApiKeys?: unknown;
 };
 
 function loadSettings(): SavedSettings {
@@ -736,6 +774,8 @@ function saveSettings(update: {
   selectedModel?: string;
   tavilyApiKey?: string | undefined;
   webSearchEnabled?: boolean;
+  webSearchBackend?: WebSearchBackend;
+  webSearchApiKeys?: Partial<Record<KetchSearchBackend, string>>;
 }): void {
   const file = settingsPath();
   mkdirSync(path.dirname(file), { recursive: true });
@@ -904,8 +944,45 @@ function openRouterApiKey(): string {
   return apiKey;
 }
 
-function tavilyApiKey(): string | undefined {
-  return process.env.TAVILY_API_KEY || storedTavilyApiKey || undefined;
+function webSearchApiKey(backend: WebSearchBackend): string | undefined {
+  if (backend === "ddg" || backend === "openrouter") return undefined;
+  const environment = {
+    exa: process.env.EXA_API_KEY || process.env.KETCH_EXA_API_KEY,
+    tavily: process.env.TAVILY_API_KEY || process.env.KETCH_TAVILY_API_KEY,
+    brave: process.env.BRAVE_API_KEY || process.env.KETCH_BRAVE_API_KEY,
+    firecrawl: process.env.FIRECRAWL_API_KEY || process.env.KETCH_FIRECRAWL_API_KEY,
+  };
+  return environment[backend] || storedWebSearchApiKeys[backend] || undefined;
+}
+
+function loadWebSearchApiKeys(value: unknown): void {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return;
+  for (const backend of ["exa", "tavily", "brave", "firecrawl"] as const) {
+    const key = decodeSecret((value as Record<string, unknown>)[backend]);
+    if (key) storedWebSearchApiKeys[backend] = key;
+  }
+}
+
+function saveWebSearchApiKeys(): void {
+  saveSettings({
+    tavilyApiKey: undefined,
+    webSearchApiKeys: Object.fromEntries(
+      Object.entries(storedWebSearchApiKeys).flatMap(([backend, key]) =>
+        key ? [[backend, encodeSecret(key)]] : []
+      ),
+    ),
+  });
+}
+
+function validWebSearchBackend(value: unknown): WebSearchBackend | undefined {
+  return typeof value === "string" && WEB_SEARCH_BACKENDS.includes(value as WebSearchBackend)
+    ? value as WebSearchBackend
+    : undefined;
+}
+
+function validKetchSearchBackend(value: unknown): KetchSearchBackend | undefined {
+  const backend = validWebSearchBackend(value);
+  return backend && backend !== "openrouter" ? backend : undefined;
 }
 
 function encodeSecret(value: string): string {

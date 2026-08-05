@@ -2,6 +2,7 @@ import type { AttachmentPreview, AttachmentRef } from "../attachments/types.js";
 import type { OpenRouterModel } from "../providers/openrouter.js";
 import type { CommandApprovalDecision, Message, RunEvent } from "../protocol.js";
 import type { FontId } from "./typography.js";
+import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js";
 
 export type GitFileChange = {
   path: string;
@@ -91,8 +92,10 @@ export type DesktopState = {
   conversation: DesktopEntry[];
   savedMessages: SavedMessageSummary[];
   openRouterAvailable: boolean;
-  tavilyConfigured: boolean;
+  ketchAvailable: boolean;
   webSearchEnabled: boolean;
+  webSearchBackend: WebSearchBackend;
+  webSearchKeyBackends: KetchSearchBackend[];
   runningThreadIds: string[];
   unsafeThreadIds: string[];
   defaultModel: string | null;
@@ -162,7 +165,8 @@ export interface DesktopApi {
   setProviderTimeoutMinutes(minutes: number): Promise<void>;
   setProviderRetries(retries: number): Promise<void>;
   setWebSearchEnabled(enabled: boolean): Promise<void>;
-  setTavilyApiKey(apiKey: string): Promise<DesktopState>;
+  setWebSearchBackend(backend: WebSearchBackend): Promise<DesktopState>;
+  setWebSearchApiKey(backend: KetchSearchBackend, apiKey: string): Promise<DesktopState>;
   saveMessage(input: SaveMessageInput): Promise<SavedMessageSummary[]>;
   deleteSavedMessage(id: string): Promise<SavedMessageSummary[]>;
   listSavedMessages(): Promise<SavedMessage[]>;
