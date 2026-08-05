@@ -10,6 +10,7 @@ import { runTool } from "../src/tools/run.js";
 import { searchTool } from "../src/tools/search.js";
 import { webSearchTool } from "../src/tools/web/search.js";
 import { extractWithKetch, searchWithKetch } from "../src/tools/web/ketch.js";
+import { fetchPublicText } from "../src/tools/web/request.js";
 import { writeTool } from "../src/tools/write.js";
 import { LocalWorkspace } from "../src/workspace.js";
 import { nativeSandboxStatus } from "../src/sandbox.js";
@@ -141,6 +142,33 @@ fi
     title: "Example page",
     content: "# Extracted",
   });
+});
+
+test("Fandom Cloudflare challenges fall back to its public wiki API", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    requests.push(url);
+    if (url.includes("/api.php?")) {
+      return new Response(JSON.stringify({
+        parse: { title: "Example page", text: { "*": "<p>Readable wiki content</p>" } },
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    return new Response("challenge", {
+      status: 403,
+      headers: { "cf-mitigated": "challenge", "Content-Type": "text/html" },
+    });
+  };
+
+  const page = await fetchPublicText("https://example.fandom.com/wiki/Some_page");
+
+  assert.equal(page.url, "https://example.fandom.com/wiki/Some_page");
+  assert.match(page.contentType, /text\/html/);
+  assert.match(page.text, /Readable wiki content/);
+  assert.equal(requests.length, 2);
+  assert.match(requests[1]!, /\/api\.php\?.*page=Some_page/);
 });
 
 test("tool input healer repairs a quoted object with a malformed integer", () => {

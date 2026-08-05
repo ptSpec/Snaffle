@@ -13,6 +13,10 @@ export async function fetchPublicText(rawUrl: string): Promise<{ url: string; co
       signal: AbortSignal.timeout(30_000),
       headers: { "User-Agent": "Esch/0.0 web_fetch" },
     });
+    if (response.status === 403 && response.headers.get("cf-mitigated") === "challenge") {
+      const fandom = await fetchFandomPage(url);
+      if (fandom) return fandom;
+    }
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
       if (!location || redirect === 5) throw new Error("Too many or invalid redirects");
@@ -28,6 +32,52 @@ export async function fetchPublicText(rawUrl: string): Promise<{ url: string; co
   }
 
   throw new Error("Too many redirects");
+}
+
+async function fetchFandomPage(url: URL): Promise<{ url: string; contentType: string; text: string } | undefined> {
+  if (!url.hostname.endsWith(".fandom.com") || !url.pathname.startsWith("/wiki/")) return undefined;
+  let page: string;
+  try {
+    page = decodeURIComponent(url.pathname.slice(6));
+  } catch {
+    return undefined;
+  }
+  if (!page) return undefined;
+
+  const api = new URL("/api.php", url);
+  api.search = new URLSearchParams({
+    action: "parse",
+    page,
+    prop: "text|displaytitle",
+    format: "json",
+    origin: "*",
+  }).toString();
+  const response = await fetch(api, {
+    signal: AbortSignal.timeout(30_000),
+    headers: { "User-Agent": "Esch/0.0 web_fetch" },
+  });
+  if (!response.ok) return undefined;
+  const data = JSON.parse(await limitedText(response)) as {
+    parse?: { title?: unknown; text?: { "*"?: unknown } };
+  };
+  const html = data.parse?.text?.["*"];
+  if (typeof html !== "string") return undefined;
+  const title = typeof data.parse?.title === "string" ? data.parse.title : page;
+  return {
+    url: url.toString(),
+    contentType: "text/html; charset=utf-8",
+    text: `<html><head><title>${escapeHtml(title)}</title></head><body>${html}</body></html>`,
+  };
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character]!);
 }
 
 function publicUrl(rawUrl: string): URL {
