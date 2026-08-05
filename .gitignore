@@ -54,6 +54,7 @@ venv/
 
 # Native worker output
 target/
+/resources/bin/
 
 # Editors and operating systems
 .DS_Store
