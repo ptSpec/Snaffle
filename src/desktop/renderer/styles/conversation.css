@@ -59,6 +59,45 @@
   padding-bottom: 3px;
 }
 
+.markdown-content .source-reference {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25em;
+  min-height: 1.5em;
+  padding: 0.22em 0.7em;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  font-family: var(--font-secondary);
+  font-size: 1em;
+  font-style: italic;
+  font-synthesis: style;
+  line-height: 1.2;
+  text-decoration: none;
+  vertical-align: baseline;
+}
+
+.markdown-content .source-reference span {
+  white-space: nowrap;
+}
+
+.markdown-content .source-reference svg {
+  width: 0.78em;
+  height: 0.78em;
+  flex: 0 0 auto;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.markdown-content .source-reference:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
 .message-footer {
   display: flex;
   align-items: center;

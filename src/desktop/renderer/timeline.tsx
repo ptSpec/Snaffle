@@ -12,14 +12,14 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import hljs from "highlight.js/lib/common";
 import type { AttachmentRef } from "../../attachments/types.js";
-import type { CommandApprovalDecision, RunEvent, ToolCall, Usage } from "../../protocol.js";
+import type { CommandApprovalDecision, RunEvent, SourceReference, ToolCall, Usage } from "../../protocol.js";
 import type { DesktopEntry } from "../api.js";
 import { JsonInspector } from "./json-inspector.js";
 
 export type TimelineItem =
   | { id: string; kind: "user"; text: string; attachments?: AttachmentRef[]; sequence: number; entryId?: string }
   | { id: string; kind: "error"; text: string }
-  | { id: string; kind: "assistant"; text: string; streaming: boolean; intermediate?: boolean; model?: string; usage?: Usage; durationMs?: number; sequence?: number; entryId?: string }
+  | { id: string; kind: "assistant"; text: string; streaming: boolean; intermediate?: boolean; model?: string; usage?: Usage; durationMs?: number; sources?: SourceReference[]; sequence?: number; entryId?: string }
   | { id: string; kind: "activity-group"; items: TimelineItem[] }
   | { id: string; kind: "reasoning"; step: number; text: string; streaming: boolean; status?: string | undefined }
   | { id: string; kind: "tool-preparing"; step: number; index: number; name: string; argumentChars: number; startedAt: number }
@@ -123,7 +123,7 @@ export function TimelineEntry({
           {item.streaming ? (
             <>{item.text}<span className="streaming-cursor" aria-hidden="true" /></>
           ) : (
-            <MarkdownContent text={item.text} />
+            <MarkdownContent text={item.text} {...(item.sources ? { sources: item.sources } : {})} />
           )}
         </div>
         {!item.streaming && !item.intermediate ? (
@@ -226,13 +226,71 @@ function ApprovalEntry({
   );
 }
 
-export const MarkdownContent = memo(function MarkdownContent({ text }: { text: string }): JSX.Element {
+export const MarkdownContent = memo(function MarkdownContent({
+  text,
+  sources,
+}: {
+  text: string;
+  sources?: SourceReference[];
+}): JSX.Element {
   return (
-    <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} skipHtml>
+    <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm, inlineSources(text, sources)]} skipHtml>
       {text}
     </ReactMarkdown>
   );
 });
+
+type MarkdownNode = {
+  type: string;
+  children?: MarkdownNode[];
+  value?: string;
+  url?: string;
+  title?: string;
+  data?: { hProperties: { className: string; title: string } };
+};
+
+function inlineSources(text: string, sources?: SourceReference[]) {
+  return () => (tree: MarkdownNode): void => {
+    const missing = (sources ?? []).flatMap((source, index) =>
+      text.includes(source.url) ? [] : [{ source, index }],
+    );
+    if (!missing.length) return;
+    const paragraph = firstParagraph(tree);
+    if (!paragraph?.children) return;
+    paragraph.children.push(
+      { type: "text", value: " " },
+      ...missing.flatMap(({ source }, sourceIndex) => [
+        ...(sourceIndex ? [{ type: "text", value: " " }] : []),
+        {
+          type: "link",
+          url: source.url,
+          title: source.title,
+          data: { hProperties: { className: "source-reference", title: source.title } },
+          children: [{ type: "text", value: websiteName(source.url) }],
+        },
+      ]),
+    );
+  };
+}
+
+function websiteName(rawUrl: string): string {
+  try {
+    const parts = new URL(rawUrl).hostname.replace(/^www\./, "").split(".");
+    const name = parts.length > 1 ? parts.slice(-2).join(".") : parts[0] || rawUrl;
+    return name.length > 15 ? `${name.slice(0, 14)}…` : name;
+  } catch {
+    return rawUrl.length > 15 ? `${rawUrl.slice(0, 14)}…` : rawUrl;
+  }
+}
+
+function firstParagraph(node: MarkdownNode): MarkdownNode | undefined {
+  if (node.type === "paragraph") return node;
+  for (const child of node.children ?? []) {
+    const paragraph = firstParagraph(child);
+    if (paragraph) return paragraph;
+  }
+  return undefined;
+}
 
 function UserMessage({
   item,
@@ -366,6 +424,24 @@ function ToolIcon({ name }: { name: string }): JSX.Element {
     );
   }
 
+  if (name === "web_search" || name === "web_fetch") {
+    return (
+      <svg className="tool-row-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <circle cx="8" cy="8" r="6.5" />
+        <path d="M1.5 8h13M8 1.5c2 2 3 4.2 3 6.5s-1 4.5-3 6.5c-2-2-3-4.2-3-6.5s1-4.5 3-6.5" />
+      </svg>
+    );
+  }
+
+  if (name === "youtube_transcript") {
+    return (
+      <svg className="tool-row-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <rect x="1.5" y="3" width="13" height="10" rx="3" />
+        <path d="m6.5 6 4 2-4 2z" />
+      </svg>
+    );
+  }
+
   return (
     <svg className="tool-row-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M3 1.5h6l4 4v9H3zM9 1.5v4h4" />
@@ -404,17 +480,27 @@ function ReasoningEntry({
 }
 
 const markdownComponents: Components = {
-  a({ href, children }) {
+  a({ href, children, className, title }) {
     const external = href?.startsWith("https://") || href?.startsWith("http://");
+    const sourceReference = className?.includes("source-reference");
     return (
       <a
+        className={className}
         href={external ? href : undefined}
+        title={title}
         onClick={(event) => {
           event.preventDefault();
           if (external && href) void window.desktop.openExternal(href);
         }}
       >
-        {children}
+        {sourceReference ? (
+          <>
+            <span>{children}</span>
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M6 3h7v7M13 3 6 10M12 9v4H3V4h4" />
+            </svg>
+          </>
+        ) : children}
       </a>
     );
   },
@@ -697,6 +783,7 @@ export function addRunEvent(
         model: event.model,
         ...(event.response.usage ? { usage: event.response.usage } : {}),
         durationMs: event.durationMs,
+        ...(event.response.sources?.length ? { sources: event.response.sources } : {}),
       };
       let completed = completedReasoning;
       if (existing !== -1) {
@@ -799,6 +886,7 @@ export function timelineFromEntries(entries: DesktopEntry[]): TimelineItem[] {
           ...(message.model ? { model: message.model } : {}),
           ...(message.usage ? { usage: message.usage } : {}),
           ...(message.durationMs === undefined ? {} : { durationMs: message.durationMs }),
+          ...(message.sources?.length ? { sources: message.sources } : {}),
         });
       }
       for (const call of message.toolCalls ?? []) calls.set(call.id, call);
