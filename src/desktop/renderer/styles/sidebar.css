@@ -461,7 +461,7 @@
 }
 
 .workspace-item {
-  font-size: calc(15.5px * var(--interface-font-scale));
+  font-size: calc(16.5px * var(--interface-font-scale));
 }
 
 .workspace-icon {
