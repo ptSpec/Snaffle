@@ -125,7 +125,7 @@ test("Ketch search and extraction use its structured CLI output", {
   t.after(() => rm(root, { recursive: true, force: true }));
   await writeFile(executable, `#!/bin/sh
 if [ "$1" = "search" ]; then
-  printf '[{"title":"Example","url":"https://example.com","description":"%s:%s"}]' "$4" "$KETCH_TAVILY_API_KEY"
+  printf '[{"title":"Example","url":"https://example.com","description":"short","content":"%s:%s"}]' "$4" "$KETCH_TAVILY_API_KEY"
 else
   cat >/dev/null
   printf '{"url":"https://example.com","title":"Example page","markdown":"# Extracted","words":1}'
