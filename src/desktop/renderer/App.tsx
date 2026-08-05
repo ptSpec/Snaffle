@@ -12,7 +12,7 @@ import {
 } from "react";
 import type { AttachmentPreview, AttachmentRef } from "../../attachments/types.js";
 import type { CommandApprovalDecision } from "../../protocol.js";
-import type { DesktopApi, DesktopRunEvent, DesktopState, SavedMessage } from "../api.js";
+import type { DesktopApi, DesktopRunEvent, DesktopState, DesktopThread, SavedMessage } from "../api.js";
 import type { OpenRouterModel } from "../../providers/openrouter.js";
 import { DEFAULT_MODEL_CONTEXT_LENGTH } from "../../providers/provider.js";
 import { DEFAULT_THEME, themeById, type Theme } from "../themes/index.js";
@@ -29,7 +29,7 @@ import {
 import { AttachmentTray } from "./attachment-tray.js";
 import { htmlToMarkdown } from "./attachment-markdown.js";
 import { Settings } from "./settings.js";
-import { SavedMessages } from "./saved-messages.js";
+import { Bookmarks, type BookmarksPage } from "./bookmarks.js";
 import { Sidebar, type AppView, type SettingsPage } from "./sidebar.js";
 import { InspectorPanel, type InspectorTab } from "./inspector/panel.js";
 import { SearchPicker } from "./search-picker.js";
@@ -97,6 +97,7 @@ export function App(): JSX.Element {
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("inspect");
   const [view, setView] = useState<AppView>("conversation");
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("appearance");
+  const [bookmarksPage, setBookmarksPage] = useState<BookmarksPage>("threads");
   const [sendOrbMotion, setSendOrbMotion] = useState<OrbMotion>("stopped");
   const taskInput = useRef<HTMLTextAreaElement>(null);
   const timelineView = useRef<HTMLDivElement>(null);
@@ -759,6 +760,23 @@ export function App(): JSX.Element {
     }
   }
 
+  async function openBookmarkedThread(thread: DesktopThread): Promise<void> {
+    try {
+      await saveDraft();
+      showDesktopState(await window.desktop.selectThread(thread.id));
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function removeThreadBookmark(thread: DesktopThread): Promise<void> {
+    try {
+      setDesktopState(withoutConversation(await window.desktop.setThreadBookmarked(thread.id, false)));
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   async function selectTheme(themeId: string): Promise<void> {
     const theme = themeById(themeId);
     if (!theme) return;
@@ -914,6 +932,7 @@ export function App(): JSX.Element {
           runningThreadIds={desktopState.runningThreadIds}
           view={view}
           settingsPage={settingsPage}
+          bookmarksPage={bookmarksPage}
           collapsed={leftCollapsed}
           beforeNavigate={saveDraft}
           onNavigate={showDesktopState}
@@ -922,6 +941,10 @@ export function App(): JSX.Element {
           onView={setView}
           onSettingsPage={(page) => {
             setSettingsPage(page);
+            setError(null);
+          }}
+          onBookmarksPage={(page) => {
+            setBookmarksPage(page);
             setError(null);
           }}
           onCollapse={() => {
@@ -960,11 +983,15 @@ export function App(): JSX.Element {
             onProviderRetries={(retries) => void setProviderRetries(retries)}
           />
         ) : view === "saved" ? (
-          <SavedMessages
+          <Bookmarks
+            workspaces={desktopState.workspaces}
             messages={savedMessages ?? []}
-            loading={savedMessages === null}
-            onOpen={(message) => void openSavedMessage(message)}
-            onDelete={(id) => void deleteSavedMessage(id)}
+            page={bookmarksPage}
+            loadingMessages={savedMessages === null}
+            onOpenThread={(thread) => void openBookmarkedThread(thread)}
+            onRemoveThread={(thread) => void removeThreadBookmark(thread)}
+            onOpenMessage={(message) => void openSavedMessage(message)}
+            onDeleteMessage={(id) => void deleteSavedMessage(id)}
           />
         ) : (
           <section className="conversation view-enter" aria-label="Conversation">

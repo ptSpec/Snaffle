@@ -238,7 +238,7 @@ body.resizing-columns .workspace-shell {
 
 .workspace-shell > .conversation,
 .workspace-shell > .settings,
-.workspace-shell > .saved-messages {
+.workspace-shell > .bookmarks {
   position: relative;
   z-index: 1;
   overflow: hidden;
