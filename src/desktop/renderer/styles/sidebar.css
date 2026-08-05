@@ -301,8 +301,23 @@
 }
 
 .workspace-row.active .thread-action {
+  flex-basis: 29px;
+  width: 29px;
+  height: 29px;
   color: var(--text-secondary);
   opacity: 1;
+}
+
+.workspace-row.active .thread-action svg {
+  width: 18px;
+  height: 18px;
+}
+
+.workspace-row.active > .row-action {
+  flex-basis: 29px;
+  width: 29px;
+  height: 29px;
+  font-size: calc(20px * var(--interface-font-scale));
 }
 
 .workspace-row.active:hover .thread-action,
@@ -555,7 +570,7 @@ html[data-accented-theme="true"] .thread-row.active .thread-item {
 
 .thread-item {
   display: grid;
-  padding: 8px 5px;
+  padding: 10px 5px;
   font-size: calc(15px * var(--interface-font-scale));
 }
 
