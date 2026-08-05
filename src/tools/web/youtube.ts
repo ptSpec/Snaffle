@@ -1,5 +1,5 @@
 import { fetchTranscript } from "youtube-transcript";
-import { integerField, objectInput, stringField, type Tool } from "../tool.js";
+import { integerField, objectInput, stringField, ToolInputError, type Tool } from "../tool.js";
 
 export const youtubeTranscriptTool: Tool = {
   name: "youtube_transcript",
@@ -22,7 +22,7 @@ export const youtubeTranscriptTool: Tool = {
     const query = stringField(input, "query", { optional: true });
     const language = stringField(input, "language", { optional: true });
     const maxChars = integerField(input, "maxChars", 12_000);
-    if (maxChars < 1_000 || maxChars > 30_000) throw new Error("maxChars must be from 1000 to 30000");
+    if (maxChars < 1_000 || maxChars > 30_000) throw new ToolInputError("maxChars must be from 1000 to 30000");
 
     const transcript = await fetchTranscript(url, language ? { lang: language } : undefined);
     if (!transcript.length) throw new Error("No transcript is available for this video");
@@ -61,7 +61,7 @@ function canonicalYoutubeUrl(value: string): string {
   const id = /^[\w-]{11}$/.test(value)
     ? value
     : /(?:v=|youtu\.be\/|embed\/)([\w-]{11})/.exec(value)?.[1];
-  if (!id) throw new Error("url must be a YouTube URL or video id");
+  if (!id) throw new ToolInputError("url must be a YouTube URL or video id");
   return `https://www.youtube.com/watch?v=${id}`;
 }
 

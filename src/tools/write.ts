@@ -1,4 +1,4 @@
-import { objectInput, stringField, type Tool } from "./tool.js";
+import { objectInput, stringField, ToolInputError, type Tool } from "./tool.js";
 
 export const writeTool: Tool = {
   name: "write_file",
@@ -17,7 +17,7 @@ export const writeTool: Tool = {
   async execute(workspace, rawInput) {
     const input = objectInput(rawInput);
     if (input.path === undefined) {
-      throw new Error('Required field "path" is missing.');
+      throw new ToolInputError('Required field "path" is missing.');
     }
     const filePath = stringField(input, "path") as string;
     const content = stringField(input, "content", { allowEmpty: true }) as string;

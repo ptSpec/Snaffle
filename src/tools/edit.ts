@@ -1,4 +1,4 @@
-import { objectInput, stringField, type Tool } from "./tool.js";
+import { objectInput, stringField, ToolInputError, type Tool } from "./tool.js";
 
 export const editTool: Tool = {
   name: "edit_file",
@@ -44,7 +44,7 @@ export const editTool: Tool = {
     const input = objectInput(rawInput);
     const filePath = stringField(input, "path") as string;
     if (!Array.isArray(input.edits) || input.edits.length === 0) {
-      throw new Error("edits must be a non-empty array");
+      throw new ToolInputError("edits must be a non-empty array");
     }
 
     const original = await workspace.read(filePath);

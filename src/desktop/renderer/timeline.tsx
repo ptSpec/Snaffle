@@ -234,7 +234,7 @@ export const MarkdownContent = memo(function MarkdownContent({
   sources?: SourceReference[];
 }): JSX.Element {
   return (
-    <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm, inlineSources(text, sources)]} skipHtml>
+    <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm, inlineSources(sources)]} skipHtml>
       {text}
     </ReactMarkdown>
   );
@@ -249,28 +249,21 @@ type MarkdownNode = {
   data?: { hProperties: { className: string; title: string } };
 };
 
-function inlineSources(text: string, sources?: SourceReference[]) {
+function inlineSources(sources?: SourceReference[]) {
   return () => (tree: MarkdownNode): void => {
-    const missing = (sources ?? []).flatMap((source, index) =>
-      text.includes(source.url) ? [] : [{ source, index }],
-    );
-    if (!missing.length) return;
-    const paragraph = firstParagraph(tree);
-    if (!paragraph?.children) return;
-    paragraph.children.push(
-      { type: "text", value: " " },
-      ...missing.flatMap(({ source }, sourceIndex) => [
-        ...(sourceIndex ? [{ type: "text", value: " " }] : []),
-        {
-          type: "link",
-          url: source.url,
-          title: source.title,
-          data: { hProperties: { className: "source-reference", title: source.title } },
-          children: [{ type: "text", value: websiteName(source.url) }],
-        },
-      ]),
-    );
+    const byUrl = new Map((sources ?? []).map((source) => [source.url, source]));
+    markSourceLinks(tree, byUrl);
   };
+}
+
+function markSourceLinks(node: MarkdownNode, sources: Map<string, SourceReference>): void {
+  const source = node.url ? sources.get(node.url) : undefined;
+  if (node.type === "link" && source) {
+    node.title = source.title;
+    node.data = { hProperties: { className: "source-reference", title: source.title } };
+    node.children = [{ type: "text", value: websiteName(source.url) }];
+  }
+  for (const child of node.children ?? []) markSourceLinks(child, sources);
 }
 
 function websiteName(rawUrl: string): string {
@@ -281,15 +274,6 @@ function websiteName(rawUrl: string): string {
   } catch {
     return rawUrl.length > 15 ? `${rawUrl.slice(0, 14)}…` : rawUrl;
   }
-}
-
-function firstParagraph(node: MarkdownNode): MarkdownNode | undefined {
-  if (node.type === "paragraph") return node;
-  for (const child of node.children ?? []) {
-    const paragraph = firstParagraph(child);
-    if (paragraph) return paragraph;
-  }
-  return undefined;
 }
 
 function UserMessage({

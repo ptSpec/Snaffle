@@ -8,6 +8,7 @@ import { editTool } from "../src/tools/edit.js";
 import { readTool } from "../src/tools/read.js";
 import { runTool } from "../src/tools/run.js";
 import { searchTool } from "../src/tools/search.js";
+import { webSearchTool } from "../src/tools/web/search.js";
 import { writeTool } from "../src/tools/write.js";
 import { LocalWorkspace } from "../src/workspace.js";
 import { nativeSandboxStatus } from "../src/sandbox.js";
@@ -74,6 +75,40 @@ test("run command reports a nonzero exit separately from tool failure", async (t
 
   assert.equal(result.exitCode, 7);
   assert.match(result.content, /exit code: 7/);
+});
+
+test("OpenRouter web search has one bounded server-side search", async (t) => {
+  const { root, workspace } = await fixture();
+  const originalFetch = globalThis.fetch;
+  let request: Record<string, unknown> | undefined;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    return rm(root, { recursive: true, force: true });
+  });
+  globalThis.fetch = async (_input, init) => {
+    request = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return new Response(JSON.stringify({
+      choices: [{ message: { content: "Grounded answer", annotations: [] } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  const tool = webSearchTool({ openRouterApiKey: "test-key" });
+  assert.ok(tool);
+  await tool.execute(workspace, { query: "current Node.js release", maxResults: 3 });
+
+  assert.equal(request?.tool_choice, "required");
+  assert.equal(request?.max_tool_calls, 1);
+  assert.equal(request?.max_tokens, 1_000);
+  assert.deepEqual(request?.tools, [{
+    type: "openrouter:web_search",
+    parameters: {
+      engine: "exa",
+      max_results: 3,
+      max_total_results: 3,
+      max_uses: 1,
+      max_characters: 3_000,
+    },
+  }]);
 });
 
 test("tool input healer repairs a quoted object with a malformed integer", () => {

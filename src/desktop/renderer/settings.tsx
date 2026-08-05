@@ -26,6 +26,7 @@ export function Settings({
   providerTimeoutMinutes,
   providerRetries,
   tavilyConfigured,
+  webSearchEnabled,
   error,
   onSelectTheme,
   onTypography,
@@ -37,6 +38,7 @@ export function Settings({
   onMaxSteps,
   onProviderTimeoutMinutes,
   onProviderRetries,
+  onWebSearchEnabled,
   onTavilyApiKey,
 }: {
   page: SettingsPage;
@@ -55,6 +57,7 @@ export function Settings({
   providerTimeoutMinutes: number;
   providerRetries: number;
   tavilyConfigured: boolean;
+  webSearchEnabled: boolean;
   error: string | null;
   onSelectTheme: (themeId: string) => void;
   onTypography: (interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId) => void;
@@ -66,10 +69,19 @@ export function Settings({
   onMaxSteps: (maxSteps: number) => void;
   onProviderTimeoutMinutes: (minutes: number) => void;
   onProviderRetries: (retries: number) => void;
+  onWebSearchEnabled: (enabled: boolean) => void;
   onTavilyApiKey: (apiKey: string) => void;
 }): JSX.Element {
   if (page === "web") {
-    return <WebSettings configured={tavilyConfigured} error={error} onSave={onTavilyApiKey} />;
+    return (
+      <WebSettings
+        configured={tavilyConfigured}
+        enabled={webSearchEnabled}
+        error={error}
+        onEnabled={onWebSearchEnabled}
+        onSave={onTavilyApiKey}
+      />
+    );
   }
 
   if (page === "agent") {
@@ -198,11 +210,15 @@ export function Settings({
 
 function WebSettings({
   configured,
+  enabled,
   error,
+  onEnabled,
   onSave,
 }: {
   configured: boolean;
+  enabled: boolean;
   error: string | null;
+  onEnabled: (enabled: boolean) => void;
   onSave: (apiKey: string) => void;
 }): JSX.Element {
   const [apiKey, setApiKey] = useState("");
@@ -212,7 +228,20 @@ function WebSettings({
       <div className="settings-content">
         <p className="eyebrow">Settings</p>
         <h1>Web</h1>
-        <p className="settings-description">OpenRouter powers web search with Luna by default. Add Tavily to use it instead. Web fetch and YouTube transcripts need no additional key.</p>
+        <p className="settings-description">When enabled, web search uses OpenRouter with Luna by default and may incur provider charges. Add Tavily to use it instead. Direct web fetches and YouTube transcripts use no paid API.</p>
+
+        <label className="setting-field text-setting">
+          <span>
+            <strong>Web search</strong>
+            <small>Expose the paid web_search tool to the model.</small>
+          </span>
+          <input
+            className="selection-checkbox"
+            type="checkbox"
+            checked={enabled}
+            onChange={(event) => onEnabled(event.target.checked)}
+          />
+        </label>
 
         <label className="setting-field text-setting">
           <span>
