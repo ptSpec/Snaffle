@@ -202,14 +202,21 @@ test("web fetch guidance follows web search availability", () => {
   const withoutSearch = defaultTools().find((tool) => tool.name === "web_fetch");
   const withSearch = defaultTools({
     webSearchEnabled: true,
+    backend: "ddg",
+    ketchPath: "/test/ketch",
+  }).find((tool) => tool.name === "web_fetch");
+  const richSearch = defaultTools({
+    webSearchEnabled: true,
     backend: "openrouter",
     openRouterApiKey: "test",
-  }).find((tool) => tool.name === "web_fetch");
+  });
   const disabledSearch = defaultTools({ webSearchEnabled: false, openRouterApiKey: "test" });
 
   assert.match(withoutSearch?.description ?? "", /Web discovery is unavailable/);
   assert.doesNotMatch(withSearch?.description ?? "", /Web discovery is unavailable/);
+  assert.equal(richSearch.some((tool) => tool.name === "web_fetch"), false);
   assert.equal(disabledSearch.some((tool) => tool.name === "web_search"), false);
+  assert.equal(disabledSearch.some((tool) => tool.name === "web_fetch"), true);
 });
 
 test("only explicitly cited tool sources reach the final answer", async (t) => {

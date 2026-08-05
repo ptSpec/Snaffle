@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import type { KetchSearchBackend } from "./types.js";
 
-type KetchSearchResult = { title?: unknown; url?: unknown; description?: unknown };
+type KetchSearchResult = { title?: unknown; url?: unknown; description?: unknown; content?: unknown };
 type KetchExtractResult = { title?: unknown; markdown?: unknown };
 
 const executableName = process.platform === "win32" ? "ketch.exe" : "ketch";
@@ -45,7 +45,9 @@ export async function searchWithKetch(
       ? [{
           title: result.title,
           url: result.url,
-          content: typeof result.description === "string" ? result.description : "",
+          content: typeof result.content === "string" && result.content
+            ? result.content
+            : typeof result.description === "string" ? result.description : "",
         }]
       : [],
   );
