@@ -28,6 +28,8 @@ import type { DesktopState, SaveMessageInput, StartRunInput } from "./api.js";
 import { openStore, type DesktopStore } from "./store.js";
 import { DEFAULT_THEME, themeById, type Theme } from "./themes/index.js";
 import {
+  DEFAULT_CODE_BLOCK_FONT_SIZE,
+  DEFAULT_EDITOR_FONT_SIZE,
   DEFAULT_FONTS,
   DEFAULT_FONT_SCALE,
   fontById,
@@ -64,14 +66,15 @@ let secondaryFont: FontId = DEFAULT_FONTS.secondary;
 let codeFont: FontId = DEFAULT_FONTS.code;
 let interfaceFontScale = DEFAULT_FONT_SCALE;
 let conversationFontScale = DEFAULT_FONT_SCALE;
-let codeBlockFontSize = 15;
-let editorFontSize = 13;
+let codeBlockFontSize = DEFAULT_CODE_BLOCK_FONT_SIZE;
+let editorFontSize = DEFAULT_EDITOR_FONT_SIZE;
 let editorCommand = "";
 let editorArguments = "";
 let maxSteps = DEFAULT_MAX_STEPS;
 let providerTimeoutMinutes = DEFAULT_PROVIDER_TIMEOUT_MS / 60_000;
 let providerRetries = DEFAULT_PROVIDER_RETRIES;
 const DEVELOPMENT_MODEL = "openai/gpt-5.6-luna";
+let selectedModel = DEVELOPMENT_MODEL;
 
 const memoryTrace: Trace = {
   async write(): Promise<void> {
@@ -99,6 +102,7 @@ async function start(): Promise<void> {
   maxSteps = validMaxSteps(settings.maxSteps) ?? DEFAULT_MAX_STEPS;
   providerTimeoutMinutes = validProviderTimeout(settings.providerTimeoutMinutes) ?? providerTimeoutMinutes;
   providerRetries = validProviderRetries(settings.providerRetries) ?? DEFAULT_PROVIDER_RETRIES;
+  selectedModel = typeof settings.selectedModel === "string" ? settings.selectedModel : DEVELOPMENT_MODEL;
   store = await openStore(path.join(app.getPath("userData"), `${PRODUCT.slug}.db`));
   attachments = new AttachmentStore(path.join(app.getPath("userData"), "attachments"));
   if (process.platform === "darwin" && !app.isPackaged) app.dock?.setIcon(applicationIcon());
@@ -472,6 +476,12 @@ function registerIpc(): void {
     saveSettings({ codeBlockFontSize });
   });
 
+  ipcMain.handle("desktop:set-selected-model", (_event, value: unknown): void => {
+    if (typeof value !== "string") throw new Error("Model must be text");
+    selectedModel = value;
+    saveSettings({ selectedModel });
+  });
+
   ipcMain.handle("desktop:set-editor-launcher", (_event, command: unknown, argumentsTemplate: unknown): void => {
     if (typeof command !== "string" || typeof argumentsTemplate !== "string") {
       throw new Error("Editor command and arguments must be text");
@@ -630,7 +640,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     openRouterAvailable: Boolean(process.env.OPENROUTER_API_KEY),
     runningThreadIds: [...activeRuns.keys()],
     unsafeThreadIds: [...unsafeThreads],
-    defaultModel: app.isPackaged ? null : DEVELOPMENT_MODEL,
+    defaultModel: selectedModel || null,
     restrictedHostAvailable: sandbox.available,
     restrictedHostDetail: sandbox.detail,
     themeId: activeTheme.id,
@@ -669,6 +679,7 @@ type SavedSettings = {
   maxSteps?: unknown;
   providerTimeoutMinutes?: unknown;
   providerRetries?: unknown;
+  selectedModel?: unknown;
 };
 
 function loadSettings(): SavedSettings {
@@ -699,6 +710,7 @@ function saveSettings(update: {
   maxSteps?: number;
   providerTimeoutMinutes?: number;
   providerRetries?: number;
+  selectedModel?: string;
 }): void {
   const file = settingsPath();
   mkdirSync(path.dirname(file), { recursive: true });
