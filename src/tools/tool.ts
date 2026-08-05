@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { JsonSchema, ToolSpec } from "../protocol.js";
 import type { Workspace } from "../workspace.js";
 
@@ -22,18 +21,6 @@ export function toolErrorContent(tool: Tool, error: unknown): string {
     `Replace the sample values with values for the current task:\n` +
     JSON.stringify(tool.exampleInput, null, 2)
   );
-}
-
-export function contentRevision(content: string): string {
-  return createHash("sha256").update(content).digest("hex").slice(0, 12);
-}
-
-export function contentLineCount(content: string): number {
-  if (!content) return 0;
-  const normalized = content.replaceAll("\r\n", "\n");
-  return normalized.endsWith("\n")
-    ? normalized.slice(0, -1).split("\n").length
-    : normalized.split("\n").length;
 }
 
 export function objectInput(input: unknown): Record<string, unknown> {

@@ -38,6 +38,8 @@
   padding: 12px 14px;
   background: var(--hover-background);
   border-radius: 16px;
+  font-family: var(--font-primary);
+  font-size: calc(16px * var(--conversation-font-scale));
 }
 
 .message-body.collapsed {
@@ -64,7 +66,7 @@
   min-height: 22px;
   margin-top: 8px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--interface-font-scale));
   opacity: 0;
   transition: opacity 120ms ease;
 }
@@ -96,7 +98,7 @@
   background: transparent;
   border: 0;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: calc(11px * var(--interface-font-scale));
   opacity: 0.82;
 }
 
@@ -147,6 +149,8 @@
 
 .markdown-content {
   overflow-wrap: anywhere;
+  font-family: var(--font-primary);
+  font-size: calc(16px * var(--conversation-font-scale));
   line-height: 1.55;
 }
 
@@ -180,6 +184,7 @@
 .markdown-content h4 {
   margin: 20px 0 8px;
   color: var(--text-strong);
+  font-family: var(--font-secondary);
   line-height: 1.25;
 }
 
@@ -286,7 +291,7 @@
   background: color-mix(in srgb, var(--code-block-background) 90%, transparent);
   border: 0;
   border-radius: 5px;
-  font-size: 11px;
+  font-size: calc(11px * var(--interface-font-scale));
   opacity: 0;
   pointer-events: none;
   transition: opacity 140ms ease, transform 140ms ease;
@@ -353,7 +358,11 @@
   background: transparent;
   border: 0;
   border-radius: 0;
-  font: 1em/1.55 var(--font-code);
+  font: var(--code-block-font-size)/1.55 var(--font-code);
+}
+
+.code-block pre code {
+  font: inherit;
 }
 
 @media (hover: none) {
@@ -443,7 +452,7 @@
   display: block;
   margin-bottom: 6px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--interface-font-scale));
   font-weight: 650;
   text-transform: uppercase;
 }

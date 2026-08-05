@@ -1,10 +1,24 @@
 import { useEffect, useState } from "react";
 import { THEMES } from "../themes/index.js";
+import {
+  FONT_OPTIONS,
+  FONT_SCALE_MAX,
+  FONT_SCALE_MIN,
+  FONT_SCALE_STEP,
+  type FontId,
+} from "../typography.js";
 import type { SettingsPage } from "./sidebar.js";
 
 export function Settings({
   page,
   themeId,
+  interfaceFont,
+  primaryFont,
+  secondaryFont,
+  codeFont,
+  interfaceFontScale,
+  conversationFontScale,
+  codeBlockFontSize,
   editorFontSize,
   editorCommand,
   editorArguments,
@@ -13,6 +27,9 @@ export function Settings({
   providerRetries,
   error,
   onSelectTheme,
+  onTypography,
+  onTypographyScale,
+  onCodeBlockFontSize,
   onEditorFontSize,
   onEditorLauncher,
   onChooseEditor,
@@ -22,6 +39,13 @@ export function Settings({
 }: {
   page: SettingsPage;
   themeId: string;
+  interfaceFont: FontId;
+  primaryFont: FontId;
+  secondaryFont: FontId;
+  codeFont: FontId;
+  interfaceFontScale: number;
+  conversationFontScale: number;
+  codeBlockFontSize: number;
   editorFontSize: number;
   editorCommand: string;
   editorArguments: string;
@@ -30,6 +54,9 @@ export function Settings({
   providerRetries: number;
   error: string | null;
   onSelectTheme: (themeId: string) => void;
+  onTypography: (interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId) => void;
+  onTypographyScale: (role: "interface" | "conversation", value: number) => void;
+  onCodeBlockFontSize: (size: number) => void;
   onEditorFontSize: (size: number) => void;
   onEditorLauncher: (command: string, argumentsTemplate: string) => void;
   onChooseEditor: () => void;
@@ -83,6 +110,7 @@ export function Settings({
                 <span style={{ background: theme.colors.panel }} />
                 <span style={{ background: theme.colors.background }} />
                 <span style={{ background: theme.colors.surface }} />
+                <span style={{ background: theme.colors.primary }} />
               </span>
               <span>{theme.name}</span>
               <span className="theme-check" aria-hidden="true">
@@ -92,18 +120,121 @@ export function Settings({
           ))}
         </div>
 
-        <NumberSetting
-          label="Code editor font size"
-          description="Text size in the Git editor, from 10 to 24 pixels."
-          value={editorFontSize}
-          min={10}
-          max={24}
-          onChange={onEditorFontSize}
-        />
+        <div className="typography-settings">
+          <section className="typography-card">
+            <h2>Interface</h2>
+            <FontSetting
+              label="Font"
+              description="Sidebars, controls, settings, and inspector text."
+              value={interfaceFont}
+              onChange={(value) => onTypography(value, primaryFont, secondaryFont, codeFont)}
+            />
+            <ScaleSetting
+              value={interfaceFontScale}
+              onChange={(value) => onTypographyScale("interface", value)}
+            />
+          </section>
+
+          <section className="typography-card">
+            <h2>Conversation</h2>
+            <FontSetting
+              label="Body font"
+              description="User messages, assistant prose, and the composer."
+              value={primaryFont}
+              onChange={(value) => onTypography(interfaceFont, value, secondaryFont, codeFont)}
+            />
+            <FontSetting
+              label="Heading font"
+              description="Headings inside assistant responses."
+              value={secondaryFont}
+              onChange={(value) => onTypography(interfaceFont, primaryFont, value, codeFont)}
+            />
+            <ScaleSetting
+              value={conversationFontScale}
+              onChange={(value) => onTypographyScale("conversation", value)}
+            />
+          </section>
+
+          <section className="typography-card">
+            <h2>Code</h2>
+            <FontSetting
+              label="Font"
+              description="Code blocks, diffs, tool data, and the Git editor."
+              value={codeFont}
+              onChange={(value) => onTypography(interfaceFont, primaryFont, secondaryFont, value)}
+            />
+            <NumberSetting
+              label="Code-block size"
+              description="Text size in conversation code blocks, from 10 to 24 pixels."
+              value={codeBlockFontSize}
+              min={10}
+              max={24}
+              onChange={onCodeBlockFontSize}
+            />
+            <NumberSetting
+              label="Editor size"
+              description="Text size in the Git editor, from 10 to 24 pixels."
+              value={editorFontSize}
+              min={10}
+              max={24}
+              onChange={onEditorFontSize}
+            />
+          </section>
+        </div>
 
         {error ? <p className="settings-error">{error}</p> : null}
       </div>
     </section>
+  );
+}
+
+function FontSetting({
+  label,
+  description,
+  value,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  value: FontId;
+  onChange: (value: FontId) => void;
+}): JSX.Element {
+  return (
+    <label className="setting-field font-setting">
+      <span>
+        <strong>{label}</strong>
+        <small>{description}</small>
+      </span>
+      <select value={value} onChange={(event) => onChange(event.target.value as FontId)}>
+        {FONT_OPTIONS.map((font) => <option key={font.id} value={font.id}>{font.name}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function ScaleSetting({ value, onChange }: { value: number; onChange: (value: number) => void }): JSX.Element {
+  return (
+    <div className="setting-field scale-setting">
+      <span>
+        <strong>Text size</strong>
+        <small>Adjust this group while keeping its size hierarchy.</small>
+      </span>
+      <div className="scale-control" aria-label="Text size">
+        <button
+          type="button"
+          aria-label="Decrease text size"
+          disabled={value <= FONT_SCALE_MIN}
+          onClick={() => onChange(value - FONT_SCALE_STEP)}
+        >−</button>
+        <output>{value}%</output>
+        <button
+          type="button"
+          aria-label="Increase text size"
+          disabled={value >= FONT_SCALE_MAX}
+          onClick={() => onChange(value + FONT_SCALE_STEP)}
+        >+</button>
+      </div>
+    </div>
   );
 }
 

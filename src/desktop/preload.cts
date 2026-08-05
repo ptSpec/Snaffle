@@ -1,6 +1,7 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { CommandApprovalDecision } from "../protocol.js";
 import type { DesktopApi, DesktopRunEvent, GitFileContents, SaveMessageInput, StartRunInput } from "./api.js";
+import type { FontId } from "./typography.js";
 
 const api: DesktopApi = {
   platform: process.platform,
@@ -20,6 +21,15 @@ const api: DesktopApi = {
   removeWorkspace: (workspaceId: string) =>
     ipcRenderer.invoke("desktop:remove-workspace", workspaceId),
   listOpenRouterModels: () => ipcRenderer.invoke("desktop:list-openrouter-models"),
+  chooseAttachments: () => ipcRenderer.invoke("desktop:choose-attachments"),
+  importDroppedFiles: (files: File[]) =>
+    ipcRenderer.invoke("desktop:import-dropped-files", files.map((file) => webUtils.getPathForFile(file))),
+  importClipboardImage: () => ipcRenderer.invoke("desktop:import-clipboard-image"),
+  readClipboardText: () => ipcRenderer.invoke("desktop:read-clipboard-text"),
+  readClipboardHtml: () => ipcRenderer.invoke("desktop:read-clipboard-html"),
+  removeAttachment: (id: string) => ipcRenderer.invoke("desktop:remove-attachment", id),
+  setAttachmentContext: (threadId: string, sequence: number, attachmentId: string, include: boolean) =>
+    ipcRenderer.invoke("desktop:set-attachment-context", threadId, sequence, attachmentId, include),
   startRun: (input: StartRunInput) => ipcRenderer.invoke("desktop:start-run", input),
   steerRun: (threadId: string, message: string) =>
     ipcRenderer.invoke("desktop:steer-run", threadId, message),
@@ -29,6 +39,11 @@ const api: DesktopApi = {
   resolveCommandApproval: (id: string, decision: CommandApprovalDecision) =>
     ipcRenderer.invoke("desktop:resolve-command-approval", id, decision),
   setTheme: (themeId: string) => ipcRenderer.invoke("desktop:set-theme", themeId),
+  setTypography: (interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId) =>
+    ipcRenderer.invoke("desktop:set-typography", interfaceFont, primary, secondary, code),
+  setTypographyScale: (role: "interface" | "conversation", value: number) =>
+    ipcRenderer.invoke("desktop:set-typography-scale", role, value),
+  setCodeBlockFontSize: (size: number) => ipcRenderer.invoke("desktop:set-code-block-font-size", size),
   setEditorFontSize: (size: number) => ipcRenderer.invoke("desktop:set-editor-font-size", size),
   setEditorLauncher: (command: string, argumentsTemplate: string) =>
     ipcRenderer.invoke("desktop:set-editor-launcher", command, argumentsTemplate),

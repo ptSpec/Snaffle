@@ -8,7 +8,6 @@ import { editTool } from "../src/tools/edit.js";
 import { readTool } from "../src/tools/read.js";
 import { runTool } from "../src/tools/run.js";
 import { searchTool } from "../src/tools/search.js";
-import { contentLineCount, contentRevision } from "../src/tools/tool.js";
 import { writeTool } from "../src/tools/write.js";
 import { LocalWorkspace } from "../src/workspace.js";
 import { nativeSandboxStatus } from "../src/sandbox.js";
@@ -26,34 +25,23 @@ test("the five explicit file and command tools work together", async (t) => {
     path: "src/example.ts",
     content: "const value = 1;\nconst ready = false;\nconst label = 'old';\n",
   });
-  assert.equal(
-    written.content,
-    `Wrote src/example.ts; version: ${contentRevision("const value = 1;\nconst ready = false;\nconst label = 'old';\n")}; total lines: ${contentLineCount("const value = 1;\nconst ready = false;\nconst label = 'old';\n")}.`,
-  );
+  assert.equal(written.content, "Successfully wrote 59 bytes to src/example.ts");
   const read = await readTool.execute(workspace, { path: "src/example.ts" });
-  assert.match(read.content, /version: [0-9a-f]{12}.*\n1 \| const value = 1/);
+  assert.equal(read.content, "const value = 1;\nconst ready = false;\nconst label = 'old';\n");
 
-  const writtenVersion = /version: ([0-9a-f]{12})/.exec(written.content)?.[1];
-  assert.ok(writtenVersion);
   const edited = await editTool.execute(workspace, {
     path: "src/example.ts",
-    version: writtenVersion,
     edits: [
-      { startLine: 1, endLine: 1, newText: "const value = 2;" },
-      { startLine: 2, endLine: 2, newText: "const ready = true;" },
+      { oldText: "const value = 1;", newText: "const value = 2;" },
+      { oldText: "const ready = false;", newText: "const ready = true;" },
     ],
   });
-  const editedVersion = /version: ([0-9a-f]{12})/.exec(edited.content)?.[1];
-  assert.ok(editedVersion);
+  assert.equal(edited.content, "Successfully replaced 2 block(s) in src/example.ts.");
   const finalEdit = await editTool.execute(workspace, {
     path: "src/example.ts",
-    version: editedVersion,
-    edits: [
-      { startLine: 3, endLine: 3, newText: "const label = 'new';" },
-      { startLine: 4, endLine: 4, newText: "export {};" },
-    ],
+    edits: [{ oldText: "const label = 'old';", newText: "const label = 'new';\nexport {};" }],
   });
-  assert.match(finalEdit.content, /total lines: 4/);
+  assert.equal(finalEdit.content, "Successfully replaced 1 block(s) in src/example.ts.");
 
   const matches = await searchTool.execute(workspace, { query: "value = 2" });
   assert.match(matches.content, /src\/example\.ts:1/);
@@ -74,7 +62,7 @@ test("the five explicit file and command tools work together", async (t) => {
   assert.equal(command.exitCode, 0);
   assert.equal(
     await readFile(path.join(root, "src/example.ts"), "utf8"),
-    "const value = 2;\nconst ready = true;\nconst label = 'new';\nexport {};",
+    "const value = 2;\nconst ready = true;\nconst label = 'new';\nexport {};\n",
   );
 });
 
@@ -90,7 +78,7 @@ test("run command reports a nonzero exit separately from tool failure", async (t
 
 test("tool input healer repairs a quoted object with a malformed integer", () => {
   const malformed =
-    '{"path": "build/spreadsheet/spreadsheet.py", "startLine": .290, "lineCount": 15}';
+    '{"path": "build/spreadsheet/spreadsheet.py", "offset": .290, "limit": 15}';
   const providerInput = healToolInput(JSON.stringify(malformed));
   const healed = healToolCall(
     {
@@ -104,12 +92,12 @@ test("tool input healer repairs a quoted object with a malformed integer", () =>
 
   assert.deepEqual(healed.input, {
     path: "build/spreadsheet/spreadsheet.py",
-    startLine: 290,
-    lineCount: 15,
+    offset: 290,
+    limit: 15,
   });
   assert.equal(
     healed.inputRepair,
-    'Arguments were sent as a quoted JSON string; converted them to a JSON object; "startLine" was .290; changed it to 290 because it requires an integer',
+    'Arguments were sent as a quoted JSON string; converted them to a JSON object; "offset" was .290; changed it to 290 because it requires an integer',
   );
 });
 
@@ -120,8 +108,7 @@ test("tool input healer accepts one edit without an array", () => {
       name: "edit_file",
       input: {
         path: "src/app.ts",
-        version: "8e42c197a810",
-        edits: { startLine: 10, endLine: 10, newText: "const port = 4000;" },
+        edits: { oldText: "const port = 3000;", newText: "const port = 4000;" },
       },
     },
     editTool.inputSchema,
@@ -129,13 +116,12 @@ test("tool input healer accepts one edit without an array", () => {
 
   assert.deepEqual(healed.input, {
     path: "src/app.ts",
-    version: "8e42c197a810",
-    edits: [{ startLine: 10, endLine: 10, newText: "const port = 4000;" }],
+    edits: [{ oldText: "const port = 3000;", newText: "const port = 4000;" }],
   });
   assert.equal(healed.inputRepair, '"edits" was one object; wrapped it in an array');
 });
 
-test("edit rejects stale versions and overlapping ranges", async (t) => {
+test("edit rejects ambiguous and overlapping exact matches", async (t) => {
   const { root, workspace } = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));
   const original = "first\nsecond\nthird\n";
@@ -144,40 +130,36 @@ test("edit rejects stale versions and overlapping ranges", async (t) => {
   await assert.rejects(
     editTool.execute(workspace, {
       path: "example.txt",
-      version: contentRevision(original),
       edits: [
-        { startLine: 1, endLine: 2, newText: "changed" },
-        { startLine: 2, endLine: 3, newText: "overlap" },
+        { oldText: "first\nsecond", newText: "changed" },
+        { oldText: "second\nthird", newText: "overlap" },
       ],
     }),
     /must not overlap/,
   );
 
-  await writeFile(path.join(root, "example.txt"), "changed externally\n");
+  await writeFile(path.join(root, "example.txt"), "repeat\nrepeat\n");
   await assert.rejects(
     editTool.execute(workspace, {
       path: "example.txt",
-      version: contentRevision(original),
-      edits: [{ startLine: 1, endLine: 1, newText: "changed" }],
+      edits: [{ oldText: "repeat", newText: "changed" }],
     }),
-    /stale or belongs to another file/,
+    /matched more than once/,
   );
 });
 
-test("edit reports exact append coordinates", async (t) => {
+test("exact edit accepts LF input and preserves CRLF files", async (t) => {
   const { root, workspace } = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));
-  const original = "first\nsecond";
+  const original = "first\r\nsecond\r\n";
   await writeFile(path.join(root, "example.txt"), original);
 
-  await assert.rejects(
-    editTool.execute(workspace, {
-      path: "example.txt",
-      version: contentRevision(original),
-      edits: [{ startLine: 4, endLine: 5, newText: "too far" }],
-    }),
-    /has 2 lines.*use startLine 3 and endLine 3/,
-  );
+  await editTool.execute(workspace, {
+    path: "example.txt",
+    edits: [{ oldText: "first\nsecond", newText: "one\ntwo" }],
+  });
+
+  assert.equal(await readFile(path.join(root, "example.txt"), "utf8"), "one\r\ntwo\r\n");
 });
 
 test("workspace rejects paths outside its root", async (t) => {

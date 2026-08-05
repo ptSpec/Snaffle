@@ -14,7 +14,7 @@
 .saved-messages h1 {
   margin: 0 0 24px;
   color: var(--text-strong);
-  font-size: 28px;
+  font-size: calc(28px * var(--interface-font-scale));
   letter-spacing: -0.03em;
 }
 
@@ -57,7 +57,7 @@
 
 .saved-message-source,
 .saved-message-meta {
-  font-size: 11px;
+  font-size: calc(11px * var(--interface-font-scale));
 }
 
 .saved-message-text {

@@ -11,12 +11,13 @@ import {
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import hljs from "highlight.js/lib/common";
+import type { AttachmentRef } from "../../attachments/types.js";
 import type { CommandApprovalDecision, RunEvent, ToolCall, Usage } from "../../protocol.js";
 import type { DesktopEntry } from "../api.js";
 import { JsonInspector } from "./json-inspector.js";
 
 export type TimelineItem =
-  | { id: string; kind: "user"; text: string; sequence: number; entryId?: string }
+  | { id: string; kind: "user"; text: string; attachments?: AttachmentRef[]; sequence: number; entryId?: string }
   | { id: string; kind: "error"; text: string }
   | { id: string; kind: "assistant"; text: string; streaming: boolean; intermediate?: boolean; model?: string; usage?: Usage; durationMs?: number; sequence?: number; entryId?: string }
   | { id: string; kind: "activity-group"; items: TimelineItem[] }
@@ -45,6 +46,7 @@ export function TimelineEntry({
   onResolveApproval,
   savedId,
   onToggleSaved,
+  onToggleAttachmentContext,
 }: {
   item: TimelineItem;
   selectedId: string | null;
@@ -53,6 +55,10 @@ export function TimelineEntry({
   onResolveApproval?: (id: string, decision: CommandApprovalDecision) => void;
   savedId?: string | undefined;
   onToggleSaved?: (item: SaveableTimelineItem, savedId?: string) => void;
+  onToggleAttachmentContext?: (
+    item: Extract<TimelineItem, { kind: "user" }>,
+    attachment: AttachmentRef,
+  ) => void;
 }): JSX.Element {
   if (item.kind === "activity-group") {
     return (
@@ -137,6 +143,7 @@ export function TimelineEntry({
       <UserMessage
         item={item}
         {...(onEditUser ? { onEdit: onEditUser } : {})}
+        {...(onToggleAttachmentContext ? { onToggleAttachmentContext } : {})}
       />
     );
   }
@@ -230,9 +237,11 @@ export const MarkdownContent = memo(function MarkdownContent({ text }: { text: s
 function UserMessage({
   item,
   onEdit,
+  onToggleAttachmentContext,
 }: {
   item: Extract<TimelineItem, { kind: "user" }>;
   onEdit?: (text: string) => void;
+  onToggleAttachmentContext?: (item: Extract<TimelineItem, { kind: "user" }>, attachment: AttachmentRef) => void;
 }): JSX.Element {
   const collapsible = item.text.length > 1000 || item.text.split("\n").length > 12;
   const [expanded, setExpanded] = useState(false);
@@ -240,7 +249,28 @@ function UserMessage({
   return (
     <article className="message user" {...(item.entryId ? { "data-entry-id": item.entryId } : {})}>
       <div className={collapsible && !expanded ? "message-body collapsed" : "message-body"}>
-        <p>{item.text}</p>
+        {item.text ? <p>{item.text}</p> : null}
+        {item.attachments?.length ? (
+          <div className="message-attachments">
+            {item.attachments.map((attachment) => {
+              const included = attachment.includeInContext !== false;
+              return (
+                <button
+                  key={attachment.id}
+                  className={included ? "" : "removed"}
+                  type="button"
+                  disabled={!onToggleAttachmentContext}
+                  title={included ? "Remove from future model context" : "Add back to model context"}
+                  aria-label={`${included ? "Remove" : "Restore"} ${attachment.name} ${included ? "from" : "to"} model context`}
+                  onClick={() => onToggleAttachmentContext?.(item, attachment)}
+                >
+                  <span>{attachment.name}</span>
+                  <b aria-hidden="true">{included ? "×" : "↻"}</b>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
       <MessageFooter
         text={item.text}
@@ -736,7 +766,14 @@ export function timelineFromEntries(entries: DesktopEntry[]): TimelineItem[] {
   entries.forEach(({ id: entryId, sequence, message }, index) => {
     if (message.role === "system") return;
     if (message.role === "user") {
-      items.push({ id: `entry-${entryId}`, kind: "user", text: message.content, sequence, entryId });
+      items.push({
+        id: `entry-${entryId}`,
+        kind: "user",
+        text: message.content,
+        sequence,
+        entryId,
+        ...(message.attachments?.length ? { attachments: message.attachments } : {}),
+      });
       return;
     }
     if (message.role === "assistant") {
