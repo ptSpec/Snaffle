@@ -56,6 +56,7 @@ async function main(): Promise<void> {
     task: options.task,
     provider: createProvider(options),
     tools: defaultTools({
+      webSearchEnabled: true,
       tavilyApiKey: process.env.TAVILY_API_KEY,
       ...(options.provider === "openrouter"
         ? { openRouterApiKey: options.apiKey }

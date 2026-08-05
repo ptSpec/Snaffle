@@ -228,7 +228,7 @@ function WebSettings({
       <div className="settings-content">
         <p className="eyebrow">Settings</p>
         <h1>Web</h1>
-        <p className="settings-description">When enabled, web search uses OpenRouter with Luna by default and may incur provider charges. Add Tavily to use it instead. Direct web fetches and YouTube transcripts use no paid API.</p>
+        <p className="settings-description">When enabled, web search prefers Tavily when configured, then bundled Ketch when available, and otherwise OpenRouter with Luna. Tavily and OpenRouter may incur provider charges; Ketch, direct web fetches, and YouTube transcripts do not invoke a paid API.</p>
 
         <label className="setting-field text-setting">
           <span>
