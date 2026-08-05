@@ -4,6 +4,10 @@
   padding: 12px 10px;
 }
 
+.workspace-sidebar-navigation {
+  padding-right: 0;
+}
+
 .workspace-navigation {
   display: flex;
   height: 100%;
@@ -84,6 +88,132 @@
   background: var(--composer-background);
 }
 
+.workspace-navigation .workspace-row.active,
+.workspace-navigation .thread-row.active {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  background: var(--app-background);
+  border-radius: 8px 0 0 8px;
+}
+
+.workspace-navigation .workspace-row.active .thread-actions {
+  background: transparent;
+}
+
+.workspace-navigation .workspace-row.active {
+  border-radius: 8px 0 0 8px;
+  filter: drop-shadow(0 0 5px var(--pane-depth-shadow));
+}
+
+.workspace-navigation .workspace-row.active::before {
+  position: absolute;
+  top: -12px;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  content: "";
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 0 0,
+    transparent 12px,
+    var(--app-background) 12.5px
+  );
+}
+
+.workspace-navigation .workspace-row.active::after {
+  position: absolute;
+  right: 0;
+  bottom: -12px;
+  width: 12px;
+  height: 12px;
+  content: "";
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 0 100%,
+    transparent 12px,
+    var(--app-background) 12.5px
+  );
+}
+
+.workspace-navigation .thread-row.active:hover::after {
+  background: linear-gradient(to right, transparent, var(--app-background) 28%);
+}
+
+.workspace-navigation .thread-row.active > .row-action {
+  background: var(--app-background);
+}
+
+.workspace-navigation .thread-row.active {
+  filter: drop-shadow(0 0 5px var(--pane-depth-shadow));
+}
+
+.workspace-navigation .thread-row.bridged {
+  margin-bottom: 12px;
+  border-radius: 0 0 0 8px;
+}
+
+.workspace-navigation .thread-row.bridged::before {
+  position: absolute;
+  top: 0;
+  left: -8px;
+  width: 8px;
+  height: 8px;
+  content: "";
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 0 100%,
+    transparent 8px,
+    var(--app-background) 8.5px
+  );
+}
+
+.workspace-navigation .thread-row.active .thread-item::before {
+  position: absolute;
+  top: -12px;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  content: "";
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 0 0,
+    transparent 12px,
+    var(--app-background) 12.5px
+  );
+}
+
+.workspace-navigation .thread-row.active .thread-item::after {
+  position: absolute;
+  right: 0;
+  bottom: -12px;
+  width: 12px;
+  height: 12px;
+  content: "";
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 0 100%,
+    transparent 12px,
+    var(--app-background) 12.5px
+  );
+}
+
+.workspace-navigation .thread-row.promoted {
+  animation: active-thread-rise 280ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+@keyframes active-thread-rise {
+  from {
+    opacity: 0.72;
+    transform: translateY(var(--thread-rise-distance, 36px));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .sidebar-row .workspace-item,
 .sidebar-row .thread-item {
   min-width: 0;
@@ -157,10 +287,13 @@
   align-items: stretch;
   flex-direction: column;
   gap: 2px;
-  margin: 0 2px 10px;
+  margin: 0 0 10px 2px;
 }
 
 .workspace-create-button {
+  --inverted-corner-fill: var(--hover-background);
+
+  position: relative;
   display: flex;
   min-width: 0;
   align-items: center;
@@ -177,12 +310,62 @@
   background: var(--hover-background);
 }
 
+.workspace-create-button:hover:not(:disabled) {
+  z-index: 3;
+  border-radius: 5px 0 0 5px;
+}
+
 .workspace-create-button.primary {
   color: var(--primary);
+  font-size: calc(15px * var(--interface-font-scale));
 }
 
 .workspace-create-button.secondary {
   color: var(--text-faint);
+}
+
+.workspace-navigation .workspace-row:not(.active) {
+  --inverted-corner-fill: var(--composer-background);
+
+  position: relative;
+}
+
+.workspace-navigation .workspace-row:not(.active):hover,
+.workspace-navigation .workspace-row:not(.active):hover .workspace-item {
+  z-index: 3;
+  border-radius: 6px 0 0 6px;
+}
+
+.workspace-create-button:hover:not(:disabled)::before,
+.workspace-create-button:hover:not(:disabled)::after,
+.workspace-navigation .workspace-row:not(.active):hover::before,
+.workspace-navigation .workspace-row:not(.active):hover::after {
+  position: absolute;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  content: "";
+  pointer-events: none;
+}
+
+.workspace-create-button:hover:not(:disabled)::before,
+.workspace-navigation .workspace-row:not(.active):hover::before {
+  top: -12px;
+  background: radial-gradient(
+    circle at 0 0,
+    transparent 12px,
+    var(--inverted-corner-fill) 12.5px
+  );
+}
+
+.workspace-create-button:hover:not(:disabled)::after,
+.workspace-navigation .workspace-row:not(.active):hover::after {
+  bottom: -12px;
+  background: radial-gradient(
+    circle at 0 100%,
+    transparent 12px,
+    var(--inverted-corner-fill) 12.5px
+  );
 }
 
 .row-action svg {
@@ -224,6 +407,10 @@
   white-space: nowrap;
 }
 
+.workspace-item {
+  font-size: calc(15.5px * var(--interface-font-scale));
+}
+
 .workspace-icon {
   flex: 0 0 auto;
   color: var(--text-faint);
@@ -254,7 +441,6 @@
 .threads {
   min-height: 0;
   flex: 1;
-  padding-top: 4px;
   overflow-y: auto;
 }
 
@@ -265,7 +451,6 @@
 .thread-list {
   margin-left: 6px;
   padding-left: 4px;
-  border-left: 1px solid color-mix(in srgb, var(--text-faint) 55%, var(--border-default));
 }
 
 .thread-row {
@@ -280,14 +465,41 @@ html[data-accented-theme="true"] .thread-row.active .thread-item {
   color: var(--primary);
 }
 
-.thread-row::before {
+.workspace-navigation .thread-row:not(.active):hover,
+.workspace-navigation .thread-row:not(.active):hover .thread-item {
+  border-radius: 6px 0 0 6px;
+}
+
+.workspace-navigation .thread-row:not(.active):hover::after {
+  border-radius: 0;
+}
+
+.workspace-navigation .thread-row:not(.active):hover .thread-item::before,
+.workspace-navigation .thread-row:not(.active):hover .thread-item::after {
   position: absolute;
-  top: 50%;
-  left: -8px;
-  width: 8px;
-  height: 1px;
+  right: 0;
+  width: 12px;
+  height: 12px;
   content: "";
-  background: color-mix(in srgb, var(--text-faint) 55%, var(--border-default));
+  pointer-events: none;
+}
+
+.workspace-navigation .thread-row:not(.active):hover .thread-item::before {
+  top: -12px;
+  background: radial-gradient(
+    circle at 0 0,
+    transparent 12px,
+    var(--composer-background) 12.5px
+  );
+}
+
+.workspace-navigation .thread-row:not(.active):hover .thread-item::after {
+  bottom: -12px;
+  background: radial-gradient(
+    circle at 0 100%,
+    transparent 12px,
+    var(--composer-background) 12.5px
+  );
 }
 
 .thread-row:hover::after {
@@ -305,8 +517,8 @@ html[data-accented-theme="true"] .thread-row.active .thread-item {
 
 .thread-item {
   display: grid;
-  padding: 7px 5px;
-  font-size: 13.5px;
+  padding: 8px 5px;
+  font-size: calc(15px * var(--interface-font-scale));
 }
 
 .thread-row > .row-action {
