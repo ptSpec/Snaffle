@@ -57,11 +57,16 @@
   --diff-removed-background: color-mix(in srgb, var(--danger) 18%, var(--code-background));
   --diff-modified-text: var(--warning);
   --diff-modified-background: color-mix(in srgb, var(--warning) 18%, var(--code-background));
+  --pane-depth-shadow: rgb(0 0 0 / 0.16);
 
   color: var(--text-primary);
   background: var(--app-background);
   font-family: var(--font-interface);
   font-synthesis: none;
+}
+
+html[data-appearance="dark"] {
+  --pane-depth-shadow: rgb(0 0 0 / 0.46);
 }
 
 * {
@@ -221,12 +226,23 @@ body.resizing-columns .workspace-shell {
 }
 
 .left-sidebar {
+  position: relative;
+  z-index: 2;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-width: 0;
   min-height: 0;
   background: var(--sidebar-background);
-  border-right: 1px solid var(--border-default);
+  box-shadow: inset -12px 0 18px -14px var(--pane-depth-shadow);
+}
+
+.workspace-shell > .conversation,
+.workspace-shell > .settings,
+.workspace-shell > .bookmarks {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  border-radius: 14px 0 0 14px;
 }
 
 .sidebar-brand {

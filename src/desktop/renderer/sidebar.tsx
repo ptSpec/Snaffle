@@ -2,11 +2,13 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import logoSvg from "../../../assets/logo_svg.svg?raw";
 import { PRODUCT } from "../../identity.js";
 import type { DesktopState, DesktopThread } from "../api.js";
+import type { BookmarksPage } from "./bookmarks.js";
 import { ThinkingOrb } from "./thinking-orb.js";
 
 export type AppView = "conversation" | "saved" | "settings";
@@ -17,6 +19,7 @@ export function Sidebar({
   runningThreadIds,
   view,
   settingsPage,
+  bookmarksPage,
   collapsed,
   beforeNavigate,
   onNavigate,
@@ -24,12 +27,14 @@ export function Sidebar({
   onError,
   onView,
   onSettingsPage,
+  onBookmarksPage,
   onCollapse,
 }: {
   state: DesktopState;
   runningThreadIds: string[];
   view: AppView;
   settingsPage: SettingsPage;
+  bookmarksPage: BookmarksPage;
   collapsed: boolean;
   beforeNavigate: () => Promise<void>;
   onNavigate: (state: DesktopState) => void;
@@ -37,32 +42,69 @@ export function Sidebar({
   onError: (message: string | null) => void;
   onView: (view: AppView) => void;
   onSettingsPage: (page: SettingsPage) => void;
+  onBookmarksPage: (page: BookmarksPage) => void;
   onCollapse: () => void;
 }): JSX.Element {
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [cursor, setCursor] = useState(0);
   const [anchor, setAnchor] = useState(0);
+  const [promotedThreadId, setPromotedThreadId] = useState(state.activeThreadId);
+  const [promotion, setPromotion] = useState<{ id: string; distance: number } | null>(null);
+  const sidebarRoot = useRef<HTMLElement>(null);
   const threadList = useRef<HTMLDivElement>(null);
+  const promotedWorkspaceId = useRef(state.workspace?.id);
   const isRunning = (threadId: string): boolean => runningThreadIds.includes(threadId);
+  const threads = state.workspace?.threads ?? [];
+  const promotedThread = threads.find((thread) => thread.id === promotedThreadId);
+  const orderedThreads = promotedThread
+    ? [promotedThread, ...threads.filter((thread) => thread.id !== promotedThread.id)]
+    : threads;
   const inactiveWorkspaces = state.workspaces.filter(
     (workspace) => workspace.id !== state.workspace?.id,
   );
-  const bookmarks = inactiveWorkspaces.flatMap((workspace) =>
-    workspace.threads
-      .filter((thread) => thread.bookmarked)
-      .map((thread) => ({ thread, workspace })),
-  );
-
   useEffect(() => {
     setSelecting(false);
     setSelectedIds([]);
   }, [state.workspace?.id, state.activeThreadId]);
 
   useEffect(() => {
+    const workspaceId = state.workspace?.id;
+    const threadId = state.activeThreadId;
+    if (promotedWorkspaceId.current !== workspaceId) {
+      promotedWorkspaceId.current = workspaceId;
+      setPromotedThreadId(threadId);
+      setPromotion(null);
+      return;
+    }
+    if (!threadId || threadId === promotedThreadId) return;
+    const pendingThreadId = threadId;
+
+    function promote(): void {
+      const index = orderedThreads.findIndex((thread) => thread.id === pendingThreadId);
+      setPromotion({ id: pendingThreadId, distance: Math.min(Math.max(index, 1) * 36, 280) });
+      setPromotedThreadId(pendingThreadId);
+    }
+
+    let promotionTimer: number | undefined;
+
+    function promoteFromOutside(event: Event): void {
+      if (sidebarRoot.current?.contains(event.target as Node) || promotionTimer !== undefined) return;
+      promotionTimer = window.setTimeout(promote, 650);
+    }
+
+    document.addEventListener("pointerdown", promoteFromOutside);
+    document.addEventListener("keydown", promoteFromOutside);
+    return () => {
+      document.removeEventListener("pointerdown", promoteFromOutside);
+      document.removeEventListener("keydown", promoteFromOutside);
+      if (promotionTimer !== undefined) window.clearTimeout(promotionTimer);
+    };
+  }, [state.workspace?.id, state.activeThreadId, promotedThreadId]);
+
+  useEffect(() => {
     if (!selecting) return;
-    const threads = state.workspace?.threads ?? [];
-    const activeIndex = threads.findIndex((thread) => thread.id === state.activeThreadId);
+    const activeIndex = orderedThreads.findIndex((thread) => thread.id === state.activeThreadId);
     const next = Math.max(0, activeIndex);
     setCursor(next);
     setAnchor(next);
@@ -153,7 +195,6 @@ export function Sidebar({
 
   function handleThreadKeys(event: ReactKeyboardEvent<HTMLDivElement>): void {
     if (!selecting) return;
-    const threads = state.workspace?.threads ?? [];
     if (event.key === "Escape") {
       setSelecting(false);
       setSelectedIds([]);
@@ -164,9 +205,9 @@ export function Sidebar({
       void deleteThreads(selectedIds);
       return;
     }
-    if (event.key === " " && event.target === event.currentTarget && threads[cursor]) {
+    if (event.key === " " && event.target === event.currentTarget && orderedThreads[cursor]) {
       event.preventDefault();
-      const id = threads[cursor].id;
+      const id = orderedThreads[cursor].id;
       if (isRunning(id)) return;
       setSelectedIds((ids) =>
         ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id],
@@ -178,13 +219,13 @@ export function Sidebar({
 
     event.preventDefault();
     const movement = event.key === "ArrowUp" ? -1 : 1;
-    const next = Math.max(0, Math.min(threads.length - 1, cursor + movement));
+    const next = Math.max(0, Math.min(orderedThreads.length - 1, cursor + movement));
     setCursor(next);
     if (event.shiftKey) {
       const start = Math.min(anchor, next);
       const end = Math.max(anchor, next);
       setSelectedIds(
-        threads.slice(start, end + 1).filter((thread) => !isRunning(thread.id)).map((thread) => thread.id),
+        orderedThreads.slice(start, end + 1).filter((thread) => !isRunning(thread.id)).map((thread) => thread.id),
       );
     } else {
       setAnchor(next);
@@ -193,19 +234,20 @@ export function Sidebar({
 
   return (
     <aside
+      ref={sidebarRoot}
       className={collapsed ? "left-sidebar collapsed" : "left-sidebar"}
       aria-label={
         view === "conversation"
           ? "Workspaces and threads"
           : view === "settings"
             ? "Settings navigation"
-            : "Saved messages"
+            : "Bookmarks"
       }
       aria-hidden={collapsed}
     >
       <header className="sidebar-brand">
         {view !== "conversation" ? (
-          <span>{view === "settings" ? "Settings" : "Saved"}</span>
+          <span>{view === "settings" ? "Settings" : "Bookmarks"}</span>
         ) : (
           <span className="brand-wordmark" aria-label={PRODUCT.name}>
             <span
@@ -231,7 +273,7 @@ export function Sidebar({
         className={
           view !== "conversation"
             ? "sidebar-navigation settings-navigation view-enter"
-            : "sidebar-navigation view-enter"
+            : "sidebar-navigation workspace-sidebar-navigation view-enter"
         }
       >
         {view === "settings" ? (
@@ -260,7 +302,23 @@ export function Sidebar({
             <div className="settings-navigation-space" aria-hidden="true" />
           </>
         ) : view === "saved" ? (
-          <div className="settings-navigation-space" aria-hidden="true" />
+          <>
+            <button
+              className={bookmarksPage === "threads" ? "sidebar-action active" : "sidebar-action"}
+              type="button"
+              onClick={() => onBookmarksPage("threads")}
+            >
+              <span>Threads</span>
+            </button>
+            <button
+              className={bookmarksPage === "messages" ? "sidebar-action active" : "sidebar-action"}
+              type="button"
+              onClick={() => onBookmarksPage("messages")}
+            >
+              <span>Messages</span>
+            </button>
+            <div className="settings-navigation-space" aria-hidden="true" />
+          </>
         ) : (
           <div key={state.workspace?.id ?? "empty"} className="workspace-navigation workspace-enter">
             <div className="workspace-create-actions">
@@ -342,11 +400,13 @@ export function Sidebar({
                   aria-label={selecting ? "Manage threads" : undefined}
                 >
                   <div className="thread-list">
-                    {state.workspace.threads.map((thread, index) => (
+                    {orderedThreads.map((thread, index) => (
                       <ThreadRow
                         key={thread.id}
                         thread={thread}
                         active={thread.id === state.activeThreadId}
+                        bridged={thread.id === state.activeThreadId && thread.id === promotedThreadId}
+                        promotionDistance={promotion?.id === thread.id ? promotion.distance : 0}
                         selecting={selecting}
                         selected={selectedIds.includes(thread.id)}
                         focused={selecting && index === cursor}
@@ -388,30 +448,6 @@ export function Sidebar({
                     ) : null}
                   </div>
                 </div>
-
-                {bookmarks.length ? (
-                  <div className="bookmarked-threads">
-                    <div className="section-heading">
-                      <h2>Bookmarked</h2>
-                    </div>
-                    {bookmarks.map(({ thread, workspace }) => (
-                      <ThreadRow
-                        key={thread.id}
-                        thread={thread}
-                        workspaceName={workspace.name}
-                        active={false}
-                        selecting={false}
-                        selected={false}
-                        focused={false}
-                        running={isRunning(thread.id)}
-                        onSelect={() => void selectThread(thread.id)}
-                        onToggleSelected={() => undefined}
-                        onToggleBookmark={() => void toggleBookmark(thread.id, false)}
-                        onDelete={() => void deleteThread(thread)}
-                      />
-                    ))}
-                  </div>
-                ) : null}
 
                 {inactiveWorkspaces.length ? (
                   <div className="inactive-workspaces">
@@ -466,7 +502,7 @@ export function Sidebar({
               }}
             >
               <SavedIcon />
-              <span>Saved messages</span>
+              <span>Bookmarks</span>
             </button>
             <button
               className="sidebar-action"
@@ -488,8 +524,9 @@ export function Sidebar({
 
 function ThreadRow({
   thread,
-  workspaceName,
   active,
+  bridged,
+  promotionDistance,
   selecting,
   selected,
   focused,
@@ -500,8 +537,9 @@ function ThreadRow({
   onDelete,
 }: {
   thread: DesktopThread;
-  workspaceName?: string;
   active: boolean;
+  bridged: boolean;
+  promotionDistance: number;
   selecting: boolean;
   selected: boolean;
   focused: boolean;
@@ -513,10 +551,15 @@ function ThreadRow({
 }): JSX.Element {
   let className = "sidebar-row thread-row";
   if (active) className += " active";
+  if (bridged) className += " bridged";
+  if (promotionDistance) className += " promoted";
   if (focused) className += " focused";
 
   return (
-    <div className={className}>
+    <div
+      className={className}
+      style={promotionDistance ? { "--thread-rise-distance": `${promotionDistance}px` } as CSSProperties : undefined}
+    >
       {selecting ? (
         <input
           className="selection-checkbox"
@@ -541,7 +584,6 @@ function ThreadRow({
           ) : null}
           <span className="thread-title-text">{thread.title}</span>
         </span>
-        {workspaceName ? <small>{workspaceName}</small> : null}
       </button>
       {!selecting ? (
         <>
