@@ -103,8 +103,8 @@ const legacyWriteTool = {
 };
 
 const variants = {
-  legacy: { prompt: LEGACY_PROMPT, tools: [runTool, legacyReadTool, searchTool, legacyEditTool, legacyWriteTool] },
-  versioned: { prompt: SYSTEM_PROMPT, tools: [runTool, readTool, searchTool, editTool, writeTool] },
+  legacyExact: { prompt: LEGACY_PROMPT, tools: [runTool, legacyReadTool, searchTool, legacyEditTool, legacyWriteTool] },
+  currentExact: { prompt: SYSTEM_PROMPT, tools: [runTool, readTool, searchTool, editTool, writeTool] },
 };
 
 const cases = [
@@ -139,7 +139,9 @@ for (const model of models) {
   for (let trial = 1; trial <= trials; trial += 1) {
     for (const [caseIndex, benchmarkCase] of cases.entries()) {
       if (!selectedCases.has(benchmarkCase.id)) continue;
-      const order = (trial + caseIndex) % 2 ? ["legacy", "versioned"] : ["versioned", "legacy"];
+      const order = (trial + caseIndex) % 2
+        ? ["legacyExact", "currentExact"]
+        : ["currentExact", "legacyExact"];
       for (const variant of order) {
         const result = await runTrial({ model, trial, benchmarkCase, variant, seed: trial * 100 + caseIndex });
         results.push(result);

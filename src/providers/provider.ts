@@ -1,5 +1,7 @@
 import type { Message, ModelResponse, ToolSpec } from "../protocol.js";
 
+export const DEFAULT_MODEL_CONTEXT_LENGTH = 128_000;
+
 export type ModelStreamEvent =
   | { type: "text.delta"; text: string }
   | { type: "reasoning.delta"; text: string }

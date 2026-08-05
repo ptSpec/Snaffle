@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -7,6 +7,8 @@ import path from "node:path";
 import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_MAX_STEPS, runAgent } from "../agent-loop.js";
+import { AttachmentStore, MAX_ATTACHMENTS } from "../attachments/store.js";
+import type { AttachmentRef } from "../attachments/types.js";
 import { initialMessages } from "../context.js";
 import { commitGitChanges, initializeGitRepository, saveGitFile } from "../git/actions.js";
 import { safeWorkspacePath } from "../git/process.js";
@@ -25,6 +27,13 @@ import { LocalWorkspace, type CommandApprovalRequest } from "../workspace.js";
 import type { DesktopState, SaveMessageInput, StartRunInput } from "./api.js";
 import { openStore, type DesktopStore } from "./store.js";
 import { DEFAULT_THEME, themeById, type Theme } from "./themes/index.js";
+import {
+  DEFAULT_FONTS,
+  DEFAULT_FONT_SCALE,
+  fontById,
+  validFontScale,
+  type FontId,
+} from "./typography.js";
 
 const desktopDirectory = path.dirname(fileURLToPath(import.meta.url));
 const rendererPath = path.join(desktopDirectory, "../../renderer/index.html");
@@ -32,6 +41,7 @@ const preloadPath = path.join(desktopDirectory, "preload.cjs");
 
 let mainWindow: BrowserWindow | undefined;
 let store: DesktopStore;
+let attachments: AttachmentStore;
 const activeRuns = new Map<
   string,
   {
@@ -48,6 +58,13 @@ const pendingApprovals = new Map<
   { threadId: string; resolve: (decision: CommandApprovalDecision) => void }
 >();
 let activeTheme: Theme = DEFAULT_THEME;
+let interfaceFont: FontId = DEFAULT_FONTS.interface;
+let primaryFont: FontId = DEFAULT_FONTS.primary;
+let secondaryFont: FontId = DEFAULT_FONTS.secondary;
+let codeFont: FontId = DEFAULT_FONTS.code;
+let interfaceFontScale = DEFAULT_FONT_SCALE;
+let conversationFontScale = DEFAULT_FONT_SCALE;
+let codeBlockFontSize = 15;
 let editorFontSize = 13;
 let editorCommand = "";
 let editorArguments = "";
@@ -69,6 +86,13 @@ async function start(): Promise<void> {
     typeof settings.themeId === "string"
       ? themeById(settings.themeId) ?? DEFAULT_THEME
       : DEFAULT_THEME;
+  interfaceFont = fontById(settings.interfaceFont)?.id ?? DEFAULT_FONTS.interface;
+  primaryFont = fontById(settings.primaryFont)?.id ?? DEFAULT_FONTS.primary;
+  secondaryFont = fontById(settings.secondaryFont)?.id ?? DEFAULT_FONTS.secondary;
+  codeFont = fontById(settings.codeFont)?.id ?? DEFAULT_FONTS.code;
+  interfaceFontScale = validFontScale(settings.interfaceFontScale) ?? DEFAULT_FONT_SCALE;
+  conversationFontScale = validFontScale(settings.conversationFontScale) ?? DEFAULT_FONT_SCALE;
+  codeBlockFontSize = validCodeFontSize(settings.codeBlockFontSize) ?? codeBlockFontSize;
   editorFontSize = validEditorFontSize(settings.editorFontSize) ?? editorFontSize;
   editorCommand = typeof settings.editorCommand === "string" ? settings.editorCommand : "";
   editorArguments = typeof settings.editorArguments === "string" ? settings.editorArguments : "";
@@ -76,6 +100,7 @@ async function start(): Promise<void> {
   providerTimeoutMinutes = validProviderTimeout(settings.providerTimeoutMinutes) ?? providerTimeoutMinutes;
   providerRetries = validProviderRetries(settings.providerRetries) ?? DEFAULT_PROVIDER_RETRIES;
   store = await openStore(path.join(app.getPath("userData"), `${PRODUCT.slug}.db`));
+  attachments = new AttachmentStore(path.join(app.getPath("userData"), "attachments"));
   if (process.platform === "darwin" && !app.isPackaged) app.dock?.setIcon(applicationIcon());
   if (!app.isPackaged && (await store.state()).workspaces.length === 0) {
     await store.addWorkspace(process.cwd(), path.basename(process.cwd()) || process.cwd());
@@ -119,7 +144,17 @@ function createWindow(): void {
   });
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  void mainWindow.loadFile(rendererPath, { query: { theme: activeTheme.id } });
+  void mainWindow.loadFile(rendererPath, {
+    query: {
+      theme: activeTheme.id,
+      interfaceFont,
+      primaryFont,
+      secondaryFont,
+      codeFont,
+      interfaceFontScale: String(interfaceFontScale),
+      conversationFontScale: String(conversationFontScale),
+    },
+  });
   mainWindow.on("closed", () => {
     mainWindow = undefined;
   });
@@ -205,6 +240,56 @@ function registerIpc(): void {
     return listOpenRouterModels(openRouterApiKey());
   });
 
+  ipcMain.handle("desktop:choose-attachments", async (event) => {
+    const owner = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    const options: OpenDialogOptions = {
+      title: "Attach files",
+      properties: ["openFile", "multiSelections"],
+      filters: [
+        { name: "Images and documents", extensions: ["png", "jpg", "jpeg", "webp", "gif", "pdf", "txt", "md", "json", "csv", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "odt", "ods", "odp", "rtf", "epub"] },
+      ],
+    };
+    const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
+    if (result.canceled) return [];
+    return attachments.importFiles(result.filePaths.slice(0, MAX_ATTACHMENTS));
+  });
+
+  ipcMain.handle("desktop:import-clipboard-image", async () => {
+    const image = clipboard.readImage();
+    if (image.isEmpty()) throw new Error("The clipboard does not contain an image");
+    return attachments.importClipboardImage(image.toPNG());
+  });
+
+  ipcMain.handle("desktop:import-dropped-files", (_event, value: unknown) => {
+    if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+      throw new Error("Dropped files must be local file paths");
+    }
+    return attachments.importFiles(value.slice(0, MAX_ATTACHMENTS));
+  });
+
+  ipcMain.handle("desktop:read-clipboard-text", () => clipboard.readText());
+  ipcMain.handle("desktop:read-clipboard-html", () => clipboard.readHTML());
+
+  ipcMain.handle("desktop:remove-attachment", (_event, value: unknown) => {
+    return attachments.remove(parseId(value, "Attachment"));
+  });
+
+  ipcMain.handle(
+    "desktop:set-attachment-context",
+    (_event, rawThreadId: unknown, rawSequence: unknown, rawAttachmentId: unknown, include: unknown) => {
+      if (typeof include !== "boolean") throw new Error("Invalid attachment context setting");
+      if (!Number.isInteger(rawSequence) || Number(rawSequence) < 0) {
+        throw new Error("Invalid message sequence");
+      }
+      return store.setAttachmentContext(
+        parseId(rawThreadId, "Thread"),
+        Number(rawSequence),
+        parseId(rawAttachmentId, "Attachment"),
+        include,
+      );
+    },
+  );
+
   ipcMain.handle("desktop:start-run", async (_event, rawInput: unknown): Promise<void> => {
     const input = parseStartRunInput(rawInput);
     const state = await store.state();
@@ -241,8 +326,15 @@ function registerIpc(): void {
       await store.saveMessages(
         threadId,
         conversation.length
-          ? [...conversation, { role: "user", content: input.task }]
-          : initialMessages(input.task, workspace.environment),
+          ? [
+              ...conversation,
+              {
+                role: "user",
+                content: input.task,
+                ...(input.attachments?.length ? { attachments: input.attachments } : {}),
+              },
+            ]
+          : initialMessages(input.task, workspace.environment, input.attachments),
       );
     } catch (error) {
       activeRuns.delete(threadId);
@@ -256,12 +348,14 @@ function registerIpc(): void {
         apiKey,
         streamIdleTimeoutMs: providerTimeoutMinutes * 60_000,
         maxRetries: providerRetries,
+        resolveAttachment: (attachment) => attachments.resolve(attachment),
       }),
       tools: defaultTools(),
       workspace,
       trace: memoryTrace,
       signal: controller.signal,
       history: conversation,
+      ...(input.attachments?.length ? { attachments: input.attachments } : {}),
       maxSteps,
       takeSteering: () => run.steering.splice(0),
       onEvent: (event) => {
@@ -341,11 +435,41 @@ function registerIpc(): void {
     }
   });
 
+  ipcMain.handle("desktop:set-typography", (_event, interfaceValue: unknown, primary: unknown, secondary: unknown, code: unknown): void => {
+    const nextInterface = fontById(interfaceValue)?.id;
+    const nextPrimary = fontById(primary)?.id;
+    const nextSecondary = fontById(secondary)?.id;
+    const nextCode = fontById(code)?.id;
+    if (!nextInterface || !nextPrimary || !nextSecondary || !nextCode) throw new Error("Unknown font selection");
+    interfaceFont = nextInterface;
+    primaryFont = nextPrimary;
+    secondaryFont = nextSecondary;
+    codeFont = nextCode;
+    saveSettings({ interfaceFont, primaryFont, secondaryFont, codeFont });
+  });
+
+  ipcMain.handle("desktop:set-typography-scale", (_event, role: unknown, value: unknown): void => {
+    const scale = validFontScale(value);
+    if ((role !== "interface" && role !== "conversation") || scale === undefined) {
+      throw new Error("Font scale must be from 85% to 125%");
+    }
+    if (role === "interface") interfaceFontScale = scale;
+    else conversationFontScale = scale;
+    saveSettings(role === "interface" ? { interfaceFontScale: scale } : { conversationFontScale: scale });
+  });
+
   ipcMain.handle("desktop:set-editor-font-size", (_event, value: unknown): void => {
     const next = validEditorFontSize(value);
     if (next === undefined) throw new Error("Editor font size must be an integer from 10 to 24");
     editorFontSize = next;
     saveSettings({ editorFontSize });
+  });
+
+  ipcMain.handle("desktop:set-code-block-font-size", (_event, value: unknown): void => {
+    const next = validCodeFontSize(value);
+    if (next === undefined) throw new Error("Code block font size must be an integer from 10 to 24");
+    codeBlockFontSize = next;
+    saveSettings({ codeBlockFontSize });
   });
 
   ipcMain.handle("desktop:set-editor-launcher", (_event, command: unknown, argumentsTemplate: unknown): void => {
@@ -510,6 +634,13 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     restrictedHostAvailable: sandbox.available,
     restrictedHostDetail: sandbox.detail,
     themeId: activeTheme.id,
+    interfaceFont,
+    primaryFont,
+    secondaryFont,
+    codeFont,
+    interfaceFontScale,
+    conversationFontScale,
+    codeBlockFontSize,
     editorFontSize,
     editorCommand,
     editorArguments,
@@ -525,6 +656,13 @@ function settingsPath(): string {
 
 type SavedSettings = {
   themeId?: unknown;
+  interfaceFont?: unknown;
+  primaryFont?: unknown;
+  secondaryFont?: unknown;
+  codeFont?: unknown;
+  interfaceFontScale?: unknown;
+  conversationFontScale?: unknown;
+  codeBlockFontSize?: unknown;
   editorFontSize?: unknown;
   editorCommand?: unknown;
   editorArguments?: unknown;
@@ -548,6 +686,13 @@ function loadSettings(): SavedSettings {
 
 function saveSettings(update: {
   themeId?: string;
+  interfaceFont?: FontId;
+  primaryFont?: FontId;
+  secondaryFont?: FontId;
+  codeFont?: FontId;
+  interfaceFontScale?: number;
+  conversationFontScale?: number;
+  codeBlockFontSize?: number;
   editorFontSize?: number;
   editorCommand?: string;
   editorArguments?: string;
@@ -564,6 +709,10 @@ function validEditorFontSize(value: unknown): number | undefined {
   return Number.isInteger(value) && Number(value) >= 10 && Number(value) <= 24
     ? Number(value)
     : undefined;
+}
+
+function validCodeFontSize(value: unknown): number | undefined {
+  return validEditorFontSize(value);
 }
 
 async function launchEditor(target: string): Promise<void> {
@@ -622,12 +771,53 @@ function parseStartRunInput(input: unknown): StartRunInput {
   const task = typeof value.task === "string" ? value.task.trim() : "";
   const model = typeof value.model === "string" ? value.model.trim() : "";
 
-  if (!task) throw new Error("Enter a task before starting a run");
+  const attachmentList = Array.isArray(value.attachments)
+    ? value.attachments.map(parseAttachment)
+    : [];
+  if (attachmentList.length > MAX_ATTACHMENTS) {
+    throw new Error(`Attach at most ${MAX_ATTACHMENTS} files`);
+  }
+  if (!task && attachmentList.length === 0) {
+    throw new Error("Enter a task or attach a file before starting a run");
+  }
   if (task.length > 30000) throw new Error("Task is too long");
   if (!model) throw new Error("Choose an OpenRouter model before starting a run");
   const threadId = typeof value.threadId === "string" ? value.threadId : "";
   if (!threadId) throw new Error("Choose a thread before starting a run");
-  return { threadId, task, model };
+  return { threadId, task, model, ...(attachmentList.length ? { attachments: attachmentList } : {}) };
+}
+
+function parseAttachment(input: unknown): AttachmentRef {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error("Invalid attachment");
+  }
+  const value = input as Record<string, unknown>;
+  const kind = value.kind;
+  const delivery = value.delivery;
+  if (kind !== "image" && kind !== "document" && kind !== "pdf") {
+    throw new Error("Invalid attachment kind");
+  }
+  if (delivery !== "image" && delivery !== "markdown" && delivery !== "pdf") {
+    throw new Error("Invalid attachment delivery");
+  }
+  if (typeof value.name !== "string" || typeof value.mediaType !== "string") {
+    throw new Error("Invalid attachment metadata");
+  }
+  if (
+    !Number.isInteger(value.size) || Number(value.size) < 0 ||
+    !Number.isInteger(value.estimatedTokens) || Number(value.estimatedTokens) < 0
+  ) {
+    throw new Error("Invalid attachment size");
+  }
+  return {
+    id: parseId(value.id, "Attachment"),
+    name: value.name,
+    mediaType: value.mediaType,
+    size: Number(value.size),
+    kind,
+    delivery,
+    estimatedTokens: Number(value.estimatedTokens),
+  };
 }
 
 function parseSteeringMessage(value: unknown): string {

@@ -1,5 +1,7 @@
+import type { AttachmentPreview, AttachmentRef } from "../attachments/types.js";
 import type { OpenRouterModel } from "../providers/openrouter.js";
 import type { CommandApprovalDecision, Message, RunEvent } from "../protocol.js";
+import type { FontId } from "./typography.js";
 
 export type GitFileChange = {
   path: string;
@@ -95,6 +97,13 @@ export type DesktopState = {
   restrictedHostAvailable: boolean;
   restrictedHostDetail: string;
   themeId: string;
+  interfaceFont: FontId;
+  primaryFont: FontId;
+  secondaryFont: FontId;
+  codeFont: FontId;
+  interfaceFontScale: number;
+  conversationFontScale: number;
+  codeBlockFontSize: number;
   editorFontSize: number;
   editorCommand: string;
   editorArguments: string;
@@ -107,6 +116,7 @@ export type StartRunInput = {
   threadId: string;
   task: string;
   model: string;
+  attachments?: AttachmentRef[];
 };
 
 export type DesktopRunEvent = {
@@ -126,12 +136,22 @@ export interface DesktopApi {
   deleteThreads(threadIds: string[]): Promise<DesktopState>;
   removeWorkspace(workspaceId: string): Promise<DesktopState>;
   listOpenRouterModels(): Promise<OpenRouterModel[]>;
+  chooseAttachments(): Promise<AttachmentPreview[]>;
+  importDroppedFiles(files: File[]): Promise<AttachmentPreview[]>;
+  importClipboardImage(): Promise<AttachmentPreview>;
+  readClipboardText(): Promise<string>;
+  readClipboardHtml(): Promise<string>;
+  removeAttachment(id: string): Promise<void>;
+  setAttachmentContext(threadId: string, sequence: number, attachmentId: string, include: boolean): Promise<void>;
   startRun(input: StartRunInput): Promise<void>;
   steerRun(threadId: string, message: string): Promise<boolean>;
   stopRun(threadId: string): Promise<boolean>;
   setThreadUnsafe(threadId: string, unsafe: boolean): Promise<DesktopState>;
   resolveCommandApproval(id: string, decision: CommandApprovalDecision): Promise<DesktopState>;
   setTheme(themeId: string): Promise<void>;
+  setTypography(interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId): Promise<void>;
+  setTypographyScale(role: "interface" | "conversation", value: number): Promise<void>;
+  setCodeBlockFontSize(size: number): Promise<void>;
   setEditorFontSize(size: number): Promise<void>;
   setEditorLauncher(command: string, argumentsTemplate: string): Promise<void>;
   chooseEditorApplication(): Promise<string | null>;

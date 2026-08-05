@@ -29,7 +29,7 @@
   padding: 4px 6px;
   border-bottom: 1px solid transparent;
   border-radius: 0;
-  font-size: 15px;
+  font-size: calc(15px * var(--interface-font-scale));
 }
 
 .inspector-tabs button:hover,
@@ -63,7 +63,7 @@
 .git-state {
   margin: 18px 2px;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: calc(14px * var(--interface-font-scale));
   line-height: 1.45;
 }
 
@@ -78,7 +78,7 @@
   min-height: 28px;
   padding: 0 12px;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: calc(14px * var(--interface-font-scale));
 }
 
 .change-branch {
@@ -101,18 +101,18 @@
 .change-branch strong {
   overflow: hidden;
   font-weight: 500;
+  color: var(--primary);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .commit-panel {
-  --commit-surface: color-mix(in srgb, var(--text) 76%, var(--surface));
-  --commit-ink: var(--background);
+  --commit-ink: var(--text-primary);
 
   margin: 6px 0 8px;
   padding: 0;
   color: var(--commit-ink);
-  background: var(--commit-surface);
+  background: transparent;
   border-block: 1px solid var(--border-default);
 }
 
@@ -125,6 +125,7 @@
   color: var(--commit-ink);
   list-style: none;
   cursor: pointer;
+  outline: none;
 }
 
 .commit-summary::-webkit-details-marker {
@@ -132,7 +133,7 @@
 }
 
 .commit-summary::before {
-  color: var(--commit-ink);
+  color: var(--primary);
   font-size: 18px;
   line-height: 1;
   content: "›";
@@ -143,6 +144,16 @@
   transform: rotate(90deg);
 }
 
+.commit-panel[open] .commit-summary {
+  box-shadow: inset 0 -2px color-mix(in srgb, var(--primary) 65%, var(--border-default));
+}
+
+.commit-summary:focus-visible {
+  box-shadow:
+    inset 3px 0 var(--primary),
+    inset 0 -2px color-mix(in srgb, var(--primary) 65%, var(--border-default));
+}
+
 .commit-summary > span:first-of-type {
   font-weight: 600;
   white-space: nowrap;
@@ -150,13 +161,12 @@
 
 .commit-summary > small {
   margin-left: auto;
-  color: var(--commit-ink);
-  opacity: 0.62;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
 .commit-body {
-  padding: 4px 12px 9px;
+  padding: 10px 12px 9px;
 }
 
 .commit-entry {
@@ -170,15 +180,20 @@
   min-width: 0;
   padding: 7px 8px;
   color: var(--text-primary);
-  background: var(--composer-background);
-  border: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-default);
   border-radius: 7px;
   outline: none;
 }
 
+.commit-entry input:focus,
+.commit-body > textarea:focus {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 72%, var(--border-focus));
+}
+
 .commit-limit {
   color: var(--commit-ink);
-  font-size: 11px;
+  font-size: calc(11px * var(--interface-font-scale));
   opacity: 0.62;
   white-space: nowrap;
   animation: commit-limit-in 120ms ease-out;
@@ -197,8 +212,8 @@
   padding: 7px 8px;
   resize: none;
   color: var(--text-primary);
-  background: var(--composer-background);
-  border: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-default);
   border-radius: 7px;
   outline: none;
   line-height: 1.35;
@@ -208,22 +223,25 @@
   display: flex;
   align-items: center;
   min-height: 34px;
-  margin-top: 7px;
+  margin-top: 2px;
 }
 
 .commit-footer button {
   margin-left: auto;
   padding: 7px 9px;
-  color: var(--commit-surface);
+  color: var(--primary-text);
   white-space: nowrap;
-  background: var(--commit-ink);
-  border: 1px solid var(--commit-ink);
+  background: var(--primary);
+  border: 1px solid var(--primary);
   border-radius: 7px;
   font-weight: 600;
 }
 
 .commit-footer button:disabled {
-  opacity: 0.68;
+  color: var(--text-muted);
+  background: var(--control-background);
+  border-color: transparent;
+  opacity: 0.72;
 }
 
 .commit-hint {
@@ -263,7 +281,7 @@
   border: 0;
   border-radius: 7px;
   outline: none;
-  font-size: 14px;
+  font-size: calc(14px * var(--interface-font-scale));
 }
 
 .change-filter svg {
@@ -296,7 +314,7 @@
   align-items: center;
   padding: 7px 6px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--interface-font-scale));
   cursor: pointer;
 }
 
@@ -316,7 +334,7 @@
   background: transparent;
   border: 0;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: calc(14px * var(--interface-font-scale));
   cursor: pointer;
 }
 
@@ -461,7 +479,7 @@
   padding-bottom: 7px;
   border-bottom: 1px solid var(--border-default);
   color: var(--text-strong);
-  font-size: 14px;
+  font-size: calc(14px * var(--interface-font-scale));
 }
 
 .change-file-picker {
@@ -527,7 +545,7 @@ html[data-appearance="light"] .change-detail-heading .change-back:hover {
 }
 
 .change-detail-heading button {
-  font-size: 14px;
+  font-size: calc(14px * var(--interface-font-scale));
 }
 
 .change-detail-heading .change-back {
@@ -549,6 +567,6 @@ html[data-appearance="light"] .change-detail-heading .change-back:hover {
 .change-error {
   margin: 7px;
   color: var(--status-danger-text);
-  font-size: 14px;
+  font-size: calc(14px * var(--interface-font-scale));
   line-height: 1.4;
 }

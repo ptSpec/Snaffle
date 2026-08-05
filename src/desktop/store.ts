@@ -286,6 +286,39 @@ export class DesktopStore {
     await this.database.batch(statements, "write");
   }
 
+  async setAttachmentContext(
+    threadId: string,
+    sequence: number,
+    attachmentId: string,
+    include: boolean,
+  ): Promise<void> {
+    const result = await this.database.execute({
+      sql: "SELECT data FROM entries WHERE thread_id = ? AND sequence = ?",
+      args: [threadId, sequence],
+    });
+    if (!result.rows[0]) throw new Error("Message no longer exists");
+
+    const message = JSON.parse(rowText(result.rows[0], "data")) as Message;
+    if (message.role !== "user" || !message.attachments?.length) {
+      throw new Error("Message has no attachments");
+    }
+
+    let found = false;
+    const attachments = message.attachments.map((attachment) => {
+      if (attachment.id !== attachmentId) return attachment;
+      found = true;
+      if (!include) return { ...attachment, includeInContext: false as const };
+      const { includeInContext: _removed, ...restored } = attachment;
+      return restored;
+    });
+    if (!found) throw new Error("Attachment no longer exists");
+
+    await this.database.execute({
+      sql: "UPDATE entries SET data = ? WHERE thread_id = ? AND sequence = ?",
+      args: [JSON.stringify({ ...message, attachments }), threadId, sequence],
+    });
+  }
+
   close(): void {
     this.database.close();
   }

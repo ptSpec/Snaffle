@@ -1,9 +1,9 @@
-import { contentLineCount, contentRevision, objectInput, stringField, type Tool } from "./tool.js";
+import { objectInput, stringField, type Tool } from "./tool.js";
 
 export const writeTool: Tool = {
   name: "write_file",
   description:
-    "Create a file or replace its complete contents, then return its version and exact total lines for a later edit_file call. Use edit_file for targeted changes.",
+    "Create a file or replace its complete contents. Use edit_file for targeted changes to an existing file.",
   exampleInput: { path: "src/config.ts", content: "export const port = 3000;\n" },
   inputSchema: {
     type: "object",
@@ -23,8 +23,6 @@ export const writeTool: Tool = {
     const content = stringField(input, "content", { allowEmpty: true }) as string;
 
     await workspace.write(filePath, content);
-    return {
-      content: `Wrote ${filePath}; version: ${contentRevision(content)}; total lines: ${contentLineCount(content)}.`,
-    };
+    return { content: `Successfully wrote ${Buffer.byteLength(content)} bytes to ${filePath}` };
   },
 };

@@ -114,7 +114,7 @@ const editorTheme = EditorView.theme({
     overflow: "auto",
     fontFamily: "var(--font-code)",
     fontSize: "var(--editor-font-size, 13px)",
-    lineHeight: "1.55",
+    lineHeight: "1.65",
   },
   ".cm-content": { padding: "7px 0", caretColor: "var(--text-strong)" },
   ".cm-line": { padding: "0 7px 0 4px" },

@@ -1,121 +1,81 @@
-import { contentLineCount, contentRevision, objectInput, stringField, type Tool } from "./tool.js";
+import { objectInput, stringField, type Tool } from "./tool.js";
 
 export const editTool: Tool = {
   name: "edit_file",
   description:
-    "Replace one or more inclusive line ranges using the latest version returned for that path by read_file, write_file, or edit_file. To append after a file with N total lines, use startLine and endLine N+1. Returns the new version and exact total lines. Use one call for multiple non-overlapping ranges.",
+    "Apply one or more exact-text replacements to one file. Each oldText must match exactly once in the original file, including whitespace. Multiple edits must identify distinct, non-overlapping regions of that original file. Reuse current text already known from a successful read, write, or edit; reread only when the text is unknown or a match fails.",
   exampleInput: {
     path: "src/app.ts",
-    version: "8e42c197a810",
     edits: [
-      { startLine: 10, endLine: 10, newText: "const port = 4000;" },
-      { startLine: 40, endLine: 42, newText: "replacement lines" },
+      { oldText: "const port = 3000;", newText: "const port = 4000;" },
+      { oldText: "const ready = false;", newText: "const ready = true;" },
     ],
   },
   inputSchema: {
     type: "object",
     properties: {
       path: { type: "string", description: "Required. Workspace-relative file path." },
-      version: {
-        type: "string",
-        description: "Required. Latest version returned by read_file, write_file, or edit_file for this exact path. Never reuse another file's version.",
-      },
       edits: {
         type: "array",
         minItems: 1,
         description:
-          "Required. One or more non-overlapping edit objects. Each requires startLine, endLine, and newText. Ranges use the original version, not earlier edits in this array. To append after a file with N lines, use N+1 for both line fields.",
+          "Required. Exact replacements against the original file. Use one array item for one edit and multiple items for separate regions.",
         items: {
           type: "object",
           properties: {
-            startLine: {
-              type: "integer",
-              minimum: 1,
-              description: "Required. First line to replace, inclusive; use current total lines + 1 to append.",
+            oldText: {
+              type: "string",
+              description: "Required. Small exact current text that occurs once, including whitespace.",
             },
-            endLine: {
-              type: "integer",
-              minimum: 1,
-              description: "Required. Last line to replace, inclusive; use startLine for one line.",
+            newText: {
+              type: "string",
+              description: "Required. Replacement text; an empty string deletes oldText.",
             },
-            newText: { type: "string", description: "Required. Replacement text; empty deletes the range." },
           },
-          required: ["startLine", "endLine", "newText"],
+          required: ["oldText", "newText"],
           additionalProperties: false,
         },
       },
     },
-    required: ["path", "version", "edits"],
+    required: ["path", "edits"],
     additionalProperties: false,
   },
   async execute(workspace, rawInput) {
     const input = objectInput(rawInput);
     const filePath = stringField(input, "path") as string;
-    const version = stringField(input, "version") as string;
     if (!Array.isArray(input.edits) || input.edits.length === 0) {
       throw new Error("edits must be a non-empty array");
     }
 
-    const content = await workspace.read(filePath);
-    if (contentRevision(content) !== version) {
-      throw new Error(
-        `Version does not match ${filePath}. It is stale or belongs to another file. Read ${filePath} and retry with that file's version.`,
-      );
-    }
-
-    const lineEnding = content.includes("\r\n") ? "\r\n" : "\n";
-    const lines = content ? content.replaceAll("\r\n", "\n").split("\n") : [];
-    const lineCount = contentLineCount(content);
+    const original = await workspace.read(filePath);
+    const normalized = original.replaceAll("\r\n", "\n");
     const edits = input.edits.map((rawEdit, index) => {
       const edit = objectInput(rawEdit);
-      const startLine = requiredLine(edit, "startLine", index);
-      const endLine = requiredLine(edit, "endLine", index);
-      const newText = stringField(edit, "newText", { allowEmpty: true }) as string;
-      const appends = startLine === lineCount + 1 && endLine === startLine;
-      if (endLine < startLine || (endLine > lineCount && !appends)) {
-        throw new Error(
-          `Edit ${index + 1} requested lines ${startLine}-${endLine}, but this version has ${lineCount} lines. ` +
-          `To append, use startLine ${lineCount + 1} and endLine ${lineCount + 1}; otherwise read the relevant range and retry.`,
-        );
+      const oldText = (stringField(edit, "oldText") as string).replaceAll("\r\n", "\n");
+      const newText = (stringField(edit, "newText", { allowEmpty: true }) as string).replaceAll("\r\n", "\n");
+      const start = normalized.indexOf(oldText);
+      if (start === -1) {
+        throw new Error(`Edit ${index + 1}: oldText was not found. Read the file and retry with exact current text.`);
       }
-      return { startLine, endLine, newText, appends };
+      if (normalized.indexOf(oldText, start + 1) !== -1) {
+        throw new Error(`Edit ${index + 1}: oldText matched more than once. Include more surrounding text.`);
+      }
+      return { start, end: start + oldText.length, newText };
     });
 
-    const ordered = [...edits].sort((left, right) => left.startLine - right.startLine);
+    const ordered = [...edits].sort((left, right) => left.start - right.start);
     for (let index = 1; index < ordered.length; index += 1) {
-      if (ordered[index]!.startLine <= ordered[index - 1]!.endLine) {
-        throw new Error("Edit line ranges must not overlap");
+      if (ordered[index]!.start < ordered[index - 1]!.end) {
+        throw new Error("Exact edit regions must not overlap");
       }
     }
 
+    let updated = normalized;
     for (const edit of ordered.reverse()) {
-      const replacement = edit.newText
-        ? edit.newText.replaceAll("\r\n", "\n").split("\n")
-        : [];
-      const appendAfterFinalNewline = edit.appends && content.endsWith("\n");
-      const index = edit.appends
-        ? lines.length - (appendAfterFinalNewline ? 1 : 0)
-        : edit.startLine - 1;
-      const deleteCount = edit.appends
-        ? (appendAfterFinalNewline ? 1 : 0)
-        : edit.endLine - edit.startLine + 1;
-      lines.splice(index, deleteCount, ...replacement);
+      updated = updated.slice(0, edit.start) + edit.newText + updated.slice(edit.end);
     }
-
-    const updated = lines.join(lineEnding);
+    if (original.includes("\r\n")) updated = updated.replaceAll("\n", "\r\n");
     await workspace.write(filePath, updated);
-    return {
-      content:
-        `Updated ${filePath} with ${edits.length} edit(s); version: ${contentRevision(updated)}; ` +
-        `total lines: ${contentLineCount(updated)}.`,
-    };
+    return { content: `Successfully replaced ${edits.length} block(s) in ${filePath}.` };
   },
 };
-
-function requiredLine(input: Record<string, unknown>, name: string, index: number): number {
-  const value = input[name];
-  if (!Number.isInteger(value) || (value as number) < 1) {
-    throw new Error(`Edit ${index + 1}: ${name} must be a positive integer`);
-  }
-  return value as number;
-}

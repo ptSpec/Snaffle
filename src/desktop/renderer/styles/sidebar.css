@@ -33,7 +33,7 @@
 .section-heading h2 {
   margin: 0 8px;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: calc(11px * var(--interface-font-scale));
   font-weight: 650;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -107,7 +107,7 @@
   background: transparent;
   border: 0;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: calc(12px * var(--interface-font-scale));
   line-height: 1;
   opacity: 0;
 }
@@ -169,7 +169,7 @@
   background: transparent;
   border: 0;
   border-radius: 5px;
-  font-size: 12px;
+  font-size: calc(12px * var(--interface-font-scale));
   white-space: nowrap;
 }
 
@@ -178,7 +178,7 @@
 }
 
 .workspace-create-button.primary {
-  color: var(--text-strong);
+  color: var(--primary);
 }
 
 .workspace-create-button.secondary {
@@ -276,6 +276,10 @@
   background: var(--hover-background);
 }
 
+html[data-accented-theme="true"] .thread-row.active .thread-item {
+  color: var(--primary);
+}
+
 .thread-row::before {
   position: absolute;
   top: 50%;
@@ -324,7 +328,7 @@
 .thread-item small {
   overflow: hidden;
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: calc(10px * var(--interface-font-scale));
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -374,7 +378,7 @@
   background: transparent;
   border: 0;
   border-radius: 5px;
-  font-size: 11px;
+  font-size: calc(11px * var(--interface-font-scale));
 }
 
 .thread-selection-actions button:hover {

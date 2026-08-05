@@ -36,19 +36,19 @@
 
 .inspector-card {
   color: var(--text-muted);
-  font-size: 15px;
+  font-size: calc(15px * var(--interface-font-scale));
 }
 
 .inspector-card h3 {
   margin: 0;
   color: var(--text-strong);
-  font-size: 18px;
+  font-size: calc(18px * var(--interface-font-scale));
 }
 
 .inspector-card h4 {
   margin: 14px 0 5px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--interface-font-scale));
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -61,7 +61,7 @@
 .eyebrow {
   margin: 0 0 5px;
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: calc(12px * var(--interface-font-scale));
   font-weight: 650;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -72,13 +72,13 @@
   margin-top: 8px !important;
   padding: 4px 6px;
   border-radius: 5px;
-  font-size: 14px;
+  font-size: calc(14px * var(--interface-font-scale));
 }
 
 .inspector-card .inspector-repair {
   margin-top: 9px;
   color: var(--text-faint);
-  font-size: 14px;
+  font-size: calc(14px * var(--interface-font-scale));
 }
 
 pre {

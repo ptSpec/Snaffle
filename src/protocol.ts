@@ -1,3 +1,5 @@
+import type { AttachmentRef } from "./attachments/types.js";
+
 export type JsonSchema = Record<string, unknown>;
 
 export type ToolCall = {
@@ -8,7 +10,8 @@ export type ToolCall = {
 };
 
 export type Message =
-  | { role: "system" | "user"; content: string }
+  | { role: "system"; content: string }
+  | { role: "user"; content: string; attachments?: AttachmentRef[] }
   | {
       role: "assistant";
       content: string;
