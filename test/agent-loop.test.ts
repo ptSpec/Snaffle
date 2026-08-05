@@ -19,7 +19,7 @@ class ScriptedProvider implements ModelProvider {
     tools: ToolSpec[],
     _signal: AbortSignal,
   ): Promise<ModelResponse> {
-    assert.equal(tools.length, 5);
+    assert.equal(tools.length, 7);
     this.call += 1;
 
     if (this.call === 1) {

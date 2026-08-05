@@ -1,9 +1,10 @@
-import type { JsonSchema, ToolSpec } from "../protocol.js";
+import type { JsonSchema, SourceReference, ToolSpec } from "../protocol.js";
 import type { Workspace } from "../workspace.js";
 
 export type ToolResult = {
   content: string;
   exitCode?: number | null;
+  sources?: SourceReference[];
 };
 
 export interface Tool extends ToolSpec {

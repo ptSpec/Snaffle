@@ -25,6 +25,7 @@ export function Settings({
   maxSteps,
   providerTimeoutMinutes,
   providerRetries,
+  tavilyConfigured,
   error,
   onSelectTheme,
   onTypography,
@@ -36,6 +37,7 @@ export function Settings({
   onMaxSteps,
   onProviderTimeoutMinutes,
   onProviderRetries,
+  onTavilyApiKey,
 }: {
   page: SettingsPage;
   themeId: string;
@@ -52,6 +54,7 @@ export function Settings({
   maxSteps: number;
   providerTimeoutMinutes: number;
   providerRetries: number;
+  tavilyConfigured: boolean;
   error: string | null;
   onSelectTheme: (themeId: string) => void;
   onTypography: (interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId) => void;
@@ -63,7 +66,12 @@ export function Settings({
   onMaxSteps: (maxSteps: number) => void;
   onProviderTimeoutMinutes: (minutes: number) => void;
   onProviderRetries: (retries: number) => void;
+  onTavilyApiKey: (apiKey: string) => void;
 }): JSX.Element {
+  if (page === "web") {
+    return <WebSettings configured={tavilyConfigured} error={error} onSave={onTavilyApiKey} />;
+  }
+
   if (page === "agent") {
     return (
       <AgentSettings
@@ -180,6 +188,56 @@ export function Settings({
               onChange={onEditorFontSize}
             />
           </section>
+        </div>
+
+        {error ? <p className="settings-error">{error}</p> : null}
+      </div>
+    </section>
+  );
+}
+
+function WebSettings({
+  configured,
+  error,
+  onSave,
+}: {
+  configured: boolean;
+  error: string | null;
+  onSave: (apiKey: string) => void;
+}): JSX.Element {
+  const [apiKey, setApiKey] = useState("");
+
+  return (
+    <section className="settings view-enter" aria-label="Web settings">
+      <div className="settings-content">
+        <p className="eyebrow">Settings</p>
+        <h1>Web</h1>
+        <p className="settings-description">OpenRouter powers web search with Luna by default. Add Tavily to use it instead. Web fetch and YouTube transcripts need no additional key.</p>
+
+        <label className="setting-field text-setting">
+          <span>
+            <strong>Tavily API key</strong>
+            <small>{configured ? "Configured. Enter a new key to replace it." : "Optional. The renderer and model never receive it."}</small>
+          </span>
+          <input
+            type="password"
+            value={apiKey}
+            autoComplete="off"
+            placeholder={configured ? "••••••••••••" : "tvly-…"}
+            onChange={(event) => setApiKey(event.target.value)}
+          />
+        </label>
+        <div className="editor-actions">
+          <button
+            className="primary"
+            type="button"
+            disabled={!apiKey.trim()}
+            onClick={() => {
+              onSave(apiKey.trim());
+              setApiKey("");
+            }}
+          >Save key</button>
+          <button type="button" disabled={!configured} onClick={() => onSave("")}>Remove key</button>
         </div>
 
         {error ? <p className="settings-error">{error}</p> : null}
