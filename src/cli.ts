@@ -2,6 +2,7 @@
 
 import path from "node:path";
 import { runAgent } from "./agent-loop.js";
+import { builtInCapabilities } from "./capabilities/active.js";
 import { ENV_PREFIX, LOCAL_STATE_DIRECTORY, PRODUCT } from "./identity.js";
 import { OpenAICompatibleProvider } from "./providers/openai-compatible.js";
 import { listOpenRouterModels, OpenRouterProvider } from "./providers/openrouter.js";
@@ -56,7 +57,7 @@ async function main(): Promise<void> {
   const result = await runAgent({
     task: options.task,
     provider: createProvider(options),
-    tools: defaultTools(webSearchOptions(options)),
+    capabilities: builtInCapabilities(defaultTools(webSearchOptions(options))),
     workspace: new LocalWorkspace(options.workspace, options.unsafeHost ? "unsafe" : "restricted"),
     trace: new JsonlTrace(options.tracePath),
     signal: controller.signal,
