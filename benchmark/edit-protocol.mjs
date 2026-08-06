@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runAgent } from "../dist/src/agent-loop.js";
+import { builtInCapabilities } from "../dist/src/capabilities/active.js";
 import { SYSTEM_PROMPT } from "../dist/src/context.js";
 import { OpenRouterProvider } from "../dist/src/providers/openrouter.js";
 import { editTool } from "../dist/src/tools/edit.js";
@@ -178,7 +179,7 @@ async function runTrial({ model, trial, benchmarkCase, variant, seed }) {
         temperature: 0,
         ...(model.startsWith("tencent/hy3") ? { seed } : {}),
       }),
-      tools: variants[variant].tools,
+      capabilities: builtInCapabilities(variants[variant].tools),
       workspace,
       trace,
       signal: new AbortController().signal,

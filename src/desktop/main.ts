@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { DEFAULT_MAX_STEPS, runAgent } from "../agent-loop.js";
 import { AttachmentStore, MAX_ATTACHMENTS } from "../attachments/store.js";
 import type { AttachmentRef } from "../attachments/types.js";
+import { builtInCapabilities } from "../capabilities/active.js";
 import { initialMessages } from "../context.js";
 import { commitGitChanges, initializeGitRepository, saveGitFile } from "../git/actions.js";
 import { safeWorkspacePath } from "../git/process.js";
@@ -371,14 +372,16 @@ function registerIpc(): void {
         maxRetries: providerRetries,
         resolveAttachment: (attachment) => attachments.resolve(attachment),
       }),
-      tools: defaultTools(webSearchEnabled
-        ? {
-            webSearchEnabled: true,
-            backend: webSearchBackend,
-            apiKey: webSearchApiKey(webSearchBackend),
-            openRouterApiKey: apiKey,
-          }
-        : {}),
+      capabilities: builtInCapabilities(
+        defaultTools(webSearchEnabled
+          ? {
+              webSearchEnabled: true,
+              backend: webSearchBackend,
+              apiKey: webSearchApiKey(webSearchBackend),
+              openRouterApiKey: apiKey,
+            }
+          : {}),
+      ),
       workspace,
       trace: memoryTrace,
       signal: controller.signal,

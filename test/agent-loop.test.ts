@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { runAgent } from "../src/agent-loop.js";
+import { activeCapabilities, builtInCapabilities } from "../src/capabilities/active.js";
 import type { ModelProvider } from "../src/providers/provider.js";
 import type { Message, ModelResponse, RunEvent, ToolSpec } from "../src/protocol.js";
 import { defaultTools } from "../src/tools/default-tools.js";
@@ -62,6 +63,16 @@ class DirectProvider implements ModelProvider {
   }
 }
 
+test("active capabilities reject duplicate tool names", () => {
+  assert.throws(
+    () => activeCapabilities([
+      { source: { type: "built-in" }, tool: writeTool },
+      { source: { type: "plugin", pluginId: "example" }, tool: writeTool },
+    ]),
+    /Active tool name must be unique: write_file/,
+  );
+});
+
 test("agent loop executes a tool and completes naturally", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "agent-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -70,7 +81,7 @@ test("agent loop executes a tool and completes naturally", async (t) => {
   const result = await runAgent({
     task: "Create answer.txt",
     provider: new ScriptedProvider(),
-    tools: defaultTools(),
+    capabilities: builtInCapabilities(defaultTools()),
     workspace: new LocalWorkspace(root, "disabled"),
     trace,
     signal: new AbortController().signal,
@@ -102,7 +113,7 @@ test("agent loop carries conversation history into a follow-up", async (t) => {
   const first = await runAgent({
     task: "Write a short paragraph.",
     provider: new DirectProvider("A short paragraph."),
-    tools: defaultTools(),
+    capabilities: builtInCapabilities(defaultTools()),
     workspace,
     trace: new MemoryTrace(),
     signal,
@@ -113,7 +124,7 @@ test("agent loop carries conversation history into a follow-up", async (t) => {
     task: "Make it longer.",
     history: first.messages,
     provider,
-    tools: defaultTools(),
+    capabilities: builtInCapabilities(defaultTools()),
     workspace,
     trace: new MemoryTrace(),
     signal,
@@ -143,7 +154,7 @@ test("agent loop applies steering after the current model output", async (t) => 
   const result = await runAgent({
     task: "Start work.",
     provider,
-    tools: defaultTools(),
+    capabilities: builtInCapabilities(defaultTools()),
     workspace: new LocalWorkspace(root, "disabled"),
     trace: new MemoryTrace(),
     signal: new AbortController().signal,
@@ -187,7 +198,7 @@ test("tool examples are shown after failure, not sent in every tool description"
   const result = await runAgent({
     task: "Write a file.",
     provider,
-    tools: defaultTools(),
+    capabilities: builtInCapabilities(defaultTools()),
     workspace: new LocalWorkspace(root, "disabled"),
     trace: new MemoryTrace(),
     signal: new AbortController().signal,
@@ -250,7 +261,7 @@ test("only explicitly cited tool sources reach the final answer", async (t) => {
   const result = await runAgent({
     task: "Research this.",
     provider,
-    tools: [sourceTool],
+    capabilities: builtInCapabilities([sourceTool]),
     workspace: new LocalWorkspace(root, "disabled"),
     trace: new MemoryTrace(),
     signal: new AbortController().signal,
