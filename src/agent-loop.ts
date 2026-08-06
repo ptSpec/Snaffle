@@ -1,16 +1,17 @@
 import { initialMessages } from "./context.js";
 import type { AttachmentRef } from "./attachments/types.js";
+import type { ActiveCapabilities } from "./capabilities/active.js";
 import type { ModelProvider, ModelStreamEvent } from "./providers/provider.js";
 import type { Message, RunEvent, SourceReference } from "./protocol.js";
 import { healToolCall } from "./tool-input.js";
-import { toolErrorContent, type Tool } from "./tools/tool.js";
+import { toolErrorContent } from "./tools/tool.js";
 import type { Trace } from "./trace.js";
 import type { Workspace } from "./workspace.js";
 
 export type RunAgentOptions = {
   task: string;
   provider: ModelProvider;
-  tools: Tool[];
+  capabilities: ActiveCapabilities;
   workspace: Workspace;
   trace: Trace;
   signal: AbortSignal;
@@ -31,6 +32,7 @@ export const DEFAULT_MAX_STEPS = 50;
 
 export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
   const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
+  const tools = options.capabilities.tools.map(({ tool }) => tool);
   const messages = options.history?.length
     ? [
         ...options.history,
@@ -41,12 +43,12 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         },
       ]
     : initialMessages(options.task, options.workspace.environment, options.attachments);
-  const toolSpecs = options.tools.map(({ name, description, inputSchema }) => ({
+  const toolSpecs = tools.map(({ name, description, inputSchema }) => ({
     name,
     description,
     inputSchema,
   }));
-  const toolsByName = new Map(options.tools.map((tool) => [tool.name, tool]));
+  const toolsByName = new Map(tools.map((tool) => [tool.name, tool]));
   const sources = new Map<string, SourceReference>();
 
   await emit(options, {
