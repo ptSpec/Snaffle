@@ -8,7 +8,7 @@ Keep provider reasoning visible and durable for transparency without automatical
 
 Reasoning storage and model context are separate concerns:
 
-- Esch stores the complete reasoning trace in its local database.
+- Snaffle stores the complete reasoning trace in its local database.
 - The UI continues to show stored reasoning with the run that produced it.
 - Reasoning remains in model context while that run's tool loop is active.
 - A later user turn may omit reasoning from completed runs without deleting it.
@@ -16,7 +16,7 @@ Reasoning storage and model context are separate concerns:
 ## Context behavior
 
 ```text
-Esch database and UI
+Snaffle database and UI
 └── retain the complete visible reasoning trace
 
 Active run and tool loop
@@ -40,7 +40,7 @@ Add one setting named **Previous reasoning in context**:
 
 2. **Exclude after run**
    - Do not send completed-run reasoning on later user turns, including to remote providers.
-   - Continue storing and displaying it in Esch.
+   - Continue storing and displaying it in Snaffle.
    - Continue replaying it during the active tool loop.
    - Show a concise warning that some providers or models may lose continuity or reject the request.
 
@@ -101,6 +101,5 @@ Compare correctness, provider failures, input and cached tokens, and follow-up q
 - Reasoning summarization or semantic memory
 - Different policies for every individual message
 - Automatic model-specific heuristics outside provider capabilities
-- Removing reasoning from Esch's database
+- Removing reasoning from Snaffle's database
 - Stripping reasoning during an active tool loop
-

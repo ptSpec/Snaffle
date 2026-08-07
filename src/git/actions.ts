@@ -1,5 +1,5 @@
-import { LocalWorkspace } from "../workspace.js";
-import type { GitFileContents } from "../desktop/api.js";
+import { LocalWorkspace } from "../execution/workspace.js";
+import type { GitFileContents } from "./types.js";
 import { MAX_GIT_OUTPUT_BYTES, runGit } from "./process.js";
 
 export async function initializeGitRepository(workspace: string): Promise<void> {

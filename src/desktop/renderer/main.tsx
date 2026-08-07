@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { PRODUCT } from "../../identity.js";
+import { PROJECT } from "../../identity.js";
 import { DEFAULT_THEME, themeById } from "../themes/index.js";
 import {
   CONVERSATION_FONT_BASE,
@@ -42,7 +42,7 @@ import "@fontsource/geist-mono/latin-700.css";
 import "@fontsource/geist-pixel/latin-400.css";
 import "./styles.css";
 
-document.title = PRODUCT.name;
+document.title = PROJECT.name;
 const query = new URLSearchParams(window.location.search);
 const requestedTheme = query.get("theme") ?? "";
 const initialTheme = themeById(requestedTheme) ?? DEFAULT_THEME;

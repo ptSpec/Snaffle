@@ -7,8 +7,8 @@ import type { Message } from "../src/protocol.js";
 import { openStore } from "../src/desktop/store.js";
 
 test("chat entry ids stay stable and saved messages survive source deletion", async (t) => {
-  const root = await mkdtemp(path.join(tmpdir(), "esch-store-"));
-  const store = await openStore(path.join(root, "esch.db"));
+  const root = await mkdtemp(path.join(tmpdir(), "harness-store-"));
+  const store = await openStore(path.join(root, "store.db"));
   t.after(async () => {
     store.close();
     await rm(root, { recursive: true, force: true });
@@ -47,8 +47,8 @@ test("chat entry ids stay stable and saved messages survive source deletion", as
 });
 
 test("sent attachments can leave and rejoin model context", async (t) => {
-  const root = await mkdtemp(path.join(tmpdir(), "esch-store-"));
-  const store = await openStore(path.join(root, "esch.db"));
+  const root = await mkdtemp(path.join(tmpdir(), "harness-store-"));
+  const store = await openStore(path.join(root, "store.db"));
   t.after(async () => {
     store.close();
     await rm(root, { recursive: true, force: true });
@@ -80,8 +80,8 @@ test("sent attachments can leave and rejoin model context", async (t) => {
 });
 
 test("restoring a thread removes the failed turn and newer context checkpoints", async (t) => {
-  const root = await mkdtemp(path.join(tmpdir(), "esch-restore-store-"));
-  const store = await openStore(path.join(root, "esch.db"));
+  const root = await mkdtemp(path.join(tmpdir(), "harness-restore-store-"));
+  const store = await openStore(path.join(root, "store.db"));
   t.after(async () => {
     store.close();
     await rm(root, { recursive: true, force: true });
@@ -117,8 +117,8 @@ test("restoring a thread removes the failed turn and newer context checkpoints",
 });
 
 test("context checkpoints preserve the full transcript and project only the tail", async (t) => {
-  const root = await mkdtemp(path.join(tmpdir(), "esch-context-store-"));
-  const store = await openStore(path.join(root, "esch.db"));
+  const root = await mkdtemp(path.join(tmpdir(), "harness-context-store-"));
+  const store = await openStore(path.join(root, "store.db"));
   t.after(async () => {
     store.close();
     await rm(root, { recursive: true, force: true });

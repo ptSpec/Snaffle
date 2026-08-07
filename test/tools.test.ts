@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { healToolCall, healToolInput } from "../src/tool-input.js";
+import { healToolCall, healToolInput } from "../src/tools/input.js";
 import { editTool } from "../src/tools/edit.js";
 import { truncateMiddle } from "../src/tools/output.js";
 import { readTool } from "../src/tools/read.js";
@@ -14,8 +14,8 @@ import { webSearchTool } from "../src/tools/web/search.js";
 import { extractWithKetch, searchWithKetch } from "../src/tools/web/ketch.js";
 import { fetchPublicText } from "../src/tools/web/request.js";
 import { writeTool } from "../src/tools/write.js";
-import { LocalWorkspace } from "../src/workspace.js";
-import { nativeSandboxStatus } from "../src/sandbox.js";
+import { LocalWorkspace } from "../src/execution/workspace.js";
+import { nativeSandboxStatus } from "../src/execution/native/sandbox.js";
 
 async function fixture(): Promise<{ root: string; workspace: LocalWorkspace }> {
   const root = await mkdtemp(path.join(tmpdir(), "tool-test-"));
@@ -310,6 +310,29 @@ test("tool input healer parses stringified array properties", () => {
   assert.equal(healed.inputRepair, '"edits" was array JSON sent as a string; parsed it');
 });
 
+test("tool input healer repairs raw newlines in stringified arrays", () => {
+  const healed = healToolCall(
+    {
+      id: "call-1",
+      name: "edit_file",
+      input: {
+        path: "src/app.ts",
+        edits: '[{"oldText":"first\nsecond","newText":"changed\ntext"}]',
+      },
+    },
+    editTool.inputSchema,
+  );
+
+  assert.deepEqual(healed.input, {
+    path: "src/app.ts",
+    edits: [{ oldText: "first\nsecond", newText: "changed\ntext" }],
+  });
+  assert.equal(
+    healed.inputRepair,
+    '"edits" was array JSON sent as a string with unescaped control characters; repaired and parsed it',
+  );
+});
+
 test("edit rejects ambiguous and overlapping exact matches", async (t) => {
   const { root, workspace } = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -358,7 +381,7 @@ test("workspace rejects paths outside its root", async (t) => {
   await assert.rejects(workspace.read("../secret"), /leaves the workspace/);
   await assert.rejects(workspace.write("/tmp/secret", "no"), /must be relative/);
   await mkdir(path.join(root, ".git"));
-  await assert.rejects(workspace.write(".git/config", "no"), /managed by Esch/);
+  await assert.rejects(workspace.write(".git/config", "no"), /managed by Snaffle/);
 });
 
 test("workspace rejects symlinks that leave its root", async (t) => {
