@@ -1,7 +1,7 @@
 .sidebar-navigation {
   min-height: 0;
   overflow: hidden;
-  padding: 12px 10px;
+  padding: 12px 6px;
 }
 
 .workspace-sidebar-navigation {
@@ -35,27 +35,27 @@
 .settings-navigation .sidebar-action.active::after {
   position: absolute;
   right: 0;
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   content: "";
   pointer-events: none;
 }
 
 .settings-navigation .sidebar-action.active::before {
-  top: -12px;
+  top: -10px;
   background: radial-gradient(
     circle at 0 0,
-    transparent 12px,
-    var(--app-background) 12.5px
+    transparent 10px,
+    var(--app-background) 10.5px
   );
 }
 
 .settings-navigation .sidebar-action.active::after {
-  bottom: -12px;
+  bottom: -10px;
   background: radial-gradient(
     circle at 0 100%,
-    transparent 12px,
-    var(--app-background) 12.5px
+    transparent 10px,
+    var(--app-background) 10.5px
   );
 }
 
@@ -146,31 +146,31 @@
 
 .workspace-navigation .workspace-row.active::before {
   position: absolute;
-  top: -12px;
+  top: -10px;
   right: 0;
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   content: "";
   pointer-events: none;
   background: radial-gradient(
     circle at 0 0,
-    transparent 12px,
-    var(--app-background) 12.5px
+    transparent 10px,
+    var(--app-background) 10.5px
   );
 }
 
 .workspace-navigation .workspace-row.active::after {
   position: absolute;
   right: 0;
-  bottom: -12px;
-  width: 12px;
-  height: 12px;
+  bottom: -10px;
+  width: 10px;
+  height: 10px;
   content: "";
   pointer-events: none;
   background: radial-gradient(
     circle at 0 100%,
-    transparent 12px,
-    var(--app-background) 12.5px
+    transparent 10px,
+    var(--app-background) 10.5px
   );
 }
 
@@ -208,31 +208,31 @@
 
 .workspace-navigation .thread-row.active .thread-item::before {
   position: absolute;
-  top: -12px;
+  top: -10px;
   right: 0;
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   content: "";
   pointer-events: none;
   background: radial-gradient(
     circle at 0 0,
-    transparent 12px,
-    var(--app-background) 12.5px
+    transparent 10px,
+    var(--app-background) 10.5px
   );
 }
 
 .workspace-navigation .thread-row.active .thread-item::after {
   position: absolute;
   right: 0;
-  bottom: -12px;
-  width: 12px;
-  height: 12px;
+  bottom: -10px;
+  width: 10px;
+  height: 10px;
   content: "";
   pointer-events: none;
   background: radial-gradient(
     circle at 0 100%,
-    transparent 12px,
-    var(--app-background) 12.5px
+    transparent 10px,
+    var(--app-background) 10.5px
   );
 }
 
@@ -395,29 +395,29 @@
 .workspace-navigation .workspace-row:not(.active):hover::after {
   position: absolute;
   right: 0;
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   content: "";
   pointer-events: none;
 }
 
 .workspace-create-button:hover:not(:disabled)::before,
 .workspace-navigation .workspace-row:not(.active):hover::before {
-  top: -12px;
+  top: -10px;
   background: radial-gradient(
     circle at 0 0,
-    transparent 12px,
-    var(--inverted-corner-fill) 12.5px
+    transparent 10px,
+    var(--inverted-corner-fill) 10.5px
   );
 }
 
 .workspace-create-button:hover:not(:disabled)::after,
 .workspace-navigation .workspace-row:not(.active):hover::after {
-  bottom: -12px;
+  bottom: -10px;
   background: radial-gradient(
     circle at 0 100%,
-    transparent 12px,
-    var(--inverted-corner-fill) 12.5px
+    transparent 10px,
+    var(--inverted-corner-fill) 10.5px
   );
 }
 
@@ -531,27 +531,27 @@ html[data-accented-theme="true"] .thread-row.active .thread-item {
 .workspace-navigation .thread-row:not(.active):hover .thread-item::after {
   position: absolute;
   right: 0;
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   content: "";
   pointer-events: none;
 }
 
 .workspace-navigation .thread-row:not(.active):hover .thread-item::before {
-  top: -12px;
+  top: -10px;
   background: radial-gradient(
     circle at 0 0,
-    transparent 12px,
-    var(--composer-background) 12.5px
+    transparent 10px,
+    var(--composer-background) 10.5px
   );
 }
 
 .workspace-navigation .thread-row:not(.active):hover .thread-item::after {
-  bottom: -12px;
+  bottom: -10px;
   background: radial-gradient(
     circle at 0 100%,
-    transparent 12px,
-    var(--composer-background) 12.5px
+    transparent 10px,
+    var(--composer-background) 10.5px
   );
 }
 
@@ -579,7 +579,13 @@ html[data-accented-theme="true"] .thread-row.active .thread-item {
   z-index: 2;
   top: 50%;
   background: var(--composer-background);
+  font-size: calc(15px * var(--interface-font-scale));
   transform: translateY(-50%);
+}
+
+.thread-row > .row-action svg {
+  width: 16px;
+  height: 16px;
 }
 
 .thread-row > .row-action:nth-last-child(2) {
@@ -594,6 +600,7 @@ html[data-accented-theme="true"] .thread-row.active .thread-item {
   display: flex;
   min-width: 0;
   align-items: center;
+  padding-left: 6px;
 }
 
 .thread-fork-marker {
@@ -624,7 +631,7 @@ html[data-accented-theme="true"] .thread-row.active .thread-item {
   stroke-width: 1.35;
 }
 
-html[data-accented-theme="true"] .thread-fork-marker {
+html[data-accented-theme="true"] .thread-row.active .thread-fork-marker {
   color: var(--primary);
 }
 
@@ -699,11 +706,20 @@ html[data-accented-theme="true"] .thread-fork-marker {
 }
 
 .sidebar-action-icon {
-  flex: 0 0 12px;
-  width: 12px;
-  height: 12px;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
   stroke: currentColor;
   stroke-linejoin: round;
+}
+
+.sidebar-settings-icon {
+  display: inline-grid;
+  width: 16px;
+  flex: 0 0 16px;
+  place-items: center;
+  font-size: calc(23px * var(--interface-font-scale));
+  line-height: 1;
 }
 
 .sidebar-action:hover,

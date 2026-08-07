@@ -25,6 +25,11 @@ export const FONT_OPTIONS = [
     family: '"Crimson Pro", serif',
   },
   {
+    id: "cormorant-garamond",
+    name: "Cormorant Garamond",
+    family: '"Cormorant Garamond", serif',
+  },
+  {
     id: "inter",
     name: "Inter",
     family: '"Inter", sans-serif',
