@@ -30,6 +30,7 @@ export function healToolInput(value: unknown, schema?: JsonSchema): ParsedToolIn
     }
   }
 
+  candidate = parseStringifiedProperties(candidate, schema, repairs);
   candidate = wrapSingleArrayItems(candidate, schema, repairs);
   candidate = removeEmptyOptionalStrings(candidate, schema, repairs);
   const healed = candidate !== null && typeof candidate === "object" && !Array.isArray(candidate);
@@ -37,6 +38,32 @@ export function healToolInput(value: unknown, schema?: JsonSchema): ParsedToolIn
     input: candidate,
     ...(healed && repairs.length ? { repair: repairs.join("; ") } : {}),
   };
+}
+
+function parseStringifiedProperties(
+  input: unknown,
+  schema: JsonSchema | undefined,
+  repairs: string[],
+): unknown {
+  if (!isObject(input) || !isObject(schema?.properties)) return input;
+  let result = input;
+
+  for (const [name, definition] of Object.entries(schema.properties)) {
+    if (!isObject(definition) || typeof input[name] !== "string") continue;
+    if (definition.type !== "array" && definition.type !== "object") continue;
+    try {
+      const parsed: unknown = JSON.parse(input[name]);
+      const matches = definition.type === "array" ? Array.isArray(parsed) : isObject(parsed);
+      if (!matches) continue;
+      if (result === input) result = { ...input };
+      result[name] = parsed;
+      repairs.push(`"${name}" was ${definition.type} JSON sent as a string; parsed it`);
+    } catch {
+      // Leave invalid strings for normal tool validation and its useful error.
+    }
+  }
+
+  return result;
 }
 
 function repairJsonSyntax(
