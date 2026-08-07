@@ -19,6 +19,8 @@ export type RunAgentOptions = {
   attachments?: AttachmentRef[];
   maxSteps?: number;
   onEvent?: (event: RunEvent) => void | Promise<void>;
+  onMessage?: (message: Message, sequence: number) => void | Promise<void>;
+  sequenceStart?: number;
   takeSteering?: () => string[];
 };
 
@@ -50,6 +52,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
   }));
   const toolsByName = new Map(tools.map((tool) => [tool.name, tool]));
   const sources = new Map<string, SourceReference>();
+  let nextSequence = options.sequenceStart ?? messages.length;
 
   await emit(options, {
     type: "run.started",
@@ -86,12 +89,12 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
       await emit(options, {
         type: "model.completed",
         step,
-        sequence: messages.length,
+        sequence: nextSequence,
         model: options.provider.model,
         durationMs,
         response,
       });
-      messages.push({
+      const assistantMessage: Message = {
         role: "assistant",
         content: response.text,
         ...(response.reasoning ? { reasoning: response.reasoning } : {}),
@@ -100,10 +103,17 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         ...(response.usage ? { usage: response.usage } : {}),
         durationMs,
         ...(response.sources?.length ? { sources: response.sources } : {}),
-      });
+      };
+      messages.push(assistantMessage);
+      await options.onMessage?.(assistantMessage, nextSequence);
+      nextSequence += 1;
 
       if (response.toolCalls.length === 0) {
-        if (appendSteering(messages, options.takeSteering?.())) continue;
+        const steeringCount = await appendSteering(messages, options.takeSteering?.(), options, nextSequence);
+        if (steeringCount) {
+          nextSequence += steeringCount;
+          continue;
+        }
         if (!response.text.trim()) throw new Error("Model returned an empty final response");
         await emit(options, { type: "run.completed", text: response.text, steps: step });
         return { text: response.text, steps: step, messages };
@@ -130,27 +140,30 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         }
 
         content = content.slice(0, 12000);
-        messages.push({
+        const toolMessage: Message = {
           role: "tool",
           toolCallId: call.id,
           content,
           ...(isError ? { isError: true } : {}),
           ...(exitCode === undefined ? {} : { exitCode }),
           ...(call.inputRepair ? { inputRepair: call.inputRepair } : {}),
-        });
+        };
+        messages.push(toolMessage);
+        await options.onMessage?.(toolMessage, nextSequence);
         await emit(options, {
           type: "tool.completed",
           step,
           index,
-          sequence: messages.length - 1,
+          sequence: nextSequence,
           call,
           content,
           isError,
           ...(exitCode === undefined ? {} : { exitCode }),
         });
+        nextSequence += 1;
       }
 
-      appendSteering(messages, options.takeSteering?.());
+      nextSequence += await appendSteering(messages, options.takeSteering?.(), options, nextSequence);
     }
 
     throw new Error(`Agent exceeded the ${maxSteps}-step limit`);
@@ -160,10 +173,19 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
   }
 }
 
-function appendSteering(messages: Message[], steering: string[] | undefined): boolean {
-  if (!steering?.length) return false;
-  for (const content of steering) messages.push({ role: "user", content });
-  return true;
+async function appendSteering(
+  messages: Message[],
+  steering: string[] | undefined,
+  options: RunAgentOptions,
+  sequence: number,
+): Promise<number> {
+  if (!steering?.length) return 0;
+  for (const [index, content] of steering.entries()) {
+    const message: Message = { role: "user", content };
+    messages.push(message);
+    await options.onMessage?.(message, sequence + index);
+  }
+  return steering.length;
 }
 
 function emitModelEvent(

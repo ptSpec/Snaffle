@@ -55,6 +55,12 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:set-provider-timeout", minutes),
   setProviderRetries: (retries: number) =>
     ipcRenderer.invoke("desktop:set-provider-retries", retries),
+  setCompaction: (mode, threshold) =>
+    ipcRenderer.invoke("desktop:set-compaction", mode, threshold),
+  getContextReport: (threadId, contextLength) =>
+    ipcRenderer.invoke("desktop:get-context-report", threadId, contextLength),
+  compactContext: (threadId, model, contextLength) =>
+    ipcRenderer.invoke("desktop:compact-context", threadId, model, contextLength),
   setWebSearchEnabled: (enabled: boolean) =>
     ipcRenderer.invoke("desktop:set-web-search-enabled", enabled),
   setWebSearchBackend: (backend: WebSearchBackend) =>

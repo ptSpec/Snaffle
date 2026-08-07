@@ -14,6 +14,8 @@ import type { AttachmentPreview, AttachmentRef } from "../../attachments/types.j
 import type { CommandApprovalDecision } from "../../protocol.js";
 import type { DesktopApi, DesktopRunEvent, DesktopState, DesktopThread, SavedMessage } from "../api.js";
 import type { OpenRouterModel } from "../../providers/openrouter.js";
+import type { CompactionMode } from "../../context/budget.js";
+import type { ContextReport } from "../../context/report.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../../tools/web/types.js";
 import { DEFAULT_MODEL_CONTEXT_LENGTH } from "../../providers/provider.js";
 import { DEFAULT_THEME, themeById, type Theme } from "../themes/index.js";
@@ -34,6 +36,7 @@ import { Bookmarks, type BookmarksPage } from "./bookmarks.js";
 import { Sidebar, type AppView, type SettingsPage } from "./sidebar.js";
 import { InspectorPanel, type InspectorTab } from "./inspector/panel.js";
 import { SearchPicker } from "./search-picker.js";
+import { ContextGauge } from "./context/gauge.js";
 import { ThinkingOrb, type OrbMotion } from "./thinking-orb.js";
 import {
   addRunEvent,
@@ -56,6 +59,7 @@ const initialState: DesktopState = {
   workspaces: [],
   activeThreadId: null,
   conversation: [],
+  contextCheckpoints: [],
   savedMessages: [],
   openRouterAvailable: false,
   ketchAvailable: false,
@@ -81,6 +85,8 @@ const initialState: DesktopState = {
   maxSteps: 50,
   providerTimeoutMinutes: 3,
   providerRetries: 2,
+  compactionMode: "automatic",
+  compactionThreshold: 65,
 };
 
 export function App(): JSX.Element {
@@ -104,6 +110,9 @@ export function App(): JSX.Element {
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("appearance");
   const [bookmarksPage, setBookmarksPage] = useState<BookmarksPage>("threads");
   const [sendOrbMotion, setSendOrbMotion] = useState<OrbMotion>("stopped");
+  const [contextReport, setContextReport] = useState<ContextReport | null>(null);
+  const [contextRefresh, setContextRefresh] = useState(0);
+  const [compactingContext, setCompactingContext] = useState(false);
   const taskInput = useRef<HTMLTextAreaElement>(null);
   const timelineView = useRef<HTMLDivElement>(null);
   const executionMode = useRef<HTMLDetailsElement>(null);
@@ -288,6 +297,10 @@ export function App(): JSX.Element {
         threadTimelines.current.delete(threadId);
         return;
       }
+      if (event.type.startsWith("context.") && activeThreadId.current !== threadId) {
+        threadTimelines.current.delete(threadId);
+        return;
+      }
       addRunEvent(event, (update) => {
         const next = update(threadTimelines.current.get(threadId) ?? []);
         threadTimelines.current.set(threadId, next);
@@ -306,6 +319,9 @@ export function App(): JSX.Element {
           runningThreadIds: state.runningThreadIds.filter((id) => id !== threadId),
         }));
       }
+      if (event.type === "run.persisted" || event.type.startsWith("context.")) {
+        setContextRefresh((value) => value + 1);
+      }
     }
 
     function flushEvents(): void {
@@ -319,7 +335,7 @@ export function App(): JSX.Element {
       .getState()
       .then((state) => {
         activeThreadId.current = state.activeThreadId;
-        const initialTimeline = timelineFromEntries(state.conversation);
+        const initialTimeline = timelineFromEntries(state.conversation, state.contextCheckpoints);
         setDesktopState(withoutConversation(state));
         if (state.activeThreadId) threadTimelines.current.set(state.activeThreadId, initialTimeline);
         setTimeline(initialTimeline);
@@ -364,6 +380,10 @@ export function App(): JSX.Element {
   );
   const selectedContextLength = models.find((model) => model.id === selectedModel)?.contextLength ??
     DEFAULT_MODEL_CONTEXT_LENGTH;
+  const pendingContextTokens = Math.ceil(task.length / 4) + pendingAttachments.reduce(
+    (total, attachment) => total + attachment.estimatedTokens,
+    0,
+  );
   const selectedModalities = models.find((model) => model.id === selectedModel)?.inputModalities;
   const imageUnsupported = contextAttachments.some((attachment) => attachment.kind === "image") &&
     selectedModalities !== undefined && !selectedModalities.includes("image");
@@ -381,6 +401,35 @@ export function App(): JSX.Element {
             : !unsafeHostExecution && !desktopState.restrictedHostAvailable
               ? desktopState.restrictedHostDetail
               : null;
+
+  useEffect(() => {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId) {
+      setContextReport(null);
+      return;
+    }
+    let current = true;
+    void window.desktop.getContextReport(threadId, selectedContextLength).then(
+      (report) => { if (current) setContextReport(report); },
+      (cause: unknown) => { if (current) setError(errorMessage(cause)); },
+    );
+    return () => { current = false; };
+  }, [contextRefresh, desktopState.activeThreadId, selectedContextLength]);
+
+  async function compactCurrentContext(): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId || !selectedModel) return;
+    setCompactingContext(true);
+    setError(null);
+    try {
+      await window.desktop.compactContext(threadId, selectedModel, selectedContextLength);
+      setContextReport(await window.desktop.getContextReport(threadId, selectedContextLength));
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setCompactingContext(false);
+    }
+  }
 
   async function loadModels(): Promise<void> {
     setError(null);
@@ -427,6 +476,7 @@ export function App(): JSX.Element {
       threadId,
       task: task.trim(),
       model: selectedModel,
+      contextLength: selectedContextLength,
       ...(pendingAttachments.length
         ? { attachments: pendingAttachments.map(attachmentRef) }
         : {}),
@@ -586,6 +636,7 @@ export function App(): JSX.Element {
         threadTimelines.current.set(threadId, next);
         return next;
       });
+      setContextRefresh((value) => value + 1);
       setError(null);
     } catch (cause) {
       setError(errorMessage(cause));
@@ -673,7 +724,7 @@ export function App(): JSX.Element {
     const storedTimeline = state.activeThreadId
       ? threadTimelines.current.get(state.activeThreadId)
       : undefined;
-    const nextTimeline = storedTimeline ?? timelineFromEntries(state.conversation);
+    const nextTimeline = storedTimeline ?? timelineFromEntries(state.conversation, state.contextCheckpoints);
     setDesktopState(withoutConversation(state));
     if (state.activeThreadId && !storedTimeline) {
       threadTimelines.current.set(state.activeThreadId, nextTimeline);
@@ -895,6 +946,16 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setCompaction(compactionMode: CompactionMode, compactionThreshold: number): Promise<void> {
+    try {
+      await window.desktop.setCompaction(compactionMode, compactionThreshold);
+      setDesktopState((state) => ({ ...state, compactionMode, compactionThreshold }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   async function setWebSearchBackend(webSearchBackend: WebSearchBackend): Promise<void> {
     try {
       await window.desktop.setWebSearchBackend(webSearchBackend);
@@ -1005,6 +1066,8 @@ export function App(): JSX.Element {
             maxSteps={desktopState.maxSteps}
             providerTimeoutMinutes={desktopState.providerTimeoutMinutes}
             providerRetries={desktopState.providerRetries}
+            compactionMode={desktopState.compactionMode}
+            compactionThreshold={desktopState.compactionThreshold}
             ketchAvailable={desktopState.ketchAvailable}
             openRouterAvailable={desktopState.openRouterAvailable}
             webSearchEnabled={desktopState.webSearchEnabled}
@@ -1021,6 +1084,7 @@ export function App(): JSX.Element {
             onMaxSteps={(maxSteps) => void setMaxSteps(maxSteps)}
             onProviderTimeoutMinutes={(minutes) => void setProviderTimeoutMinutes(minutes)}
             onProviderRetries={(retries) => void setProviderRetries(retries)}
+            onCompaction={(mode, threshold) => void setCompaction(mode, threshold)}
             onWebSearchEnabled={(enabled) => void setWebSearchEnabled(enabled)}
             onWebSearchBackend={(backend) => void setWebSearchBackend(backend)}
             onWebSearchApiKey={(backend, apiKey) => void setWebSearchApiKey(backend, apiKey)}
@@ -1165,6 +1229,12 @@ export function App(): JSX.Element {
                 disabled={loadingModels || !desktopState.openRouterAvailable || running}
                 allowCustom
                 onChange={selectModel}
+              />
+              <ContextGauge
+                report={contextReport}
+                extraTokens={pendingContextTokens}
+                compacting={compactingContext}
+                onCompact={() => void compactCurrentContext()}
               />
 
               <details
@@ -1376,7 +1446,9 @@ function activeDraft(state: DesktopState): string {
 }
 
 function withoutConversation(state: DesktopState): DesktopState {
-  return state.conversation.length ? { ...state, conversation: [] } : state;
+  return state.conversation.length || state.contextCheckpoints.length
+    ? { ...state, conversation: [], contextCheckpoints: [] }
+    : state;
 }
 
 function trimThreadTimelines(

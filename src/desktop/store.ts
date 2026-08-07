@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Message } from "../protocol.js";
+import { ContextStore } from "../context/store.js";
 import type { DesktopEntry, DesktopThread, DesktopWorkspace } from "./api.js";
 import { SavedMessageStore } from "./saved-messages-store.js";
 
@@ -23,9 +24,11 @@ export async function openStore(filename: string): Promise<DesktopStore> {
 
 export class DesktopStore {
   readonly savedMessages: SavedMessageStore;
+  readonly context: ContextStore;
 
   constructor(private readonly database: Client) {
     this.savedMessages = new SavedMessageStore(database);
+    this.context = new ContextStore(database);
   }
 
   async initialize(): Promise<void> {
@@ -86,6 +89,7 @@ export class DesktopStore {
     }
     await this.database.execute("PRAGMA foreign_keys = ON");
     await this.savedMessages.initialize();
+    await this.context.initialize();
   }
 
   async state(): Promise<StoreState> {
@@ -224,17 +228,46 @@ export class DesktopStore {
     return (await this.entries(threadId)).map((entry) => entry.message);
   }
 
+  async lastSequence(threadId: string): Promise<number> {
+    const result = await this.database.execute({
+      sql: "SELECT COALESCE(MAX(sequence), -1) AS sequence FROM entries WHERE thread_id = ?",
+      args: [threadId],
+    });
+    return rowNumber(result.rows[0], "sequence");
+  }
+
+  async appendMessage(threadId: string, sequence: number, message: Message): Promise<void> {
+    const now = Date.now();
+    const firstTask = message.role === "user" ? message.content.trim().replace(/\s+/g, " ") : "";
+    const title = firstTask && firstTask.length > 48 ? `${firstTask.slice(0, 47)}…` : firstTask;
+    await this.database.batch(
+      [
+        {
+          sql: `INSERT INTO entries(id, thread_id, sequence, role, text, data, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(thread_id, sequence) DO UPDATE SET
+              role = excluded.role, text = excluded.text, data = excluded.data`,
+          args: [randomUUID(), threadId, sequence, message.role, message.content, JSON.stringify(message), now],
+        },
+        {
+          sql: `UPDATE threads
+            SET title = CASE WHEN title GLOB 'Thread [0-9]*' AND ? != '' THEN ? ELSE title END,
+                draft = '', updated_at = ?
+            WHERE id = ?`,
+          args: [title, title, now, threadId],
+        },
+      ],
+      "write",
+    );
+  }
+
   async entries(threadId: string | null): Promise<DesktopEntry[]> {
     if (!threadId) return [];
     const result = await this.database.execute({
       sql: "SELECT id, sequence, data FROM entries WHERE thread_id = ? ORDER BY sequence",
       args: [threadId],
     });
-    return result.rows.map((row) => ({
-      id: rowText(row, "id"),
-      sequence: rowNumber(row, "sequence"),
-      message: JSON.parse(rowText(row, "data")) as Message,
-    }));
+    return result.rows.map(entryFromRow);
   }
 
   async saveMessages(threadId: string, messages: Message[]): Promise<void> {
@@ -379,6 +412,14 @@ function threadFromRow(row: Row): DesktopThread {
     draft: rowText(row, "draft"),
     bookmarked: rowNumber(row, "bookmarked") === 1,
     updatedAt: rowNumber(row, "updated_at"),
+  };
+}
+
+function entryFromRow(row: Row): DesktopEntry {
+  return {
+    id: rowText(row, "id"),
+    sequence: rowNumber(row, "sequence"),
+    message: JSON.parse(rowText(row, "data")) as Message,
   };
 }
 
