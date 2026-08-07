@@ -6,6 +6,7 @@ import type { ModelProvider, ModelStreamEvent } from "./providers/provider.js";
 import type { Message, RunEvent, SourceReference } from "./protocol.js";
 import { healToolCall } from "./tool-input.js";
 import { ToolInputError, toolErrorContent } from "./tools/tool.js";
+import { truncateMiddle } from "./tools/output.js";
 import type { Trace } from "./trace.js";
 import type { Workspace } from "./workspace.js";
 
@@ -144,7 +145,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           content = tool ? toolErrorContent(tool, error) : `Error: ${errorMessage(error)}`;
         }
 
-        content = content.slice(0, 12000);
+        content = truncateMiddle(content);
         const toolMessage: Message = {
           role: "tool",
           toolCallId: call.id,

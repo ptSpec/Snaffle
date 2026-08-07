@@ -9,26 +9,29 @@ import { extractWithKetch } from "./ketch.js";
 export function webFetchTool(searchAvailable: boolean, ketchPath?: string): Tool {
   return {
     name: "web_fetch",
-    description: "Fetch a known direct public HTTP or HTTPS page and return readable text without invoking a paid search or model API. Do not use search-engine pages." + (searchAvailable
+    description: "Fetch a known direct public HTTP or HTTPS page and return readable text without invoking a paid search or model API. Do not use search-engine pages. If the page is truncated, continue with the returned start offset." + (searchAvailable
       ? ""
       : " Web discovery is unavailable in this run. Do not repeatedly guess URL paths; if no direct URL is known, answer cautiously or tell the user web search is disabled."),
     inputSchema: {
       type: "object",
       properties: {
         url: { type: "string", description: "Required. Public HTTP or HTTPS URL to fetch." },
+        start: { type: "integer", description: "Optional. Character offset to start from; defaults to 0.", minimum: 0 },
         maxChars: { type: "integer", description: "Optional. Maximum returned characters. Defaults to 12000; allowed range 1000-30000." },
       },
       required: ["url"],
       additionalProperties: false,
     },
-    exampleInput: { url: "https://example.com/docs", maxChars: 12000 },
+    exampleInput: { url: "https://example.com/docs", start: 0, maxChars: 12000 },
     async execute(_workspace, rawInput) {
       const input = objectInput(rawInput);
       const url = stringField(input, "url")!;
       if (isSearchEngineUrl(url)) {
         throw new Error("web_fetch cannot retrieve Google or Bing. Provide a direct publisher or documentation URL instead.");
       }
+      const start = integerField(input, "start", 0);
       const maxChars = integerField(input, "maxChars", 12_000);
+      if (start < 0) throw new ToolInputError("start must be at least 0");
       if (maxChars < 1_000 || maxChars > 30_000) throw new ToolInputError("maxChars must be from 1000 to 30000");
 
       const page = await fetchPublicText(url);
@@ -36,11 +39,18 @@ export function webFetchTool(searchAvailable: boolean, ketchPath?: string): Tool
         throw new Error(`Unsupported content type: ${page.contentType.split(";")[0]}`);
       }
       const html = /html|xhtml/i.test(page.contentType) || /<html[\s>]/i.test(page.text);
-      const readable = html ? await extractReadable(page.text, page.url, maxChars, ketchPath) : undefined;
+      const readable = html ? await extractReadable(page.text, page.url, 2_000_000, ketchPath) : undefined;
       const title = readable?.title || (html ? pageTitle(page.text) : new URL(page.url).hostname);
       const content = readable?.content || (html ? markdown(page.text) : page.text.trim());
+      if (start >= content.length && content.length) {
+        throw new ToolInputError(`start ${start} is beyond the extracted page (${content.length} characters)`);
+      }
+      const end = Math.min(start + maxChars, content.length);
+      const continuation = end < content.length
+        ? `\n\n[Showing characters ${start}-${end - 1} of ${content.length}. Continue with start ${end}.]`
+        : "";
       return {
-        content: `Source: ${title}\nURL: ${page.url}\n\n${content.slice(0, maxChars)}`,
+        content: `Source: ${title}\nURL: ${page.url}\n\n${content.slice(start, end)}${continuation}`,
         sources: [{ title, url: page.url }],
       };
     },
