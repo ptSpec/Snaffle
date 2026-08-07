@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { cp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { cp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import electron from "electron";
@@ -22,20 +23,24 @@ async function macosDevelopmentApp() {
   const bundle = path.join(cache, `${PROJECT.name}.app`);
   const contents = path.join(bundle, "Contents");
   const executableName = PROJECT.name;
+  const iconName = `${PROJECT.slug}.icns`;
 
   await rm(bundle, { recursive: true, force: true });
-  await mkdir(path.join(contents, "MacOS"), { recursive: true });
-  await cp(path.join(source, "Contents", "PkgInfo"), path.join(contents, "PkgInfo"));
-  await symlink(path.join(source, "Contents", "Frameworks"), path.join(contents, "Frameworks"));
-  await symlink(path.join(source, "Contents", "Resources"), path.join(contents, "Resources"));
-  await symlink(
-    path.join(source, "Contents", "MacOS", "Electron"),
+  await cp(source, bundle, {
+    recursive: true,
+    mode: constants.COPYFILE_FICLONE,
+    verbatimSymlinks: true,
+  });
+  await rename(
+    path.join(contents, "MacOS", "Electron"),
     path.join(contents, "MacOS", executableName),
   );
+  await cp(path.join(root, "assets", "logo.icns"), path.join(contents, "Resources", iconName));
 
   let plist = await readFile(path.join(source, "Contents", "Info.plist"), "utf8");
   plist = setPlistValue(plist, "CFBundleDisplayName", PROJECT.name);
   plist = setPlistValue(plist, "CFBundleExecutable", executableName);
+  plist = setPlistValue(plist, "CFBundleIconFile", iconName);
   plist = setPlistValue(plist, "CFBundleIdentifier", `${PROJECT.domain.split(".").reverse().join(".")}.desktop`);
   plist = setPlistValue(plist, "CFBundleName", PROJECT.name);
   await writeFile(path.join(contents, "Info.plist"), plist);
