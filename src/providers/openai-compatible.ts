@@ -1,6 +1,6 @@
 import type { AttachmentRef, ResolvedAttachment } from "../attachments/types.js";
 import type { Message, ModelResponse, ToolCall, ToolSpec } from "../protocol.js";
-import { healToolInput } from "../tool-input.js";
+import { healToolInput } from "../tools/input.js";
 import type { ModelProvider, ModelStreamEvent } from "./provider.js";
 
 const MAX_STREAM_BUFFER_CHARS = 8 * 1024 * 1024;

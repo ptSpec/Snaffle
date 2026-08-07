@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { healToolCall, healToolInput } from "../src/tool-input.js";
+import { healToolCall, healToolInput } from "../src/tools/input.js";
 import { editTool } from "../src/tools/edit.js";
 import { truncateMiddle } from "../src/tools/output.js";
 import { readTool } from "../src/tools/read.js";
@@ -14,8 +14,8 @@ import { webSearchTool } from "../src/tools/web/search.js";
 import { extractWithKetch, searchWithKetch } from "../src/tools/web/ketch.js";
 import { fetchPublicText } from "../src/tools/web/request.js";
 import { writeTool } from "../src/tools/write.js";
-import { LocalWorkspace } from "../src/workspace.js";
-import { nativeSandboxStatus } from "../src/sandbox.js";
+import { LocalWorkspace } from "../src/execution/workspace.js";
+import { nativeSandboxStatus } from "../src/execution/native/sandbox.js";
 
 async function fixture(): Promise<{ root: string; workspace: LocalWorkspace }> {
   const root = await mkdtemp(path.join(tmpdir(), "tool-test-"));

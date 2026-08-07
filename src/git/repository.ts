@@ -1,5 +1,5 @@
 import { lstat, readFile, readlink, stat } from "node:fs/promises";
-import type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents } from "../desktop/api.js";
+import type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents } from "./types.js";
 import { MAX_GIT_OUTPUT_BYTES, runGit, safeWorkspacePath } from "./process.js";
 
 export async function gitChanges(workspace: string): Promise<GitChanges> {

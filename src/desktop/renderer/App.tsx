@@ -29,24 +29,25 @@ import {
   validFontScale,
   type FontId,
 } from "../typography.js";
-import { AttachmentTray } from "./attachment-tray.js";
-import { htmlToMarkdown } from "./attachment-markdown.js";
-import { Settings } from "./settings.js";
-import { Bookmarks, type BookmarksPage } from "./bookmarks.js";
-import { Sidebar, type AppView, type SettingsPage } from "./sidebar.js";
-import { InspectorPanel, type InspectorTab } from "./inspector/panel.js";
-import { SearchPicker } from "./search-picker.js";
-import { ContextGauge } from "./context/gauge.js";
-import { ThinkingOrb, type OrbMotion } from "./thinking-orb.js";
+import { AttachmentTray } from "./sections/conversation/attachment-tray.js";
+import { htmlToMarkdown } from "./sections/conversation/attachment-markdown.js";
+import { Settings } from "./screens/settings/settings.js";
+import { Bookmarks, type BookmarksPage } from "./screens/bookmarks/bookmarks.js";
+import { Sidebar, type AppView, type SettingsPage } from "./sections/sidebar/sidebar.js";
+import { InspectorPanel, type InspectorTab } from "./sections/inspector/panel.js";
+import type { OrbMotion } from "./components/thinking-orb.js";
+import { Composer } from "./sections/conversation/composer.js";
+import {
+  TimelineEntry,
+} from "./sections/conversation/timeline.js";
 import {
   addRunEvent,
   findTimelineItem,
   newTimelineId,
-  TimelineEntry,
   timelineFromEntries,
   type SaveableTimelineItem,
   type TimelineItem,
-} from "./timeline.js";
+} from "./sections/conversation/timeline-state.js";
 
 declare global {
   interface Window {
@@ -1172,159 +1173,40 @@ export function App(): JSX.Element {
             onRemoveActive={removeActiveAttachment}
             onRemovePending={(attachment) => void removeAttachment(attachment)}
           />
-          <form
-            className={draggingAttachments ? "composer dragging" : "composer"}
+          <Composer
+            task={task}
+            taskInput={taskInput}
+            executionMode={executionMode}
+            composerAdd={composerAdd}
+            dragging={draggingAttachments}
+            running={running}
+            pendingAttachmentCount={pendingAttachments.length}
+            models={models}
+            selectedModel={selectedModel}
+            loadingModels={loadingModels}
+            providerAvailable={desktopState.openRouterAvailable}
+            contextReport={contextReport}
+            pendingContextTokens={pendingContextTokens}
+            compactingContext={compactingContext}
+            unsafe={unsafeHostExecution}
+            restrictedDetail={desktopState.restrictedHostDetail}
+            orbMotion={sendOrbMotion}
+            blocker={runBlocker}
+            error={error}
+            platform={window.desktop.platform}
+            onTask={setTask}
             onSubmit={(event) => void startRun(event)}
-            onDragEnter={(event) => {
-              if (event.dataTransfer.types.includes("Files")) setDraggingAttachments(true);
-            }}
-            onDragOver={(event) => {
-              if (!event.dataTransfer.types.includes("Files")) return;
-              event.preventDefault();
-              event.dataTransfer.dropEffect = "copy";
-            }}
-            onDragLeave={(event) => {
-              const nextTarget = event.relatedTarget;
-              if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
-                setDraggingAttachments(false);
-              }
-            }}
+            onDragging={setDraggingAttachments}
             onDrop={(event) => void dropAttachments(event)}
-          >
-            <textarea
-              ref={taskInput}
-              value={task}
-              onChange={(event) => setTask(event.target.value)}
-              onPaste={(event) => void pasteIntoTask(event)}
-              onKeyDown={(event) => {
-                const pastePlain = event.key.toLowerCase() === "v" &&
-                  event.shiftKey &&
-                  (window.desktop.platform === "darwin" ? event.metaKey : event.ctrlKey);
-                if (pastePlain) {
-                  event.preventDefault();
-                  void pastePlainText();
-                  return;
-                }
-                if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
-                event.preventDefault();
-                event.currentTarget.form?.requestSubmit();
-              }}
-              placeholder="Describe the coding task…"
-              rows={1}
-            />
-
-            <div className="composer-controls">
-              <details ref={composerAdd} className="composer-add">
-                <summary aria-label="Add to message" title="Add to message">＋</summary>
-                <div className="composer-add-menu">
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      void chooseAttachments();
-                      event.currentTarget.closest("details")?.removeAttribute("open");
-                    }}
-                    disabled={running || pendingAttachments.length >= 8}
-                  >Attach files</button>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      void pasteMarkdown();
-                      event.currentTarget.closest("details")?.removeAttribute("open");
-                    }}
-                  >Paste as Markdown</button>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      void pastePlainText();
-                      event.currentTarget.closest("details")?.removeAttribute("open");
-                    }}
-                  >Paste without formatting</button>
-                </div>
-              </details>
-              <SearchPicker
-                className={selectedModel ? "model-search" : "model-search empty"}
-                value={selectedModel}
-                options={models.map((model) => ({ value: model.id, label: model.name }))}
-                placeholder={loadingModels ? "Loading models…" : "Select model"}
-                searchPlaceholder="Search models…"
-                disabled={loadingModels || !desktopState.openRouterAvailable || running}
-                allowCustom
-                onChange={selectModel}
-              />
-              <ContextGauge
-                report={contextReport}
-                extraTokens={pendingContextTokens}
-                compacting={compactingContext}
-                onCompact={() => void compactCurrentContext()}
-              />
-
-              <details
-                ref={executionMode}
-                className={unsafeHostExecution ? "execution-mode unsafe" : "execution-mode"}
-              >
-                <summary>
-                  {unsafeHostExecution ? (
-                    <span className="execution-dot" aria-hidden="true" />
-                  ) : (
-                    <svg className="execution-shield" viewBox="0 0 16 18" aria-hidden="true">
-                      <path d="M8 1 14 3.4v4.3c0 3.9-2.5 7.1-6 8.3-3.5-1.2-6-4.4-6-8.3V3.4L8 1Z" />
-                    </svg>
-                  )}
-                  {unsafeHostExecution ? "Unsafe · this thread" : "Restricted"}
-                </summary>
-                <div className="execution-details">
-                  <button
-                    className="execution-details-close"
-                    type="button"
-                    aria-label="Close execution settings"
-                    title="Close"
-                    onClick={(event) => event.currentTarget.closest("details")?.removeAttribute("open")}
-                  >
-                    ×
-                  </button>
-                  <strong>
-                    {unsafeHostExecution ? "Unrestricted host execution" : desktopState.restrictedHostDetail}
-                  </strong>
-                  <p>
-                    {unsafeHostExecution
-                      ? "Shell commands run as your user and can access host files, network, and inherited environment. File tools remain workspace-only."
-                      : "Shell commands can write in this workspace and use private temporary files. Personal host files, network access, and Git metadata are blocked."}
-                  </p>
-                  <label className={unsafeHostExecution ? "host-toggle enabled" : "host-toggle"}>
-                    <input
-                      type="checkbox"
-                      checked={unsafeHostExecution}
-                      onChange={(event) => void setThreadUnsafe(event.target.checked)}
-                      disabled={running}
-                    />
-                    {unsafeHostExecution ? "Return to restricted" : "Allow unrestricted shell commands"}
-                  </label>
-                </div>
-              </details>
-
-              {running && task.trim() ? <small className="steer-hint">Enter to steer</small> : null}
-
-              <button
-                className={running ? "send-button stop" : "send-button"}
-                type={running ? "button" : "submit"}
-                onClick={running ? () => void stopRun() : undefined}
-                aria-label={running ? "Stop run" : "Send task"}
-                aria-disabled={!running && Boolean(runBlocker)}
-                title={running ? "Stop run" : runBlocker ?? "Send task"}
-              >
-                <span className="send-button-orb" aria-hidden="true">
-                  <ThinkingOrb motion={sendOrbMotion} speed={1.7} />
-                </span>
-                <span className="send-button-symbol" aria-hidden="true">{running ? "■" : "↑"}</span>
-              </button>
-            </div>
-
-            {error ? (
-              <div className="composer-error" role="alert">
-                {error}
-              </div>
-            ) : null}
-          </form>
+            onPaste={(event) => void pasteIntoTask(event)}
+            onPastePlain={() => void pastePlainText()}
+            onPasteMarkdown={() => void pasteMarkdown()}
+            onChooseAttachments={() => void chooseAttachments()}
+            onModel={selectModel}
+            onCompact={() => void compactCurrentContext()}
+            onUnsafe={(value) => void setThreadUnsafe(value)}
+            onStop={() => void stopRun()}
+          />
           </section>
         )}
 
