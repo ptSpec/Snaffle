@@ -841,7 +841,11 @@ export function addRunEvent(
 
   if (event.type === "model.completed") {
     setTimeline((items) => {
-      const completedReasoning = finishReasoning(items, event.step, event.response.reasoning ?? "");
+      const completedReasoning = finishReasoning(
+        items.filter((item) => item.kind !== "tool-preparing" || item.step !== event.step),
+        event.step,
+        event.response.reasoning ?? "",
+      );
       const existing = streamingAssistantIndex(completedReasoning);
       const intermediate = event.response.toolCalls.length > 0;
       const metadata = {
@@ -865,6 +869,11 @@ export function addRunEvent(
       }
       return intermediate ? completed : collapseCompletedRuns(completed);
     });
+    return;
+  }
+
+  if (event.type === "run.completed") {
+    setTimeline((items) => collapseCompletedRuns(stopActivity(items)));
     return;
   }
 
