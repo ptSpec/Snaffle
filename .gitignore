@@ -26,7 +26,8 @@ eval-results/
 artifacts/
 .cache/
 
-# Esch local state
+# Product local state (current and legacy)
+.snaffle/
 .esch/
 *.sqlite
 *.sqlite-shm

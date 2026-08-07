@@ -31,7 +31,7 @@ try {
   }
 } catch {}
 
-const temporary = await mkdtemp(join(tmpdir(), "esch-ketch-"));
+const temporary = await mkdtemp(join(tmpdir(), "coding-harness-ketch-"));
 try {
   const archiveName = `ketch_${version}_${suffix}`;
   const response = await fetch(`https://github.com/1broseidon/ketch/releases/download/v${version}/${archiveName}`);

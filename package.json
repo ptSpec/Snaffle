@@ -1,5 +1,6 @@
 {
-  "name": "esch",
+  "name": "snaffle",
+  "productName": "Snaffle",
   "version": "0.0.0",
   "private": true,
   "engines": {
@@ -8,6 +9,7 @@
   "type": "module",
   "main": "dist/src/desktop/main.js",
   "bin": {
+    "snaffle": "dist/src/cli.js",
     "esch": "dist/src/cli.js"
   },
   "scripts": {

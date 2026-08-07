@@ -4,6 +4,7 @@ import { chmod, mkdir, readFile, realpath, rename, stat, writeFile } from "node:
 import path from "node:path";
 import { promisify } from "node:util";
 import { rgPath } from "@vscode/ripgrep";
+import { PRODUCT } from "../identity.js";
 import { hostEnvironmentDescription, runRestrictedCommand } from "./native/sandbox.js";
 import type { CommandApprovalDecision } from "../protocol.js";
 
@@ -228,7 +229,7 @@ export class LocalWorkspace implements Workspace {
       throw new Error(`Path leaves the workspace: ${input}`);
     }
     if (relative.split(path.sep).includes(".git")) {
-      throw new Error("Git metadata is managed by Esch and cannot be accessed through file tools");
+      throw new Error(`Git metadata is managed by ${PRODUCT.name} and cannot be accessed through file tools`);
     }
   }
 

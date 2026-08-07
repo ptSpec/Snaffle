@@ -5,7 +5,6 @@ import {
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
-import logoSvg from "../../../../../assets/logo_svg.svg?raw";
 import { PRODUCT } from "../../../../identity.js";
 import type { DesktopState, DesktopThread } from "../../../api.js";
 import type { BookmarksPage } from "../../screens/bookmarks/bookmarks.js";
@@ -183,7 +182,7 @@ export function Sidebar({
   }
 
   async function removeWorkspace(workspaceId: string, name: string): Promise<void> {
-    if (!window.confirm(`Remove ${name} from Esch? The project directory will not be deleted.`)) {
+    if (!window.confirm(`Remove ${name} from ${PRODUCT.name}? The project directory will not be deleted.`)) {
       return;
     }
     try {
@@ -250,12 +249,7 @@ export function Sidebar({
           <span>{view === "settings" ? "Settings" : "Bookmarks"}</span>
         ) : (
           <span className="brand-wordmark" aria-label={PRODUCT.name}>
-            <span
-              className="brand-mark"
-              aria-hidden="true"
-              dangerouslySetInnerHTML={{ __html: logoSvg }}
-            />
-            <span className="brand-name">Sch</span>
+            <span className="brand-name">{PRODUCT.name}</span>
           </span>
         )}
         <button
@@ -401,7 +395,7 @@ export function Sidebar({
                     onClick={() => void removeWorkspace(state.workspace!.id, state.workspace!.name)}
                     disabled={state.workspace.threads.some((thread) => isRunning(thread.id))}
                     aria-label={`Remove ${state.workspace.name}`}
-                    title="Remove workspace from Esch"
+                    title={`Remove workspace from ${PRODUCT.name}`}
                   >
                     ×
                   </button>
@@ -485,7 +479,7 @@ export function Sidebar({
                           onClick={() => void removeWorkspace(workspace.id, workspace.name)}
                           disabled={workspace.threads.some((thread) => isRunning(thread.id))}
                           aria-label={`Remove ${workspace.name}`}
-                          title="Remove workspace from Esch"
+                          title={`Remove workspace from ${PRODUCT.name}`}
                         >
                           ×
                         </button>

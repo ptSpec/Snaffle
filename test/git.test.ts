@@ -26,12 +26,12 @@ test("Git porcelain output preserves paths and change counts", () => {
 });
 
 test("Git editor preserves CRLF line endings", async () => {
-  const workspace = await mkdtemp(join(tmpdir(), "esch-git-"));
+  const workspace = await mkdtemp(join(tmpdir(), "harness-git-"));
   try {
     await exec("git", ["init"], { cwd: workspace });
     await writeFile(join(workspace, "example.txt"), "one\ntwo\n");
     await exec("git", ["add", "example.txt"], { cwd: workspace });
-    await exec("git", ["-c", "user.name=Esch Test", "-c", "user.email=test@example.com", "commit", "-m", "initial"], { cwd: workspace });
+    await exec("git", ["-c", "user.name=Snaffle Test", "-c", "user.email=test@example.com", "commit", "-m", "initial"], { cwd: workspace });
     await writeFile(join(workspace, "example.txt"), "one\r\ntwo changed\r\n");
 
     const contents = await gitFileContents(workspace, "example.txt");
@@ -49,7 +49,7 @@ test("Git editor preserves CRLF line endings", async () => {
 });
 
 test("Git changes do not open directory symbolic links as files", async () => {
-  const workspace = await mkdtemp(join(tmpdir(), "esch-git-link-"));
+  const workspace = await mkdtemp(join(tmpdir(), "harness-git-link-"));
   try {
     await exec("git", ["init"], { cwd: workspace });
     await mkdir(join(workspace, "target"));
@@ -66,10 +66,10 @@ test("Git changes do not open directory symbolic links as files", async () => {
 });
 
 test("Git commit includes only selected files", async () => {
-  const workspace = await mkdtemp(join(tmpdir(), "esch-git-commit-"));
+  const workspace = await mkdtemp(join(tmpdir(), "harness-git-commit-"));
   try {
     await exec("git", ["init"], { cwd: workspace });
-    await exec("git", ["config", "user.name", "Esch Test"], { cwd: workspace });
+    await exec("git", ["config", "user.name", "Snaffle Test"], { cwd: workspace });
     await exec("git", ["config", "user.email", "test@example.com"], { cwd: workspace });
     await writeFile(join(workspace, "one.txt"), "one\n");
     await writeFile(join(workspace, "two.txt"), "two\n");

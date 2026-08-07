@@ -65,7 +65,7 @@ const GitEditor = forwardRef<GitEditorHandle, {
             bracketMatching(),
             highlightActiveLine(),
             EditorView.lineWrapping,
-            syntaxHighlighting(eschHighlighting),
+            syntaxHighlighting(editorHighlighting),
             keymap.of([
               { key: "Mod-s", run: (target) => { handlers.current.onSave(target.state.doc.toString()); return true; } },
               indentWithTab,
@@ -150,7 +150,7 @@ const editorTheme = EditorView.theme({
   },
 });
 
-const eschHighlighting = HighlightStyle.define([
+const editorHighlighting = HighlightStyle.define([
   { tag: tags.comment, color: "var(--syntax-comment)" },
   { tag: [tags.keyword, tags.modifier], color: "var(--syntax-keyword)" },
   { tag: [tags.string, tags.regexp], color: "var(--syntax-string)" },
