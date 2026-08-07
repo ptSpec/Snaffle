@@ -116,6 +116,42 @@ test("restoring a thread removes the failed turn and newer context checkpoints",
   assert.equal(await store.context.latest(threadId), null);
 });
 
+test("forking a thread copies history through one message and preserves its source", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "harness-fork-store-"));
+  const store = await openStore(path.join(root, "store.db"));
+  t.after(async () => {
+    store.close();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  await store.addWorkspace(root, "example");
+  const sourceThreadId = (await store.state()).activeThreadId!;
+  await store.saveMessages(sourceThreadId, [
+    { role: "system", content: "system" },
+    { role: "user", content: "first" },
+    { role: "assistant", content: "first answer" },
+    { role: "user", content: "second" },
+    { role: "assistant", content: "second answer" },
+  ]);
+  const sourceEntryId = (await store.entries(sourceThreadId))[2]!.id;
+
+  await store.forkThread(sourceThreadId, 2);
+
+  const state = await store.state();
+  const forkThreadId = state.activeThreadId!;
+  const fork = state.workspaces[0]!.threads.find((thread) => thread.id === forkThreadId)!;
+  assert.notEqual(forkThreadId, sourceThreadId);
+  assert.equal(fork.sourceThreadId, sourceThreadId);
+  assert.equal(fork.sourceEntryId, sourceEntryId);
+  assert.equal(fork.branchLabel, null);
+  assert.deepEqual((await store.messages(forkThreadId)).map((message) => message.content), [
+    "system",
+    "first",
+    "first answer",
+  ]);
+  assert.equal((await store.messages(sourceThreadId)).length, 5);
+});
+
 test("context checkpoints preserve the full transcript and project only the tail", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "harness-context-store-"));
   const store = await openStore(path.join(root, "store.db"));

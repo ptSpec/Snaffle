@@ -34,6 +34,19 @@ export function registerWorkspaceIpc(options: {
     await store.createThread(id(value, "Workspace"));
     return state();
   });
+  ipcMain.handle("desktop:fork-thread", async (
+    _event,
+    threadValue: unknown,
+    sequenceValue: unknown,
+  ): Promise<DesktopState> => {
+    const threadId = id(threadValue, "Thread");
+    if (options.runningThread(threadId)) throw new Error("Wait for the current run to finish before forking");
+    if (!Number.isInteger(sequenceValue) || Number(sequenceValue) < 0) {
+      throw new Error("Fork point must be a message sequence");
+    }
+    await store.forkThread(threadId, Number(sequenceValue));
+    return state();
+  });
   ipcMain.handle("desktop:select-thread", async (_event, value: unknown): Promise<DesktopState> => {
     await store.selectThread(id(value, "Thread"));
     return state();

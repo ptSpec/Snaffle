@@ -27,6 +27,7 @@ export function Sidebar({
   onView,
   onSettingsPage,
   onBookmarksPage,
+  onOpenThreadSource,
   onCollapse,
 }: {
   state: DesktopState;
@@ -42,6 +43,7 @@ export function Sidebar({
   onView: (view: AppView) => void;
   onSettingsPage: (page: SettingsPage) => void;
   onBookmarksPage: (page: BookmarksPage) => void;
+  onOpenThreadSource: (thread: DesktopThread) => void;
   onCollapse: () => void;
 }): JSX.Element {
   const [selecting, setSelecting] = useState(false);
@@ -412,6 +414,7 @@ export function Sidebar({
                       <ThreadRow
                         key={thread.id}
                         thread={thread}
+                        sourceTitle={threads.find((candidate) => candidate.id === thread.sourceThreadId)?.title}
                         active={thread.id === state.activeThreadId}
                         bridged={thread.id === state.activeThreadId && thread.id === promotedThreadId}
                         promotionDistance={promotion?.id === thread.id ? promotion.distance : 0}
@@ -420,6 +423,9 @@ export function Sidebar({
                         focused={selecting && index === cursor}
                         running={isRunning(thread.id)}
                         onSelect={() => void selectThread(thread.id)}
+                        {...(thread.sourceThreadId && thread.sourceEntryId
+                          ? { onOpenSource: () => onOpenThreadSource(thread) }
+                          : {})}
                         onToggleSelected={() => {
                           setCursor(index);
                           setAnchor(index);
@@ -532,6 +538,7 @@ export function Sidebar({
 
 function ThreadRow({
   thread,
+  sourceTitle,
   active,
   bridged,
   promotionDistance,
@@ -540,11 +547,13 @@ function ThreadRow({
   focused,
   running,
   onSelect,
+  onOpenSource,
   onToggleSelected,
   onToggleBookmark,
   onDelete,
 }: {
   thread: DesktopThread;
+  sourceTitle: string | undefined;
   active: boolean;
   bridged: boolean;
   promotionDistance: number;
@@ -553,6 +562,7 @@ function ThreadRow({
   focused: boolean;
   running: boolean;
   onSelect: () => void;
+  onOpenSource?: () => void;
   onToggleSelected: () => void;
   onToggleBookmark: () => void;
   onDelete: () => void;
@@ -578,11 +588,24 @@ function ThreadRow({
           aria-label={`Select ${thread.title}`}
         />
       ) : null}
+      {!selecting && onOpenSource ? (
+        <button
+          className="thread-fork-marker"
+          type="button"
+          onClick={onOpenSource}
+          title={`Open source: ${sourceTitle ?? "source thread"}`}
+          aria-label={`Open source thread ${sourceTitle ?? ""}`.trim()}
+        >
+          <ThreadForkIcon />
+        </button>
+      ) : null}
       <button
         className="thread-item"
         type="button"
         onClick={selecting ? onToggleSelected : onSelect}
-        title={thread.title}
+        title={thread.sourceThreadId
+          ? `${thread.title} — Forked from ${sourceTitle ?? "another thread"}`
+          : thread.title}
       >
         <span className="thread-title-row">
           {running ? (
@@ -636,6 +659,17 @@ function ArchiveIcon(): JSX.Element {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M2.5 5h11v8.5h-11zM2 2.5h12V5H2zM6 8h4" />
+    </svg>
+  );
+}
+
+function ThreadForkIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="4" cy="3" r="1.5" />
+      <circle cx="12" cy="5" r="1.5" />
+      <circle cx="12" cy="12" r="1.5" />
+      <path d="M4 4.5v2.25A5.25 5.25 0 0 0 9.25 12H10.5M4 6.5A5.5 5.5 0 0 1 9.5 5H10.5" />
     </svg>
   );
 }

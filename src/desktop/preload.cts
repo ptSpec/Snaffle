@@ -12,6 +12,8 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:select-workspace", workspaceId),
   createThread: (workspaceId: string) =>
     ipcRenderer.invoke("desktop:create-thread", workspaceId),
+  forkThread: (threadId: string, sequence: number) =>
+    ipcRenderer.invoke("desktop:fork-thread", threadId, sequence),
   selectThread: (threadId: string) => ipcRenderer.invoke("desktop:select-thread", threadId),
   setThreadDraft: (threadId: string, draft: string) =>
     ipcRenderer.invoke("desktop:set-thread-draft", threadId, draft),
