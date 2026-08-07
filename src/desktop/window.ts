@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from "electron";
 import path from "node:path";
-import { PRODUCT } from "../identity.js";
+import { PROJECT } from "../identity.js";
 import type { Theme } from "./themes/index.js";
 import type { FontId } from "./typography.js";
 
@@ -20,7 +20,7 @@ export function createDesktopWindow(
   appearance: WindowAppearance,
 ): BrowserWindow {
   const window = new BrowserWindow({
-    title: PRODUCT.name,
+    title: PROJECT.name,
     width: 1360,
     height: 860,
     minWidth: 980,

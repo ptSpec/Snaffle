@@ -3,7 +3,7 @@
 import path from "node:path";
 import { runAgent } from "./agent/loop.js";
 import { builtInCapabilities } from "./capabilities/active.js";
-import { ENV_PREFIX, LOCAL_STATE_DIRECTORY, PRODUCT, productEnvironment } from "./identity.js";
+import { ENV_PREFIX, LOCAL_STATE_DIRECTORY, PROJECT, projectEnvironment } from "./identity.js";
 import { OpenAICompatibleProvider } from "./providers/openai-compatible.js";
 import { listOpenRouterModels, OpenRouterProvider } from "./providers/openrouter.js";
 import type { ModelProvider } from "./providers/provider.js";
@@ -105,7 +105,7 @@ function parseArgs(args: string[]): CliOptions {
     throw new Error("--provider must be openai-compatible or openrouter");
   }
   const modelEnvironmentVariable = `${ENV_PREFIX}_MODEL`;
-  const model = values.get("--model") ?? productEnvironment("MODEL", process.env);
+  const model = values.get("--model") ?? projectEnvironment("MODEL", process.env);
   if (!listModels && !task) throw new Error("A task is required");
   if (!listModels && !model) throw new Error(`Set --model or ${modelEnvironmentVariable}`);
 
@@ -122,12 +122,12 @@ function parseArgs(args: string[]): CliOptions {
     model: model ?? "",
     baseUrl:
       values.get("--base-url") ??
-      productEnvironment("BASE_URL", process.env) ??
+      projectEnvironment("BASE_URL", process.env) ??
       "http://localhost:11434/v1",
     apiKey:
       values.get("--api-key") ??
       (provider === "openrouter" ? process.env.OPENROUTER_API_KEY : undefined) ??
-      productEnvironment("API_KEY", process.env),
+      projectEnvironment("API_KEY", process.env),
     tracePath:
       values.get("--trace") ??
       path.join(
@@ -159,7 +159,7 @@ function createProvider(options: CliOptions): ModelProvider {
 }
 
 function webSearchOptions(options: CliOptions) {
-  const requested = productEnvironment("WEB_SEARCH_BACKEND", process.env);
+  const requested = projectEnvironment("WEB_SEARCH_BACKEND", process.env);
   const backend: WebSearchBackend = requested && WEB_SEARCH_BACKENDS.includes(requested as WebSearchBackend)
     ? requested as WebSearchBackend
     : "ddg";
@@ -194,7 +194,7 @@ function firstLine(value: string): string {
 }
 
 function printHelp(): void {
-  console.log(`Usage: ${PRODUCT.slug} [options] "task"
+  console.log(`Usage: ${PROJECT.slug} [options] "task"
 
 Options:
   --workspace <path>  Workspace directory (default: current directory)

@@ -1,4 +1,4 @@
-import { PRODUCT } from "../identity.js";
+import { PROJECT } from "../identity.js";
 import type { Message, ToolSpec } from "../protocol.js";
 import { estimateContextCharacters, estimateContextTokens } from "./budget.js";
 
@@ -88,7 +88,7 @@ export function withoutMalformedToolCalls(messages: Message[]): Message[] {
       return [{
         role: "user",
         content:
-          `${PRODUCT.name} tool input correction notice, not a new user request: The previous ${name} call had malformed arguments. ` +
+          `${PROJECT.name} tool input correction notice, not a new user request: The previous ${name} call had malformed arguments. ` +
           `The original task is unchanged.\n\n${message.content}`,
       }];
     }

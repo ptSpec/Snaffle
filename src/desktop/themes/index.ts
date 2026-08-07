@@ -1,4 +1,4 @@
-import { LEGACY_PRODUCTS } from "../../identity.js";
+import { LEGACY_PROJECTS } from "../../identity.js";
 import type { Theme } from "./contract.js";
 import { darkTheme } from "./dark.js";
 import { lightTheme } from "./light.js";
@@ -11,6 +11,6 @@ export const THEMES: readonly Theme[] = [darkTheme, lightTheme, snaffleTheme];
 export const DEFAULT_THEME: Theme = darkTheme;
 
 export function themeById(id: string): Theme | undefined {
-  if (LEGACY_PRODUCTS.some((product) => product.slug === id)) return snaffleTheme;
+  if (LEGACY_PROJECTS.some((project) => project.slug === id)) return snaffleTheme;
   return THEMES.find((theme) => theme.id === id);
 }

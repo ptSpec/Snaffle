@@ -1,5 +1,5 @@
 import type { AttachmentRef, ResolvedAttachment } from "../attachments/types.js";
-import { PRODUCT } from "../identity.js";
+import { PROJECT } from "../identity.js";
 import type { Message, ModelResponse, ToolCall, ToolSpec } from "../protocol.js";
 import { healToolInput } from "../tools/input.js";
 import type { ModelProvider, ModelStreamEvent } from "./provider.js";
@@ -128,7 +128,7 @@ function isAuthFailure(status: number | undefined): boolean {
 
 function addRetryReminder(messages: Message[], failure: string): Message[] {
   const notice =
-    `${PRODUCT.name} retry notice, not a new user request: The last model generation was rejected before ${PRODUCT.name} received it. ` +
+    `${PROJECT.name} retry notice, not a new user request: The last model generation was rejected before ${PROJECT.name} received it. ` +
     `The original task is unchanged and completed tool calls remain completed; do not repeat them. ` +
     `Provider error: ${failure.slice(0, 2000)} Generate only the next response again. ` +
     `If using a tool, call exactly one and send its arguments as one JSON object matching its schema. ` +
@@ -308,7 +308,7 @@ async function toOpenAIMessage(
       role: "tool",
       tool_call_id: message.toolCallId,
       content: message.inputRepair
-        ? `${message.content}\n\n[${PRODUCT.name} corrected your previous tool input: ${message.inputRepair}. Next time, send the corrected form directly.]`
+        ? `${message.content}\n\n[${PROJECT.name} corrected your previous tool input: ${message.inputRepair}. Next time, send the corrected form directly.]`
         : message.content,
     };
   }
