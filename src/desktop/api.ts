@@ -16,6 +16,9 @@ export type DesktopThread = {
   title: string;
   draft: string;
   bookmarked: boolean;
+  sourceThreadId: string | null;
+  sourceEntryId: string | null;
+  branchLabel: string | null;
   updatedAt: number;
 };
 
@@ -116,6 +119,7 @@ export interface DesktopApi {
   chooseWorkspace(): Promise<DesktopState | null>;
   selectWorkspace(workspaceId: string): Promise<DesktopState>;
   createThread(workspaceId: string): Promise<DesktopState>;
+  forkThread(threadId: string, sequence: number): Promise<DesktopState>;
   selectThread(threadId: string): Promise<DesktopState>;
   setThreadDraft(threadId: string, draft: string): Promise<void>;
   restoreThread(threadId: string, sequence: number): Promise<DesktopState>;

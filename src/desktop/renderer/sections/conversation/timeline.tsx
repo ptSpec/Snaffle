@@ -20,6 +20,7 @@ export function TimelineEntry({
   onToggleSaved,
   onToggleAttachmentContext,
   onRestore,
+  onFork,
 }: {
   item: TimelineItem;
   selectedId: string | null;
@@ -33,6 +34,7 @@ export function TimelineEntry({
     attachment: AttachmentRef,
   ) => void;
   onRestore?: (sequence: number) => void;
+  onFork?: (sequence: number) => void;
 }): JSX.Element {
   if (item.kind === "activity-group") {
     return (
@@ -107,6 +109,9 @@ export function TimelineEntry({
             text={item.text}
             metadata={modelMetadata(item)}
             saved={Boolean(savedId)}
+            {...(onFork && item.sequence !== undefined
+              ? { onFork: () => onFork(item.sequence!) }
+              : {})}
             {...(onToggleSaved ? { onSave: () => onToggleSaved(item, savedId) } : {})}
           />
         ) : null}
@@ -119,6 +124,7 @@ export function TimelineEntry({
       <UserMessage
         item={item}
         {...(onEditUser ? { onEdit: onEditUser } : {})}
+        {...(onFork ? { onFork } : {})}
         {...(onToggleAttachmentContext ? { onToggleAttachmentContext } : {})}
       />
     );
@@ -210,10 +216,12 @@ function ApprovalEntry({
 function UserMessage({
   item,
   onEdit,
+  onFork,
   onToggleAttachmentContext,
 }: {
   item: Extract<TimelineItem, { kind: "user" }>;
   onEdit?: (text: string) => void;
+  onFork?: (sequence: number) => void;
   onToggleAttachmentContext?: (item: Extract<TimelineItem, { kind: "user" }>, attachment: AttachmentRef) => void;
 }): JSX.Element {
   const collapsible = item.text.length > 1000 || item.text.split("\n").length > 12;
@@ -249,6 +257,7 @@ function UserMessage({
         text={item.text}
         compact
         {...(onEdit ? { onEdit: () => onEdit(item.text) } : {})}
+        {...(onFork ? { onFork: () => onFork(item.sequence) } : {})}
       >
         {collapsible ? (
           <button className="message-expand" type="button" onClick={() => setExpanded((value) => !value)}>
@@ -266,6 +275,7 @@ function MessageFooter({
   children,
   compact = false,
   onEdit,
+  onFork,
   saved = false,
   onSave,
 }: {
@@ -274,6 +284,7 @@ function MessageFooter({
   children?: ReactNode;
   compact?: boolean;
   onEdit?: () => void;
+  onFork?: () => void;
   saved?: boolean;
   onSave?: () => void;
 }): JSX.Element {
@@ -304,6 +315,12 @@ function MessageFooter({
           >
             <BookmarkIcon filled={saved} />
             <span className="action-label">{saved ? "Saved" : "Save"}</span>
+          </button>
+        ) : null}
+        {onFork ? (
+          <button type="button" onClick={onFork} title="Fork from this message" aria-label="Fork from this message">
+            <ForkIcon />
+            <span className="action-label">Fork</span>
           </button>
         ) : null}
         <button type="button" onClick={() => void copy()} title="Copy message" aria-label="Copy message">
@@ -448,6 +465,17 @@ function BookmarkIcon({ filled }: { filled: boolean }): JSX.Element {
   return (
     <svg viewBox="0 0 16 16" fill={filled ? "currentColor" : "none"} aria-hidden="true">
       <path d="M4 2.5h8v11l-4-2.5-4 2.5z" />
+    </svg>
+  );
+}
+
+function ForkIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="4" cy="3" r="1.5" />
+      <circle cx="12" cy="5" r="1.5" />
+      <circle cx="12" cy="12" r="1.5" />
+      <path d="M4 4.5v2.25A5.25 5.25 0 0 0 9.25 12H10.5M4 6.5A5.5 5.5 0 0 1 9.5 5H10.5" />
     </svg>
   );
 }

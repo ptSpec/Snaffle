@@ -596,6 +596,38 @@ html[data-accented-theme="true"] .thread-row.active .thread-item {
   align-items: center;
 }
 
+.thread-fork-marker {
+  display: inline-grid;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  margin-left: 5px;
+  padding: 0;
+  place-items: center;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+}
+
+.thread-fork-marker:hover {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
+.thread-fork-marker svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.35;
+}
+
+html[data-accented-theme="true"] .thread-fork-marker {
+  color: var(--primary);
+}
+
 .thread-title-text {
   min-width: 0;
   overflow: hidden;

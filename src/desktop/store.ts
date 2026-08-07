@@ -47,6 +47,9 @@ export class DesktopStore {
           title TEXT NOT NULL,
           draft TEXT NOT NULL DEFAULT '',
           bookmarked INTEGER NOT NULL DEFAULT 0,
+          source_thread_id TEXT,
+          source_entry_id TEXT,
+          branch_label TEXT,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
         )`,
@@ -83,9 +86,21 @@ export class DesktopStore {
       ],
       "write",
     );
-    const threadColumns = await this.database.execute("PRAGMA table_info(threads)");
-    if (!threadColumns.rows.some((row) => rowText(row, "name") === "draft")) {
+    const threadColumns = new Set(
+      (await this.database.execute("PRAGMA table_info(threads)"))
+        .rows.map((row) => rowText(row, "name")),
+    );
+    if (!threadColumns.has("draft")) {
       await this.database.execute("ALTER TABLE threads ADD COLUMN draft TEXT NOT NULL DEFAULT ''");
+    }
+    if (!threadColumns.has("source_thread_id")) {
+      await this.database.execute("ALTER TABLE threads ADD COLUMN source_thread_id TEXT");
+    }
+    if (!threadColumns.has("source_entry_id")) {
+      await this.database.execute("ALTER TABLE threads ADD COLUMN source_entry_id TEXT");
+    }
+    if (!threadColumns.has("branch_label")) {
+      await this.database.execute("ALTER TABLE threads ADD COLUMN branch_label TEXT");
     }
     await this.database.execute("PRAGMA foreign_keys = ON");
     await this.savedMessages.initialize();
@@ -154,6 +169,64 @@ export class DesktopStore {
         VALUES (?, ?, ?, ?, ?)`,
       args: [threadId, workspaceId, `Thread ${number}`, now, now],
     });
+    await this.setActive(workspaceId, threadId);
+  }
+
+  async forkThread(sourceThreadId: string, throughSequence: number, branchLabel?: string): Promise<void> {
+    const source = await this.database.execute({
+      sql: `SELECT t.workspace_id, t.title, e.id AS source_entry_id
+        FROM threads t
+        JOIN entries e ON e.thread_id = t.id
+        WHERE t.id = ? AND e.sequence = ? AND e.role IN ('user', 'assistant')`,
+      args: [sourceThreadId, throughSequence],
+    });
+    const sourceRow = source.rows[0];
+    if (!sourceRow) throw new Error("The message is no longer available to fork");
+
+    const entries = await this.database.execute({
+      sql: `SELECT sequence, role, text, data, created_at
+        FROM entries WHERE thread_id = ? AND sequence <= ? ORDER BY sequence`,
+      args: [sourceThreadId, throughSequence],
+    });
+    const threadId = randomUUID();
+    const workspaceId = rowText(sourceRow, "workspace_id");
+    const label = branchLabel?.trim() || null;
+    const title = label || forkTitle(rowText(sourceRow, "title"));
+    const now = Date.now();
+    await this.database.batch(
+      [
+        {
+          sql: `INSERT INTO threads(
+              id, workspace_id, title, source_thread_id, source_entry_id, branch_label,
+              created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            threadId,
+            workspaceId,
+            title,
+            sourceThreadId,
+            rowText(sourceRow, "source_entry_id"),
+            label,
+            now,
+            now,
+          ],
+        },
+        ...entries.rows.map((entry) => ({
+          sql: `INSERT INTO entries(id, thread_id, sequence, role, text, data, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            randomUUID(),
+            threadId,
+            rowNumber(entry, "sequence"),
+            rowText(entry, "role"),
+            rowText(entry, "text"),
+            rowText(entry, "data"),
+            rowNumber(entry, "created_at"),
+          ],
+        })),
+      ],
+      "write",
+    );
     await this.setActive(workspaceId, threadId);
   }
 
@@ -441,8 +514,16 @@ function threadFromRow(row: Row): DesktopThread {
     title: rowText(row, "title"),
     draft: rowText(row, "draft"),
     bookmarked: rowNumber(row, "bookmarked") === 1,
+    sourceThreadId: rowOptionalText(row, "source_thread_id"),
+    sourceEntryId: rowOptionalText(row, "source_entry_id"),
+    branchLabel: rowOptionalText(row, "branch_label"),
     updatedAt: rowNumber(row, "updated_at"),
   };
+}
+
+function forkTitle(title: string): string {
+  const suffix = " · fork";
+  return `${title.slice(0, 48 - suffix.length)}${suffix}`;
 }
 
 function entryFromRow(row: Row): DesktopEntry {
@@ -463,5 +544,12 @@ function rowNumber(row: Row | undefined, key: string): number {
   const value = row?.[key];
   if (typeof value === "number") return value;
   if (typeof value === "bigint") return Number(value);
+  throw new Error(`Invalid database value: ${key}`);
+}
+
+function rowOptionalText(row: Row | undefined, key: string): string | null {
+  const value = row?.[key];
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") return value;
   throw new Error(`Invalid database value: ${key}`);
 }

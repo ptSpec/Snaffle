@@ -527,6 +527,18 @@ export function App(): JSX.Element {
     }
   }
 
+  async function forkThread(sequence: number): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId) return;
+    try {
+      await saveDraft();
+      showDesktopState(await window.desktop.forkThread(threadId, sequence));
+      window.requestAnimationFrame(() => taskInput.current?.focus());
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   function appendUserMessage(
     threadId: string,
     text: string,
@@ -815,13 +827,7 @@ export function App(): JSX.Element {
       }
       if (source.state.activeThreadId) threadTimelines.current.delete(source.state.activeThreadId);
       showDesktopState(source.state);
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => {
-          timelineView.current
-            ?.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(source.entryId)}"]`)
-            ?.scrollIntoView({ block: "center" });
-        });
-      });
+      scrollToEntry(source.entryId);
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -844,6 +850,36 @@ export function App(): JSX.Element {
     } catch (cause) {
       setError(errorMessage(cause));
     }
+  }
+
+  async function openThreadSource(thread: DesktopThread): Promise<void> {
+    if (!thread.sourceThreadId || !thread.sourceEntryId) return;
+    const sourceExists = desktopState.workspaces.some((workspace) =>
+      workspace.threads.some((candidate) => candidate.id === thread.sourceThreadId)
+    );
+    if (!sourceExists) {
+      setError("Source thread deleted");
+      return;
+    }
+    try {
+      await saveDraft();
+      threadTimelines.current.delete(thread.sourceThreadId);
+      showDesktopState(await window.desktop.selectThread(thread.sourceThreadId));
+      scrollToEntry(thread.sourceEntryId, "Source message deleted");
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  function scrollToEntry(entryId: string, missingMessage?: string): void {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const entry = timelineView.current
+          ?.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(entryId)}"]`);
+        if (entry) entry.scrollIntoView({ block: "center" });
+        else if (missingMessage) setError(missingMessage);
+      });
+    });
   }
 
   async function removeThreadBookmark(thread: DesktopThread): Promise<void> {
@@ -1064,6 +1100,7 @@ export function App(): JSX.Element {
             setBookmarksPage(page);
             setError(null);
           }}
+          onOpenThreadSource={(thread) => void openThreadSource(thread)}
           onCollapse={() => {
             leftAutoCollapsed.current = false;
             setLeftCollapsed(true);
@@ -1161,6 +1198,7 @@ export function App(): JSX.Element {
                   });
                 }}
                 {...(!running ? { onRestore: (sequence) => void restoreThread(sequence) } : {})}
+                {...(!running ? { onFork: (sequence) => void forkThread(sequence) } : {})}
               />
             ))}
           </div>
