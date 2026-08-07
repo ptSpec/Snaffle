@@ -616,8 +616,8 @@ html[data-accented-theme="true"] .thread-row.active .thread-item {
 }
 
 .thread-fork-marker svg {
-  width: 13px;
-  height: 13px;
+  width: 15px;
+  height: 15px;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
