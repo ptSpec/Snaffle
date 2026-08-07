@@ -526,7 +526,7 @@ export function Sidebar({
                 onView("settings");
               }}
             >
-              <span aria-hidden="true">⚙</span>
+              <span className="sidebar-settings-icon" aria-hidden="true">⚙</span>
               <span>Settings</span>
             </button>
           </>

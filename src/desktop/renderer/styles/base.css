@@ -245,6 +245,11 @@ body.resizing-columns .workspace-shell {
   border-radius: 14px 0 0 14px;
 }
 
+.workspace-shell > .settings {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 .sidebar-brand {
   position: relative;
   z-index: 11;
