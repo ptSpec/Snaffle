@@ -5,9 +5,11 @@ import path from "node:path";
 import test from "node:test";
 import { healToolCall, healToolInput } from "../src/tool-input.js";
 import { editTool } from "../src/tools/edit.js";
+import { truncateMiddle } from "../src/tools/output.js";
 import { readTool } from "../src/tools/read.js";
 import { runTool } from "../src/tools/run.js";
 import { searchTool } from "../src/tools/search.js";
+import { webFetchTool } from "../src/tools/web/fetch.js";
 import { webSearchTool } from "../src/tools/web/search.js";
 import { extractWithKetch, searchWithKetch } from "../src/tools/web/ketch.js";
 import { fetchPublicText } from "../src/tools/web/request.js";
@@ -77,6 +79,76 @@ test("run command reports a nonzero exit separately from tool failure", async (t
 
   assert.equal(result.exitCode, 7);
   assert.match(result.content, /exit code: 7/);
+});
+
+test("read and command truncation is explicit and actionable", async (t) => {
+  const { root, workspace } = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const lines = Array.from({ length: 300 }, (_, index) => `${index + 1}:${"x".repeat(100)}`);
+  await writeFile(path.join(root, "large.txt"), lines.join("\n"));
+
+  const first = await readTool.execute(workspace, { path: "large.txt" });
+  const nextOffset = Number(/Continue with offset (\d+)/.exec(first.content)?.[1]);
+  assert.ok(first.content.length <= 12_000);
+  assert.match(first.content, /Showing lines 1-\d+ of 300/);
+  assert.ok(nextOffset > 1);
+
+  const continued = await readTool.execute(workspace, { path: "large.txt", offset: nextOffset });
+  assert.match(continued.content, new RegExp(`^${nextOffset}:`));
+
+  const command = await runTool.execute(workspace, {
+    command: `node -e "process.stdout.write('START' + 'x'.repeat(13000) + 'TAIL')"`,
+  });
+  assert.ok(command.content.length <= 12_000);
+  assert.match(command.content, /omitted from the beginning/);
+  assert.match(command.content, /TAIL$/);
+});
+
+test("file search stops at its requested result bound", async (t) => {
+  const { root, workspace } = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(path.join(root, "many.txt"), Array.from({ length: 20 }, (_, index) => `match ${index}`).join("\n"));
+
+  const result = await searchTool.execute(workspace, { query: "match", maxResults: 3 });
+
+  assert.match(result.content, /many\.txt:1:/);
+  assert.match(result.content, /More than 3 matches found/);
+  assert.doesNotMatch(result.content, /many\.txt:5:/);
+});
+
+test("web fetch exposes continuation instead of silently cutting a page", async (t) => {
+  const { root, workspace } = await fixture();
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    return rm(root, { recursive: true, force: true });
+  });
+  globalThis.fetch = async () => new Response("a".repeat(2_500), {
+    status: 200,
+    headers: { "Content-Type": "text/plain" },
+  });
+  const tool = webFetchTool(false);
+
+  const first = await tool.execute(workspace, {
+    url: "https://example.com/large.txt",
+    maxChars: 1_000,
+  });
+  assert.match(first.content, /Continue with start 1000/);
+
+  const continued = await tool.execute(workspace, {
+    url: "https://example.com/large.txt",
+    start: 1_000,
+    maxChars: 1_000,
+  });
+  assert.match(continued.content, /Showing characters 1000-1999 of 2500/);
+});
+
+test("the generic tool-output guard reports middle truncation", () => {
+  const result = truncateMiddle(`HEAD${"x".repeat(60_000)}TAIL`);
+  assert.ok(result.length <= 50_000);
+  assert.match(result, /^HEAD/);
+  assert.match(result, /omitted from the middle/);
+  assert.match(result, /TAIL$/);
 });
 
 test("OpenRouter web search has one bounded server-side search", async (t) => {

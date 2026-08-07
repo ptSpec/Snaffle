@@ -35,11 +35,15 @@ export const youtubeTranscriptTool: Tool = {
     if (!selected.length) return { content: `No transcript passages matched “${query}”.` };
 
     const videoUrl = canonicalYoutubeUrl(url);
-    const content = selected.map((item) =>
+    const complete = selected.map((item) =>
       `[${timestamp(item.seconds)}](${videoUrl}&t=${Math.floor(item.seconds)}s) ${item.text}`,
-    ).join("\n").slice(0, maxChars);
+    ).join("\n");
+    const content = complete.slice(0, maxChars);
+    const notice = content.length < complete.length
+      ? `\n\n[Transcript truncated: showing ${content.length} of ${complete.length} characters. Use query to request the relevant passages.]`
+      : "";
     return {
-      content: `${query ? `Transcript passages for: ${query}` : "Transcript"}\n\n${content}`,
+      content: `${query ? `Transcript passages for: ${query}` : "Transcript"}\n\n${content}${notice}`,
       sources: [{ title: "YouTube transcript", url: videoUrl }],
     };
   },

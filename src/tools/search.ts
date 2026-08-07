@@ -1,9 +1,10 @@
 import { integerField, objectInput, stringField, ToolInputError, type Tool } from "./tool.js";
+import { truncateHead } from "./output.js";
 
 export const searchTool: Tool = {
   name: "search_files",
   description:
-    "Search file contents with ripgrep inside the workspace.",
+    "Search file contents with ripgrep inside the workspace. Results are bounded; narrow the query or path if output is truncated.",
   exampleInput: { query: "functionName", path: "src", glob: "*.ts", maxResults: 20 },
   inputSchema: {
     type: "object",
@@ -30,9 +31,15 @@ export const searchTool: Tool = {
     const matches = await workspace.search(query, {
       ...(searchPath === undefined ? {} : { path: searchPath }),
       ...(glob === undefined ? {} : { glob }),
-      maxResults,
+      maxResults: maxResults + 1,
     });
-
-    return { content: matches.length ? matches.join("\n") : "No matches." };
+    if (!matches.length) return { content: "No matches." };
+    const visible = matches.slice(0, maxResults).map((match) =>
+      match.length > 1_000 ? `${match.slice(0, 1_000)}… [line truncated]` : match,
+    );
+    const resultNotice = matches.length > maxResults
+      ? `\n\n[More than ${maxResults} matches found. Narrow the query or path to see others.]`
+      : "";
+    return { content: truncateHead(`${visible.join("\n")}${resultNotice}`) };
   },
 };
