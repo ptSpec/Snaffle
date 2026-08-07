@@ -1,5 +1,5 @@
 import type { JsonSchema, SourceReference, ToolSpec } from "../protocol.js";
-import type { Workspace } from "../workspace.js";
+import type { Workspace } from "../execution/workspace.js";
 
 export type ToolResult = {
   content: string;

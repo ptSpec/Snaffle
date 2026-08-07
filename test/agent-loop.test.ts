@@ -3,16 +3,16 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { runAgent } from "../src/agent-loop.js";
+import { runAgent } from "../src/agent/loop.js";
 import { activeCapabilities, builtInCapabilities } from "../src/capabilities/active.js";
 import type { ModelProvider } from "../src/providers/provider.js";
 import type { Message, ModelResponse, RunEvent, ToolSpec } from "../src/protocol.js";
-import { defaultTools } from "../src/tools/default-tools.js";
+import { defaultTools } from "../src/tools/built-ins.js";
 import { editTool } from "../src/tools/edit.js";
 import { ToolInputError, toolErrorContent, type Tool } from "../src/tools/tool.js";
 import { writeTool } from "../src/tools/write.js";
-import type { Trace } from "../src/trace.js";
-import { LocalWorkspace } from "../src/workspace.js";
+import type { Trace } from "../src/agent/trace.js";
+import { LocalWorkspace } from "../src/execution/workspace.js";
 
 class ScriptedProvider implements ModelProvider {
   readonly model = "scripted-test-model";

@@ -5,7 +5,7 @@ export const editTool: Tool = {
   description:
     "Apply one or more exact-text replacements to one file. Each oldText must match exactly once in the original file, including whitespace. Multiple edits must identify distinct, non-overlapping regions of that original file. Reuse current text already known from a successful read, write, or edit; reread only when the text is unknown or a match fails.",
   inputErrorHint:
-    "This failure concerns the edit_file input shape, not the editing strategy. Prefer correcting and retrying edit_file with the working shape below; rewriting an existing file with write_file usually uses more tokens and may overwrite unrelated changes.",
+    "This failure concerns the edit_file input shape, not the editing strategy. The edits field must be a JSON array, not quoted text containing an array. Prefer correcting and retrying edit_file with the working shape below; rewriting an existing file with write_file usually uses more tokens and may overwrite unrelated changes.",
   exampleInput: {
     path: "src/app.ts",
     edits: [
@@ -21,7 +21,7 @@ export const editTool: Tool = {
         type: "array",
         minItems: 1,
         description:
-          "Required. Exact replacements against the original file. Use one array item for one edit and multiple items for separate regions.",
+          "Required JSON array, passed directly rather than quoted or encoded as a string. Use one array item for one exact replacement and multiple items for separate regions of the original file.",
         items: {
           type: "object",
           properties: {

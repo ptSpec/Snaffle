@@ -6,35 +6,9 @@ import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js
 import type { CompactionMode } from "../context/budget.js";
 import type { ContextCheckpoint } from "../context/projection.js";
 import type { ContextReport } from "../context/report.js";
+import type { GitChanges, GitDiffPreview, GitFileContents } from "../git/types.js";
 
-export type GitFileChange = {
-  path: string;
-  status: string;
-  additions: number;
-  deletions: number;
-  exists: boolean;
-  editable: boolean;
-};
-
-export type GitChanges = {
-  state: "ready" | "unavailable" | "not-repository" | "error";
-  message?: string;
-  branch: string | null;
-  files: GitFileChange[];
-  additions: number;
-  deletions: number;
-};
-
-export type GitFileContents = {
-  current: string;
-  original: string;
-  lineEnding: "lf" | "crlf";
-};
-
-export type GitDiffPreview = {
-  lines: string[];
-  truncated: boolean;
-};
+export type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents } from "../git/types.js";
 
 export type DesktopThread = {
   id: string;

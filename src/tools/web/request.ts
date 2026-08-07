@@ -1,5 +1,6 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { PROJECT } from "../../identity.js";
 
 const MAX_RESPONSE_BYTES = 2_000_000;
 
@@ -11,7 +12,7 @@ export async function fetchPublicText(rawUrl: string): Promise<{ url: string; co
     const response = await fetch(url, {
       redirect: "manual",
       signal: AbortSignal.timeout(30_000),
-      headers: { "User-Agent": "Esch/0.0 web_fetch" },
+      headers: { "User-Agent": `${PROJECT.slug}/0.0 web_fetch` },
     });
     if (response.status === 403 && response.headers.get("cf-mitigated") === "challenge") {
       const fandom = await fetchFandomPage(url);
@@ -54,7 +55,7 @@ async function fetchFandomPage(url: URL): Promise<{ url: string; contentType: st
   }).toString();
   const response = await fetch(api, {
     signal: AbortSignal.timeout(30_000),
-    headers: { "User-Agent": "Esch/0.0 web_fetch" },
+    headers: { "User-Agent": `${PROJECT.slug}/0.0 web_fetch` },
   });
   if (!response.ok) return undefined;
   const data = JSON.parse(await limitedText(response)) as {
