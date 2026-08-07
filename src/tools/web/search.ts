@@ -75,7 +75,12 @@ async function searchKetch(
 function resultList(results: { title: string; url: string; content: string }[]): SearchResult {
   return {
     content: results.length
-      ? results.map((result, index) => `[${index + 1}] ${result.title}\nURL: ${result.url}\n${result.content}`).join("\n\n")
+      ? results.map((result, index) => {
+          const excerpt = result.content.length > 2_000
+            ? `${result.content.slice(0, 2_000)}… [excerpt truncated]`
+            : result.content;
+          return `[${index + 1}] ${result.title}\nURL: ${result.url}\n${excerpt}`;
+        }).join("\n\n")
       : "No search results found.",
     sources: results.map(({ title, url }) => ({ title, url })),
   };
