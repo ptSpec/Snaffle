@@ -122,7 +122,7 @@ function safeEnvironment(): NodeJS.ProcessEnv {
   ];
   return {
     ...Object.fromEntries(keep.flatMap((key) => process.env[key] ? [[key, process.env[key]]] : [])),
-    KETCH_CONFIG: join(tmpdir(), "esch-ketch-no-config.json"),
+    KETCH_CONFIG: join(tmpdir(), "coding-harness-ketch-no-config.json"),
   };
 }
 

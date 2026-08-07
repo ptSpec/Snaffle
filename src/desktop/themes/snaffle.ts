@@ -1,17 +1,18 @@
+import { PRODUCT } from "../../identity.js";
 import type { Theme } from "./contract.js";
 import { darkTheme } from "./dark.js";
 
-const ESCH_YELLOW = "#feff00";
+const SNAFFLE_YELLOW = "#feff00";
 
-export const eschTheme = {
+export const snaffleTheme = {
   ...darkTheme,
-  id: "esch",
-  name: "Esch",
+  id: PRODUCT.slug,
+  name: PRODUCT.name,
   accented: true,
   colors: {
     ...darkTheme.colors,
-    primary: ESCH_YELLOW,
+    primary: SNAFFLE_YELLOW,
     "primary-text": "#181818",
-    brand: ESCH_YELLOW,
+    brand: SNAFFLE_YELLOW,
   },
 } satisfies Theme;

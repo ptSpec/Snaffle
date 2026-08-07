@@ -381,7 +381,7 @@ test("workspace rejects paths outside its root", async (t) => {
   await assert.rejects(workspace.read("../secret"), /leaves the workspace/);
   await assert.rejects(workspace.write("/tmp/secret", "no"), /must be relative/);
   await mkdir(path.join(root, ".git"));
-  await assert.rejects(workspace.write(".git/config", "no"), /managed by Esch/);
+  await assert.rejects(workspace.write(".git/config", "no"), /managed by Snaffle/);
 });
 
 test("workspace rejects symlinks that leave its root", async (t) => {

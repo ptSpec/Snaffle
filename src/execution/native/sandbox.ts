@@ -124,7 +124,7 @@ async function runMacos(
   cwd: string,
   timeoutMs: number,
 ): Promise<SandboxResult> {
-  const temporary = await mkdtemp(path.join(tmpdir(), "esch-sandbox-"));
+  const temporary = await mkdtemp(path.join(tmpdir(), "coding-harness-sandbox-"));
   const home = path.join(temporary, "home");
   await mkdir(home);
 
@@ -272,7 +272,7 @@ function commandEnvironment(
 
 function restrictedShell(command: string, timeoutMs: number): string[] {
   const cpuSeconds = Math.max(5, Math.ceil(timeoutMs / 1000) + 5);
-  return ["/bin/sh", "-c", RESOURCE_LIMITS, "esch-command", String(cpuSeconds), command];
+  return ["/bin/sh", "-c", RESOURCE_LIMITS, "coding-harness-command", String(cpuSeconds), command];
 }
 
 function safePath(workspace: string): string {
@@ -320,7 +320,7 @@ async function probe(): Promise<SandboxStatus> {
   const status = nativeSandboxStatus();
   if (!status.available) return status;
 
-  const workspace = await mkdtemp(path.join(tmpdir(), "esch-sandbox-probe-"));
+  const workspace = await mkdtemp(path.join(tmpdir(), "coding-harness-sandbox-probe-"));
   try {
     const result = await runRestrictedCommand(":", workspace, workspace, 3000);
     return result.exitCode === 0

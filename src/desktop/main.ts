@@ -53,7 +53,9 @@ import {
   type FontId,
 } from "./typography.js";
 import { applicationIcon, createDesktopWindow } from "./window.js";
+import { configureDesktopIdentity, migrateLegacyUserData } from "./identity-migration.js";
 
+const userDataMigration = configureDesktopIdentity();
 const desktopDirectory = path.dirname(fileURLToPath(import.meta.url));
 const rendererPath = path.join(desktopDirectory, "../../renderer/index.html");
 const preloadPath = path.join(desktopDirectory, "preload.cjs");
@@ -88,6 +90,7 @@ let selectedModel = DEVELOPMENT_MODEL;
 
 async function start(): Promise<void> {
   loadDevelopmentEnvironment();
+  migrateLegacyUserData(userDataMigration);
   const settings = loadSettings(settingsPath());
   activeTheme =
     typeof settings.themeId === "string"
