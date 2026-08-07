@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 
 import path from "node:path";
-import { runAgent } from "./agent-loop.js";
+import { runAgent } from "./agent/loop.js";
 import { builtInCapabilities } from "./capabilities/active.js";
 import { ENV_PREFIX, LOCAL_STATE_DIRECTORY, PRODUCT } from "./identity.js";
 import { OpenAICompatibleProvider } from "./providers/openai-compatible.js";
 import { listOpenRouterModels, OpenRouterProvider } from "./providers/openrouter.js";
 import type { ModelProvider } from "./providers/provider.js";
 import type { RunEvent } from "./protocol.js";
-import { probeNativeSandbox } from "./sandbox.js";
-import { defaultTools } from "./tools/default-tools.js";
+import { probeNativeSandbox } from "./execution/native/sandbox.js";
+import { defaultTools } from "./tools/built-ins.js";
 import { WEB_SEARCH_BACKENDS, type WebSearchBackend } from "./tools/web/types.js";
-import { JsonlTrace } from "./trace.js";
-import { LocalWorkspace } from "./workspace.js";
+import { JsonlTrace } from "./agent/trace.js";
+import { LocalWorkspace } from "./execution/workspace.js";
 
 type CliOptions = {
   task: string;

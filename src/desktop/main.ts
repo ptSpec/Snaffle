@@ -1,48 +1,47 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, shell } from "electron";
-import type { OpenDialogOptions } from "electron";
-import { randomUUID } from "node:crypto";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_MAX_STEPS, runAgent } from "../agent-loop.js";
-import { AttachmentStore, MAX_ATTACHMENTS } from "../attachments/store.js";
-import type { AttachmentRef } from "../attachments/types.js";
+import { DEFAULT_MAX_STEPS } from "../agent/loop.js";
+import { AttachmentStore } from "../attachments/store.js";
 import { builtInCapabilities } from "../capabilities/active.js";
-import { initialMessages } from "../context.js";
 import {
   DEFAULT_COMPACTION_THRESHOLD,
-  compactionThreshold,
-  estimateContextCharacters,
-  estimateContextTokens,
   type CompactionMode,
 } from "../context/budget.js";
-import { compactionBoundary, ContextCompactor } from "../context/compaction.js";
-import { projectContext } from "../context/projection.js";
+import { ContextCompactor } from "../context/compaction.js";
 import { buildContextReport, type ContextReport } from "../context/report.js";
-import { commitGitChanges, initializeGitRepository, saveGitFile } from "../git/actions.js";
-import { safeWorkspacePath } from "../git/process.js";
-import { gitChanges, gitDiffPreview, gitFileContents } from "../git/repository.js";
 import { PRODUCT } from "../identity.js";
 import { OpenRouterProvider, listOpenRouterModels } from "../providers/openrouter.js";
 import {
   DEFAULT_PROVIDER_RETRIES,
   DEFAULT_PROVIDER_TIMEOUT_MS,
 } from "../providers/openai-compatible.js";
-import type { CommandApprovalDecision, Message, RunEvent } from "../protocol.js";
-import { probeNativeSandbox } from "../sandbox.js";
-import type { Trace } from "../trace.js";
-import { defaultTools } from "../tools/default-tools.js";
+import type { RunEvent } from "../protocol.js";
+import { probeNativeSandbox } from "../execution/native/sandbox.js";
+import { defaultTools } from "../tools/built-ins.js";
 import { findKetch } from "../tools/web/ketch.js";
 import {
   WEB_SEARCH_BACKENDS,
   type KetchSearchBackend,
   type WebSearchBackend,
 } from "../tools/web/types.js";
-import { LocalWorkspace, type CommandApprovalRequest } from "../workspace.js";
-import type { DesktopState, SaveMessageInput, StartRunInput } from "./api.js";
+import type { DesktopState } from "./api.js";
 import { openStore, type DesktopStore } from "./store.js";
+import { registerAttachmentIpc } from "./ipc/attachments.js";
+import { registerGitIpc } from "./ipc/git.js";
+import { registerSavedMessageIpc } from "./ipc/saved-messages.js";
+import { registerWorkspaceIpc } from "./ipc/workspaces.js";
+import { registerRunIpc, type RunIpc } from "./ipc/runs.js";
+import {
+  decodeSecret,
+  encodeSecret,
+  loadSettings,
+  saveSettings as saveSettingsFile,
+  type SettingsUpdate,
+} from "./settings.js";
 import { DEFAULT_THEME, themeById, type Theme } from "./themes/index.js";
 import {
   DEFAULT_CODE_BLOCK_FONT_SIZE,
@@ -53,6 +52,7 @@ import {
   validFontScale,
   type FontId,
 } from "./typography.js";
+import { applicationIcon, createDesktopWindow } from "./window.js";
 
 const desktopDirectory = path.dirname(fileURLToPath(import.meta.url));
 const rendererPath = path.join(desktopDirectory, "../../renderer/index.html");
@@ -61,22 +61,8 @@ const preloadPath = path.join(desktopDirectory, "preload.cjs");
 let mainWindow: BrowserWindow | undefined;
 let store: DesktopStore;
 let attachments: AttachmentStore;
-const activeRuns = new Map<
-  string,
-  {
-    controller: AbortController;
-    threadId: string;
-    workspaceId: string;
-    steering: string[];
-    acceptingSteering: boolean;
-  }
->();
-const unsafeThreads = new Set<string>();
+let runs: RunIpc;
 let contextCompactor: ContextCompactor;
-const pendingApprovals = new Map<
-  string,
-  { threadId: string; resolve: (decision: CommandApprovalDecision) => void }
->();
 let activeTheme: Theme = DEFAULT_THEME;
 let interfaceFont: FontId = DEFAULT_FONTS.interface;
 let primaryFont: FontId = DEFAULT_FONTS.primary;
@@ -99,15 +85,10 @@ const storedWebSearchApiKeys: Partial<Record<KetchSearchBackend, string>> = {};
 const DEVELOPMENT_MODEL = "openai/gpt-5.6-luna";
 let selectedModel = DEVELOPMENT_MODEL;
 
-const memoryTrace: Trace = {
-  async write(): Promise<void> {
-    // Dedicated run traces arrive with persisted run records.
-  },
-};
 
 async function start(): Promise<void> {
   loadDevelopmentEnvironment();
-  const settings = loadSettings();
+  const settings = loadSettings(settingsPath());
   activeTheme =
     typeof settings.themeId === "string"
       ? themeById(settings.themeId) ?? DEFAULT_THEME
@@ -162,58 +143,52 @@ async function start(): Promise<void> {
 }
 
 function createWindow(): void {
-  mainWindow = new BrowserWindow({
-    title: PRODUCT.name,
-    width: 1360,
-    height: 860,
-    minWidth: 980,
-    minHeight: 640,
-    ...(process.platform === "darwin" ? {} : { icon: applicationIcon() }),
-    backgroundColor: activeTheme.colors.background,
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
-    ...(process.platform === "darwin"
-      ? {
-          trafficLightPosition: { x: 12, y: 14 },
-        }
-      : {
-          titleBarOverlay: {
-            color: activeTheme.colors.background,
-            symbolColor: activeTheme.colors.text,
-            height: 40,
-          },
-        }),
-    autoHideMenuBar: true,
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      preload: preloadPath,
-    },
-  });
-
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  void mainWindow.loadFile(rendererPath, {
-    query: {
-      theme: activeTheme.id,
-      interfaceFont,
-      primaryFont,
-      secondaryFont,
-      codeFont,
-      interfaceFontScale: String(interfaceFontScale),
-      conversationFontScale: String(conversationFontScale),
-    },
+  mainWindow = createDesktopWindow(rendererPath, preloadPath, {
+    theme: activeTheme,
+    interfaceFont,
+    primaryFont,
+    secondaryFont,
+    codeFont,
+    interfaceFontScale,
+    conversationFontScale,
   });
   mainWindow.on("closed", () => {
     mainWindow = undefined;
   });
 }
 
-function applicationIcon(): string {
-  const root = app.isPackaged ? process.resourcesPath : process.cwd();
-  return path.join(root, "assets", "logo.png");
-}
-
 function registerIpc(): void {
+  registerAttachmentIpc(store, attachments, () => mainWindow);
+  registerGitIpc(store, async (target) => {
+    if (editorCommand) return launchEditor(target);
+    const error = await shell.openPath(target);
+    if (error) throw new Error(error);
+  });
+  runs = registerRunIpc({
+    store,
+    attachments,
+    compactor: contextCompactor,
+    state: desktopState,
+    capabilities: currentCapabilities,
+    apiKey: openRouterApiKey,
+    settings: () => ({
+      maxSteps,
+      providerTimeoutMinutes,
+      providerRetries,
+      compactionMode,
+      compactionThreshold: customCompactionThreshold,
+    }),
+    sendEvent: sendRunEvent,
+  });
+  registerWorkspaceIpc({
+    store,
+    state: desktopState,
+    mainWindow: () => mainWindow,
+    runningThread: runs.isThreadRunning,
+    runningWorkspace: runs.isWorkspaceRunning,
+    threadsDeleted: runs.forgetThreads,
+  });
+  registerSavedMessageIpc(store, desktopState);
   ipcMain.handle("desktop:get-state", (): Promise<DesktopState> => desktopState());
 
   ipcMain.handle("desktop:get-context-report", async (
@@ -252,316 +227,9 @@ function registerIpc(): void {
     });
   });
 
-  ipcMain.handle("desktop:choose-workspace", async (event): Promise<DesktopState | null> => {
-    const owner = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
-    const options: OpenDialogOptions = {
-      title: "Choose a workspace",
-      properties: ["openDirectory"],
-    };
-    const result = owner
-      ? await dialog.showOpenDialog(owner, options)
-      : await dialog.showOpenDialog(options);
-
-    const selectedPath = result.filePaths[0];
-    if (result.canceled || !selectedPath) return null;
-
-    await store.addWorkspace(selectedPath, path.basename(selectedPath) || selectedPath);
-    return desktopState();
-  });
-
-  ipcMain.handle("desktop:select-workspace", async (_event, value: unknown): Promise<DesktopState> => {
-    await store.selectWorkspace(parseId(value, "Workspace"));
-    return desktopState();
-  });
-
-  ipcMain.handle("desktop:create-thread", async (_event, value: unknown): Promise<DesktopState> => {
-    await store.createThread(parseId(value, "Workspace"));
-    return desktopState();
-  });
-
-  ipcMain.handle("desktop:select-thread", async (_event, value: unknown): Promise<DesktopState> => {
-    await store.selectThread(parseId(value, "Thread"));
-    return desktopState();
-  });
-
-  ipcMain.handle(
-    "desktop:set-thread-draft",
-    async (_event, threadId: unknown, draft: unknown): Promise<void> => {
-      if (typeof draft !== "string") throw new Error("Draft must be text");
-      await store.setDraft(parseId(threadId, "Thread"), draft);
-    },
-  );
-
-  ipcMain.handle(
-    "desktop:set-thread-bookmarked",
-    async (_event, threadId: unknown, bookmarked: unknown): Promise<DesktopState> => {
-      if (typeof bookmarked !== "boolean") throw new Error("Bookmark value must be a boolean");
-      await store.setBookmarked(parseId(threadId, "Thread"), bookmarked);
-      return desktopState(false);
-    },
-  );
-
-  ipcMain.handle("desktop:delete-threads", async (_event, value: unknown): Promise<DesktopState> => {
-    const threadIds = parseIds(value);
-    if (threadIds.some((threadId) => activeRuns.has(threadId))) {
-      throw new Error("The running thread cannot be deleted");
-    }
-    threadIds.forEach((threadId) => unsafeThreads.delete(threadId));
-    await store.deleteThreads(threadIds);
-    return desktopState();
-  });
-
-  ipcMain.handle("desktop:remove-workspace", async (_event, value: unknown): Promise<DesktopState> => {
-    const workspaceId = parseId(value, "Workspace");
-    if ([...activeRuns.values()].some((run) => run.workspaceId === workspaceId)) {
-      throw new Error("A workspace with a running thread cannot be removed");
-    }
-    await store.removeWorkspace(workspaceId);
-    return desktopState();
-  });
-
   ipcMain.handle("desktop:list-openrouter-models", async () => {
     return listOpenRouterModels(openRouterApiKey());
   });
-
-  ipcMain.handle("desktop:choose-attachments", async (event) => {
-    const owner = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
-    const options: OpenDialogOptions = {
-      title: "Attach files",
-      properties: ["openFile", "multiSelections"],
-      filters: [
-        { name: "Images and documents", extensions: ["png", "jpg", "jpeg", "webp", "gif", "pdf", "txt", "md", "json", "csv", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "odt", "ods", "odp", "rtf", "epub"] },
-      ],
-    };
-    const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
-    if (result.canceled) return [];
-    return attachments.importFiles(result.filePaths.slice(0, MAX_ATTACHMENTS));
-  });
-
-  ipcMain.handle("desktop:import-clipboard-image", async () => {
-    const image = clipboard.readImage();
-    if (image.isEmpty()) throw new Error("The clipboard does not contain an image");
-    return attachments.importClipboardImage(image.toPNG());
-  });
-
-  ipcMain.handle("desktop:import-dropped-files", (_event, value: unknown) => {
-    if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
-      throw new Error("Dropped files must be local file paths");
-    }
-    return attachments.importFiles(value.slice(0, MAX_ATTACHMENTS));
-  });
-
-  ipcMain.handle("desktop:read-clipboard-text", () => clipboard.readText());
-  ipcMain.handle("desktop:read-clipboard-html", () => clipboard.readHTML());
-
-  ipcMain.handle("desktop:remove-attachment", (_event, value: unknown) => {
-    return attachments.remove(parseId(value, "Attachment"));
-  });
-
-  ipcMain.handle(
-    "desktop:set-attachment-context",
-    (_event, rawThreadId: unknown, rawSequence: unknown, rawAttachmentId: unknown, include: unknown) => {
-      if (typeof include !== "boolean") throw new Error("Invalid attachment context setting");
-      if (!Number.isInteger(rawSequence) || Number(rawSequence) < 0) {
-        throw new Error("Invalid message sequence");
-      }
-      return store.setAttachmentContext(
-        parseId(rawThreadId, "Thread"),
-        Number(rawSequence),
-        parseId(rawAttachmentId, "Attachment"),
-        include,
-      );
-    },
-  );
-
-  ipcMain.handle("desktop:start-run", async (_event, rawInput: unknown): Promise<void> => {
-    const input = parseStartRunInput(rawInput);
-    const state = await store.state();
-    const selectedWorkspace = state.workspaces.find(
-      (workspace) => workspace.threads.some((thread) => thread.id === input.threadId),
-    );
-    if (!selectedWorkspace) throw new Error("The selected thread no longer exists");
-    if (activeRuns.has(input.threadId)) throw new Error("This thread is already running");
-    const unsafe = unsafeThreads.has(input.threadId);
-    if (!unsafe) {
-      const sandbox = await probeNativeSandbox();
-      if (!sandbox.available) throw new Error(sandbox.detail);
-    }
-
-    const apiKey = openRouterApiKey();
-    const controller = new AbortController();
-    const threadId = input.threadId;
-    const workspace = new LocalWorkspace(
-      selectedWorkspace.path,
-      unsafe ? "unsafe" : "restricted",
-      (request) => requestCommandApproval(threadId, request),
-    );
-    const run = {
-      controller,
-      threadId,
-      workspaceId: selectedWorkspace.id,
-      steering: [] as string[],
-      acceptingSteering: true,
-    };
-    activeRuns.set(threadId, run);
-    let conversation: Message[];
-    let nextSequence: number;
-    const capabilities = currentCapabilities(apiKey);
-    const toolSpecs = capabilities.tools.map(({ tool }) => ({
-      name: tool.name,
-      description: tool.description,
-      inputSchema: tool.inputSchema,
-    }));
-    const compactionInput = {
-      threadId,
-      model: input.model,
-      contextLength: input.contextLength,
-      tools: toolSpecs,
-    };
-    try {
-      const storedLastSequence = await store.lastSequence(threadId);
-      if (storedLastSequence < 0) {
-        const initial = initialMessages(input.task, workspace.environment, input.attachments);
-        await store.appendMessage(threadId, 0, initial[0]!);
-        await store.appendMessage(threadId, 1, initial[1]!);
-        conversation = [initial[0]!];
-        nextSequence = 2;
-      } else {
-        let checkpoint = await store.context.latest(threadId);
-        let entries = await store.context.entries(threadId, checkpoint);
-        let projection = projectContext(entries, checkpoint, toolSpecs);
-        contextCompactor.schedule({
-          ...compactionInput,
-          throughSequence: compactionBoundary(entries),
-        });
-        const safetyThreshold = compactionThreshold(
-          input.contextLength,
-          compactionMode,
-          customCompactionThreshold,
-        );
-        if (projection.estimatedTokens >= input.contextLength * safetyThreshold / 100) {
-          await contextCompactor.ready(threadId);
-          checkpoint = await store.context.latest(threadId);
-          entries = await store.context.entries(threadId, checkpoint);
-          projection = projectContext(entries, checkpoint, toolSpecs);
-        }
-        conversation = projection.messages;
-        const userMessage: Message = {
-          role: "user",
-          content: input.task,
-          ...(input.attachments?.length ? { attachments: input.attachments } : {}),
-        };
-        nextSequence = storedLastSequence + 1;
-        await store.appendMessage(threadId, nextSequence, userMessage);
-        nextSequence += 1;
-        if (checkpoint) {
-          const injectedCharacters = estimateContextCharacters([...conversation, userMessage], toolSpecs);
-          await store.context.markApplied(checkpoint.id, injectedCharacters, storedLastSequence);
-          sendRunEvent(threadId, {
-            type: "context.applied",
-            id: checkpoint.id,
-            injectedCharacters,
-            estimatedTokens: estimateContextTokens(injectedCharacters),
-          });
-        }
-      }
-    } catch (error) {
-      activeRuns.delete(threadId);
-      throw error;
-    }
-
-    void runAgent({
-      task: input.task,
-      provider: new OpenRouterProvider({
-        model: input.model,
-        apiKey,
-        streamIdleTimeoutMs: providerTimeoutMinutes * 60_000,
-        maxRetries: providerRetries,
-        resolveAttachment: (attachment) => attachments.resolve(attachment),
-      }),
-      capabilities,
-      workspace,
-      trace: memoryTrace,
-      signal: controller.signal,
-      history: conversation,
-      ...(input.attachments?.length ? { attachments: input.attachments } : {}),
-      maxSteps,
-      sequenceStart: nextSequence,
-      onMessage: (message, sequence) => store.appendMessage(threadId, sequence, message),
-      takeSteering: () => run.steering.splice(0),
-      onEvent: (event) => {
-        if (event.type === "run.completed" || event.type === "run.failed") {
-          run.acceptingSteering = false;
-        }
-        sendRunEvent(threadId, event);
-      },
-    })
-      .then(async () => {
-        sendRunEvent(threadId, { type: "run.persisted" });
-        contextCompactor.schedule(compactionInput);
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (activeRuns.get(threadId) === run) activeRuns.delete(threadId);
-      });
-  });
-
-  ipcMain.handle(
-    "desktop:restore-thread",
-    async (_event, rawThreadId: unknown, rawSequence: unknown): Promise<DesktopState> => {
-      const threadId = parseId(rawThreadId, "Thread");
-      if (!Number.isInteger(rawSequence) || Number(rawSequence) < 0) {
-        throw new Error("Invalid restore point");
-      }
-      if (activeRuns.has(threadId)) throw new Error("Wait for the current run to finish before restoring");
-      await contextCompactor.ready(threadId);
-      await store.restoreThread(threadId, Number(rawSequence));
-      return desktopState();
-    },
-  );
-
-  ipcMain.handle("desktop:steer-run", (_event, rawThreadId: unknown, rawMessage: unknown): boolean => {
-    const run = activeRuns.get(parseId(rawThreadId, "Thread"));
-    const message = parseSteeringMessage(rawMessage);
-    if (!run?.acceptingSteering) return false;
-    run.steering.push(message);
-    return true;
-  });
-
-  ipcMain.handle("desktop:stop-run", (_event, value: unknown): boolean => {
-    const run = activeRuns.get(parseId(value, "Thread"));
-    if (!run) return false;
-    run.controller.abort();
-    resolveThreadApprovals(run.threadId, "deny");
-    return true;
-  });
-
-  ipcMain.handle(
-    "desktop:set-thread-unsafe",
-    async (_event, rawThreadId: unknown, unsafe: unknown): Promise<DesktopState> => {
-      const threadId = parseId(rawThreadId, "Thread");
-      if (typeof unsafe !== "boolean") throw new Error("Unsafe state must be a boolean");
-      if (activeRuns.has(threadId)) throw new Error("Execution mode cannot change during a run");
-      if (unsafe) unsafeThreads.add(threadId);
-      else unsafeThreads.delete(threadId);
-      return desktopState(false);
-    },
-  );
-
-  ipcMain.handle(
-    "desktop:resolve-command-approval",
-    async (_event, rawId: unknown, rawDecision: unknown): Promise<DesktopState> => {
-      const id = parseId(rawId, "Approval");
-      const decision = parseApprovalDecision(rawDecision);
-      const pending = pendingApprovals.get(id);
-      if (!pending) throw new Error("This approval request is no longer active");
-      pendingApprovals.delete(id);
-      if (decision === "thread") unsafeThreads.add(pending.threadId);
-      await emitPermissionEvent(pending.threadId, { type: "permission.resolved", id, decision });
-      pending.resolve(decision);
-      return desktopState(false);
-    },
-  );
 
   ipcMain.handle("desktop:set-theme", (_event, themeId: unknown): void => {
     if (typeof themeId !== "string") throw new Error("Theme id must be a string");
@@ -697,83 +365,6 @@ function registerIpc(): void {
     saveSettings({ webSearchEnabled });
   });
 
-  ipcMain.handle("desktop:save-message", async (_event, value: unknown) => {
-    return store.savedMessages.save(parseSaveMessageInput(value));
-  });
-
-  ipcMain.handle("desktop:delete-saved-message", async (_event, value: unknown) => {
-    return store.savedMessages.delete(parseId(value, "Saved message"));
-  });
-
-  ipcMain.handle("desktop:list-saved-messages", () => store.savedMessages.list());
-
-  ipcMain.handle("desktop:open-saved-message", async (_event, value: unknown) => {
-    const source = await store.savedMessages.source(parseId(value, "Saved message"));
-    if (!source) return null;
-    await store.selectThread(source.threadId);
-    return { state: await desktopState(), entryId: source.entryId };
-  });
-
-  ipcMain.handle("desktop:get-git-changes", async (_event, value: unknown) => {
-    return gitChanges(await workspacePath(value));
-  });
-
-  ipcMain.handle("desktop:get-git-file", async (_event, workspaceId: unknown, filePath: unknown) => {
-    return gitFileContents(await workspacePath(workspaceId), parseFilePath(filePath));
-  });
-
-  ipcMain.handle("desktop:get-git-diff-preview", async (_event, workspaceId: unknown, filePath: unknown) => {
-    return gitDiffPreview(await workspacePath(workspaceId), parseFilePath(filePath));
-  });
-
-  ipcMain.handle("desktop:save-git-file", async (
-    _event,
-    workspaceId: unknown,
-    filePath: unknown,
-    content: unknown,
-    lineEnding: unknown,
-  ) => {
-    if (typeof content !== "string") throw new Error("File content must be a string");
-    if (lineEnding !== "lf" && lineEnding !== "crlf") throw new Error("Invalid line ending");
-    await saveGitFile(await workspacePath(workspaceId), parseFilePath(filePath), content, lineEnding);
-  });
-
-  ipcMain.handle("desktop:commit-git-changes", async (
-    _event,
-    workspaceId: unknown,
-    rawMessage: unknown,
-    rawPaths: unknown,
-  ) => {
-    const workspace = await workspacePath(workspaceId);
-    const message = typeof rawMessage === "string" ? rawMessage.trim() : "";
-    if (!message) throw new Error("Enter a commit message");
-    if (message.length > 6000) throw new Error("Commit message is too long");
-    const paths = parseFilePaths(rawPaths);
-    for (const filePath of paths) safeWorkspacePath(workspace, filePath);
-    await commitGitChanges(workspace, message, paths);
-    return gitChanges(workspace);
-  });
-
-  ipcMain.handle("desktop:open-workspace-file", async (_event, workspaceId: unknown, filePath: unknown) => {
-    const target = safeWorkspacePath(await workspacePath(workspaceId), parseFilePath(filePath));
-    if (editorCommand) {
-      await launchEditor(target);
-      return;
-    }
-    const error = await shell.openPath(target);
-    if (error) throw new Error(error);
-  });
-
-  ipcMain.handle("desktop:reveal-workspace-file", async (_event, workspaceId: unknown, filePath: unknown) => {
-    shell.showItemInFolder(safeWorkspacePath(await workspacePath(workspaceId), parseFilePath(filePath)));
-  });
-
-  ipcMain.handle("desktop:initialize-git-repository", async (_event, workspaceId: unknown) => {
-    const workspace = await workspacePath(workspaceId);
-    await initializeGitRepository(workspace);
-    return gitChanges(workspace);
-  });
-
   ipcMain.handle("desktop:open-external", async (_event, rawUrl: unknown): Promise<void> => {
     if (typeof rawUrl !== "string") throw new Error("External URL must be a string");
     const url = new URL(rawUrl);
@@ -782,25 +373,6 @@ function registerIpc(): void {
     }
     await shell.openExternal(url.href);
   });
-}
-
-async function workspacePath(value: unknown): Promise<string> {
-  const id = parseId(value, "Workspace");
-  const workspace = (await store.state()).workspaces.find((item) => item.id === id);
-  if (!workspace) throw new Error("The selected workspace no longer exists");
-  return workspace.path;
-}
-
-function parseFilePath(value: unknown): string {
-  if (typeof value !== "string" || !value) throw new Error("File path must be text");
-  return value;
-}
-
-function parseFilePaths(value: unknown): string[] {
-  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || !item)) {
-    throw new Error("Select at least one file to commit");
-  }
-  return value;
 }
 
 async function desktopState(includeConversation = true): Promise<DesktopState> {
@@ -822,8 +394,8 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     webSearchKeyBackends: WEB_SEARCH_BACKENDS.flatMap((backend) =>
       backend !== "openrouter" && backend !== "ddg" && webSearchApiKey(backend) ? [backend] : []
     ),
-    runningThreadIds: [...activeRuns.keys()],
-    unsafeThreadIds: [...unsafeThreads],
+    runningThreadIds: runs.runningThreadIds(),
+    unsafeThreadIds: runs.unsafeThreadIds(),
     defaultModel: selectedModel || null,
     restrictedHostAvailable: sandbox.available,
     restrictedHostDetail: sandbox.detail,
@@ -850,69 +422,8 @@ function settingsPath(): string {
   return path.join(app.getPath("userData"), "settings.json");
 }
 
-type SavedSettings = {
-  themeId?: unknown;
-  interfaceFont?: unknown;
-  primaryFont?: unknown;
-  secondaryFont?: unknown;
-  codeFont?: unknown;
-  interfaceFontScale?: unknown;
-  conversationFontScale?: unknown;
-  codeBlockFontSize?: unknown;
-  editorFontSize?: unknown;
-  editorCommand?: unknown;
-  editorArguments?: unknown;
-  maxSteps?: unknown;
-  providerTimeoutMinutes?: unknown;
-  providerRetries?: unknown;
-  compactionMode?: unknown;
-  compactionThreshold?: unknown;
-  selectedModel?: unknown;
-  tavilyApiKey?: unknown;
-  webSearchEnabled?: unknown;
-  webSearchBackend?: unknown;
-  webSearchApiKeys?: unknown;
-};
-
-function loadSettings(): SavedSettings {
-  try {
-    const file = settingsPath();
-    if (!existsSync(file)) return {};
-    const settings = JSON.parse(readFileSync(file, "utf8")) as unknown;
-    return settings && typeof settings === "object" && !Array.isArray(settings)
-      ? settings as SavedSettings
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveSettings(update: {
-  themeId?: string;
-  interfaceFont?: FontId;
-  primaryFont?: FontId;
-  secondaryFont?: FontId;
-  codeFont?: FontId;
-  interfaceFontScale?: number;
-  conversationFontScale?: number;
-  codeBlockFontSize?: number;
-  editorFontSize?: number;
-  editorCommand?: string;
-  editorArguments?: string;
-  maxSteps?: number;
-  providerTimeoutMinutes?: number;
-  providerRetries?: number;
-  compactionMode?: CompactionMode;
-  compactionThreshold?: number;
-  selectedModel?: string;
-  tavilyApiKey?: string | undefined;
-  webSearchEnabled?: boolean;
-  webSearchBackend?: WebSearchBackend;
-  webSearchApiKeys?: Partial<Record<KetchSearchBackend, string>>;
-}): void {
-  const file = settingsPath();
-  mkdirSync(path.dirname(file), { recursive: true });
-  writeFileSync(file, `${JSON.stringify({ ...loadSettings(), ...update }, null, 2)}\n`);
+function saveSettings(update: SettingsUpdate): void {
+  saveSettingsFile(settingsPath(), update);
 }
 
 function validEditorFontSize(value: unknown): number | undefined {
@@ -1003,105 +514,8 @@ function validProviderRetries(value: unknown): number | undefined {
     : undefined;
 }
 
-function parseStartRunInput(input: unknown): StartRunInput {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new Error("Run input must be an object");
-  }
-
-  const value = input as Record<string, unknown>;
-  const task = typeof value.task === "string" ? value.task.trim() : "";
-  const model = typeof value.model === "string" ? value.model.trim() : "";
-  const contextLength = Number.isInteger(value.contextLength) && Number(value.contextLength) > 0
-    ? Number(value.contextLength)
-    : 128_000;
-
-  const attachmentList = Array.isArray(value.attachments)
-    ? value.attachments.map(parseAttachment)
-    : [];
-  if (attachmentList.length > MAX_ATTACHMENTS) {
-    throw new Error(`Attach at most ${MAX_ATTACHMENTS} files`);
-  }
-  if (!task && attachmentList.length === 0) {
-    throw new Error("Enter a task or attach a file before starting a run");
-  }
-  if (task.length > 30000) throw new Error("Task is too long");
-  if (!model) throw new Error("Choose an OpenRouter model before starting a run");
-  const threadId = typeof value.threadId === "string" ? value.threadId : "";
-  if (!threadId) throw new Error("Choose a thread before starting a run");
-  return { threadId, task, model, contextLength, ...(attachmentList.length ? { attachments: attachmentList } : {}) };
-}
-
-function parseAttachment(input: unknown): AttachmentRef {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new Error("Invalid attachment");
-  }
-  const value = input as Record<string, unknown>;
-  const kind = value.kind;
-  const delivery = value.delivery;
-  if (kind !== "image" && kind !== "document" && kind !== "pdf") {
-    throw new Error("Invalid attachment kind");
-  }
-  if (delivery !== "image" && delivery !== "markdown" && delivery !== "pdf") {
-    throw new Error("Invalid attachment delivery");
-  }
-  if (typeof value.name !== "string" || typeof value.mediaType !== "string") {
-    throw new Error("Invalid attachment metadata");
-  }
-  if (
-    !Number.isInteger(value.size) || Number(value.size) < 0 ||
-    !Number.isInteger(value.estimatedTokens) || Number(value.estimatedTokens) < 0
-  ) {
-    throw new Error("Invalid attachment size");
-  }
-  return {
-    id: parseId(value.id, "Attachment"),
-    name: value.name,
-    mediaType: value.mediaType,
-    size: Number(value.size),
-    kind,
-    delivery,
-    estimatedTokens: Number(value.estimatedTokens),
-  };
-}
-
-function parseSteeringMessage(value: unknown): string {
-  const message = typeof value === "string" ? value.trim() : "";
-  if (!message) throw new Error("Enter a message before steering the run");
-  if (message.length > 30000) throw new Error("Message is too long");
-  return message;
-}
-
-function parseApprovalDecision(value: unknown): CommandApprovalDecision {
-  if (value === "deny" || value === "once" || value === "thread") return value;
-  throw new Error("Invalid approval decision");
-}
-
-function parseSaveMessageInput(input: unknown): SaveMessageInput {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new Error("Saved message input must be an object");
-  }
-  const value = input as Record<string, unknown>;
-  if (!Number.isInteger(value.sequence) || Number(value.sequence) < 0) {
-    throw new Error("Invalid message sequence");
-  }
-  if (typeof value.text !== "string" || !value.text.trim()) throw new Error("Message is empty");
-  return {
-    threadId: parseId(value.threadId, "Thread"),
-    sequence: Number(value.sequence),
-    text: value.text,
-    ...(typeof value.model === "string" ? { model: value.model } : {}),
-  };
-}
-
 function parseId(value: unknown, label: string): string {
   if (typeof value !== "string" || !value) throw new Error(`${label} id must be a string`);
-  return value;
-}
-
-function parseIds(value: unknown): string[] {
-  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item)) {
-    throw new Error("Thread ids must be an array of strings");
-  }
   return value;
 }
 
@@ -1152,25 +566,6 @@ function validKetchSearchBackend(value: unknown): KetchSearchBackend | undefined
   return backend && backend !== "openrouter" ? backend : undefined;
 }
 
-function encodeSecret(value: string): string {
-  return safeStorage.isEncryptionAvailable()
-    ? `encrypted:${safeStorage.encryptString(value).toString("base64")}`
-    : `plain:${Buffer.from(value).toString("base64")}`;
-}
-
-function decodeSecret(value: unknown): string {
-  if (typeof value !== "string") return "";
-  try {
-    if (value.startsWith("encrypted:")) {
-      return safeStorage.decryptString(Buffer.from(value.slice(10), "base64"));
-    }
-    if (value.startsWith("plain:")) return Buffer.from(value.slice(6), "base64").toString();
-  } catch {
-    return "";
-  }
-  return "";
-}
-
 function sendRunEvent(threadId: string, event: RunEvent): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send("desktop:run-event", { threadId, event: compactRunEvent(event) });
@@ -1192,39 +587,6 @@ function compactRunEvent(event: RunEvent): RunEvent {
   return event;
 }
 
-async function requestCommandApproval(
-  threadId: string,
-  request: CommandApprovalRequest,
-): Promise<CommandApprovalDecision> {
-  const id = randomUUID();
-  const event: RunEvent = {
-    type: "permission.requested",
-    id,
-    command: request.command,
-    cwd: request.cwd,
-    reason: request.reason.slice(0, 2000),
-  };
-  const decision = new Promise<CommandApprovalDecision>((resolve) => {
-    pendingApprovals.set(id, { threadId, resolve });
-  });
-  await emitPermissionEvent(threadId, event);
-  return decision;
-}
-
-async function emitPermissionEvent(threadId: string, event: RunEvent): Promise<void> {
-  await memoryTrace.write(event);
-  sendRunEvent(threadId, event);
-}
-
-function resolveThreadApprovals(threadId: string, decision: CommandApprovalDecision): void {
-  for (const [id, pending] of pendingApprovals) {
-    if (pending.threadId !== threadId) continue;
-    pendingApprovals.delete(id);
-    void emitPermissionEvent(threadId, { type: "permission.resolved", id, decision });
-    pending.resolve(decision);
-  }
-}
-
 function loadDevelopmentEnvironment(): void {
   const environmentPath = path.join(process.cwd(), ".env");
   if (!app.isPackaged && existsSync(environmentPath)) loadEnvFile(environmentPath);
@@ -1237,8 +599,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-  for (const run of activeRuns.values()) run.controller.abort();
-  for (const run of activeRuns.values()) resolveThreadApprovals(run.threadId, "deny");
+  runs?.stopAll();
   store?.close();
 });
 
