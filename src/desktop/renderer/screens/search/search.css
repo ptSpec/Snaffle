@@ -1,0 +1,109 @@
+.search-screen {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--app-background);
+}
+
+.search-content {
+  width: min(760px, calc(100% - 56px));
+  margin: 0 auto;
+  padding: 68px 0 40px;
+}
+
+.search-content h1 {
+  margin: 0 0 24px;
+  color: var(--text-strong);
+  font-size: calc(28px * var(--interface-font-scale));
+  letter-spacing: -0.03em;
+}
+
+html[data-accented-theme="true"] .search-content h1,
+html[data-accented-theme="true"] .search-result-title {
+  color: var(--primary);
+}
+
+.conversation-search-box {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  background: var(--composer-background);
+  border-radius: 10px;
+}
+
+.conversation-search-box svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.7;
+}
+
+.conversation-search-box input {
+  min-width: 0;
+  padding: 0;
+  color: var(--text-primary);
+  background: transparent;
+  border: 0;
+  outline: none;
+  font-size: calc(16px * var(--interface-font-scale));
+}
+
+.conversation-search-box span,
+.search-empty {
+  color: var(--text-muted);
+}
+
+.conversation-search-box span {
+  font-size: calc(11px * var(--interface-font-scale));
+}
+
+.conversation-search-results small {
+  color: var(--text-secondary);
+  font-size: calc(12px * var(--interface-font-scale));
+  font-weight: 500;
+}
+
+.search-empty {
+  margin: 24px 2px;
+}
+
+.conversation-search-results {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+.conversation-search-results button {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  padding: 13px 14px;
+  color: var(--text-primary);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+}
+
+.conversation-search-results button:hover,
+.conversation-search-results button.active,
+.conversation-search-results button:focus-visible {
+  background: var(--hover-background);
+  outline: none;
+}
+
+.search-result-title {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.search-result-excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-secondary);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}

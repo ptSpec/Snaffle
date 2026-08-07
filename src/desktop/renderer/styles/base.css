@@ -227,7 +227,7 @@ body.resizing-columns .workspace-shell {
 
 .left-sidebar {
   position: relative;
-  z-index: 2;
+  z-index: 11;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-width: 0;
@@ -238,7 +238,8 @@ body.resizing-columns .workspace-shell {
 
 .workspace-shell > .conversation,
 .workspace-shell > .settings,
-.workspace-shell > .bookmarks {
+.workspace-shell > .bookmarks,
+.workspace-shell > .search-screen {
   position: relative;
   z-index: 1;
   overflow: hidden;
@@ -246,6 +247,11 @@ body.resizing-columns .workspace-shell {
 }
 
 .workspace-shell > .settings {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.workspace-shell > .search-screen {
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -271,6 +277,59 @@ body.resizing-columns .workspace-shell {
   gap: 1px;
   height: 21px;
   transform: translateY(1px);
+}
+
+.brand-leading {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.brand-search {
+  display: inline-grid;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  place-items: center;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  -webkit-app-region: no-drag;
+}
+
+.brand-search:hover {
+  color: var(--text-strong);
+  background: var(--hover-background);
+}
+
+.brand-search .sidebar-action-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.brand-search.active .search-icon {
+  animation: search-focus 240ms ease-out;
+}
+
+@keyframes search-focus {
+  0% {
+    transform: scale(0.76) rotate(-10deg);
+  }
+
+  65% {
+    transform: scale(1.08) rotate(3deg);
+  }
+
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-search.active .search-icon {
+    animation: none;
+  }
 }
 
 .brand-wordmark .brand-name {

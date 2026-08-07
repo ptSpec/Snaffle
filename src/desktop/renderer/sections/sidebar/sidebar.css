@@ -713,6 +713,14 @@ html[data-accented-theme="true"] .thread-row.active .thread-fork-marker {
   stroke-linejoin: round;
 }
 
+.search-icon {
+  width: 21px;
+  height: 21px;
+  flex-basis: 21px;
+  stroke-linecap: round;
+  stroke-width: 1.9;
+}
+
 .sidebar-settings-icon {
   display: inline-grid;
   width: 16px;

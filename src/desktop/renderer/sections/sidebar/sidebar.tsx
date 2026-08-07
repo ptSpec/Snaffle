@@ -10,7 +10,7 @@ import type { DesktopState, DesktopThread } from "../../../api.js";
 import type { BookmarksPage } from "../../screens/bookmarks/bookmarks.js";
 import { ThinkingOrb } from "../../components/thinking-orb.js";
 
-export type AppView = "conversation" | "saved" | "settings";
+export type AppView = "conversation" | "saved" | "search" | "settings";
 export type SettingsPage = "appearance" | "editor" | "agent" | "context" | "web";
 
 export function Sidebar({
@@ -242,16 +242,32 @@ export function Sidebar({
           ? "Workspaces and threads"
           : view === "settings"
             ? "Settings navigation"
-            : "Bookmarks"
+            : view === "saved"
+              ? "Bookmarks"
+              : "Search"
       }
       aria-hidden={collapsed}
     >
       <header className="sidebar-brand">
-        {view !== "conversation" ? (
+        {view === "settings" || view === "saved" ? (
           <span>{view === "settings" ? "Settings" : "Bookmarks"}</span>
         ) : (
-          <span className="brand-wordmark" aria-label={PROJECT.name}>
-            <span className="brand-name">{PROJECT.name}</span>
+          <span className="brand-leading">
+            <span className="brand-wordmark" aria-label={PROJECT.name}>
+              <span className="brand-name">{PROJECT.name}</span>
+            </span>
+            <button
+              className={view === "search" ? "brand-search active" : "brand-search"}
+              type="button"
+              onClick={() => {
+                onError(null);
+                onView("search");
+              }}
+              aria-label="Search conversations"
+              title="Search conversations (⌘K / Ctrl+K)"
+            >
+              <SearchSidebarIcon />
+            </button>
           </span>
         )}
         <button
@@ -272,8 +288,27 @@ export function Sidebar({
             : "sidebar-navigation workspace-sidebar-navigation view-enter"
         }
       >
-        {view === "settings" ? (
+        {view === "search" ? (
           <>
+            <button className="sidebar-action active" type="button" aria-current="page">
+              <SearchSidebarIcon />
+              <span>Search</span>
+            </button>
+            <div className="settings-navigation-space" aria-hidden="true" />
+          </>
+        ) : view === "settings" ? (
+          <>
+            <button
+              className="sidebar-action"
+              type="button"
+              onClick={() => {
+                onError(null);
+                onView("search");
+              }}
+            >
+              <SearchSidebarIcon />
+              <span>Search</span>
+            </button>
             <button
               className={settingsPage === "appearance" ? "sidebar-action active" : "sidebar-action"}
               type="button"
@@ -678,6 +713,15 @@ function SavedIcon(): JSX.Element {
   return (
     <svg className="sidebar-action-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M4 2.5h8v11l-4-2.5-4 2.5z" />
+    </svg>
+  );
+}
+
+function SearchSidebarIcon(): JSX.Element {
+  return (
+    <svg className="sidebar-action-icon search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="10.75" cy="10.75" r="6.25" />
+      <path d="m15.4 15.4 4.6 4.6" />
     </svg>
   );
 }
