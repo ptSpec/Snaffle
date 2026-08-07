@@ -8,7 +8,13 @@ import {
 } from "../src/context/budget.js";
 import { compactionBoundary } from "../src/context/compaction.js";
 import { projectContext, type ContextCheckpoint } from "../src/context/projection.js";
-import { serializeForSummary, summaryMessages, SUMMARY_SYSTEM_PROMPT } from "../src/context/summary.js";
+import {
+  serializeForSummary,
+  summaryMessages,
+  SUMMARY_SYSTEM_PROMPT,
+  SUMMARY_TEMPLATE,
+  TOOL_RESULT_SUMMARY_LIMIT,
+} from "../src/context/summary.js";
 import { buildContextReport } from "../src/context/report.js";
 import type { Message, ToolSpec } from "../src/protocol.js";
 
@@ -62,17 +68,33 @@ test("summary serialization excludes reasoning but retains tool continuity", () 
   const serialized = serializeForSummary(messages);
 
   assert.doesNotMatch(serialized, /hidden reasoning/);
-  assert.match(serialized, /run_command/);
+  assert.match(serialized, /\[Tool call 1 · run_command\]/);
+  assert.match(serialized, /\[Tool result 1\]/);
   assert.match(serialized, /\/workspace/);
+});
+
+test("summary serialization bounds large tool results while retaining their beginning and end", () => {
+  const content = `BEGIN${"x".repeat(4_000)}END`;
+  const serialized = serializeForSummary([{ role: "tool", toolCallId: "large", content }]);
+  const result = serialized.slice(serialized.indexOf("\n") + 1);
+
+  assert.equal(result.length, TOOL_RESULT_SUMMARY_LIMIT);
+  assert.match(result, /^BEGIN/);
+  assert.match(result, /tool result truncated/);
+  assert.match(result, /END$/);
 });
 
 test("compaction prompt supports general conversations and preserves user preferences", () => {
   assert.doesNotMatch(SUMMARY_SYSTEM_PROMPT, /coding conversation/i);
-  assert.match(SUMMARY_SYSTEM_PROMPT, /User preferences/);
   assert.match(SUMMARY_SYSTEM_PROMPT, /durable preferences/);
-  assert.match(SUMMARY_SYSTEM_PROMPT, /Key files/);
-  assert.match(SUMMARY_SYSTEM_PROMPT, /short change summary/);
+  assert.match(SUMMARY_SYSTEM_PROMPT, /repeated tool failures/);
   assert.match(SUMMARY_SYSTEM_PROMPT, /without any previous information/);
+  assert.match(SUMMARY_TEMPLATE, /User preferences/);
+  assert.match(SUMMARY_TEMPLATE, /Lessons from failures/);
+  assert.match(SUMMARY_TEMPLATE, /what the next assistant should do better/);
+  assert.match(SUMMARY_TEMPLATE, /Relevant files or artifacts/);
+  assert.match(SUMMARY_TEMPLATE, /If relevant: path or artifact/);
+  assert.match(summaryMessages([])[1]?.content ?? "", /Use exactly this Markdown structure/);
   assert.match(summaryMessages([], undefined, true)[0]?.content ?? "", /small context window/);
 });
 
