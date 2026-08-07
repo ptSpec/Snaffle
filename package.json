@@ -15,7 +15,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json --noEmit && vite build",
     "prepare:ketch": "node scripts/install-ketch.mjs",
-    "desktop": "npm run prepare:ketch && npm run build && electron .",
+    "desktop": "npm run prepare:ketch && npm run build && node scripts/run-desktop.mjs",
     "start": "node dist/src/cli.js",
     "benchmark:edit": "npm run build && node --env-file-if-exists=.env benchmark/edit-protocol.mjs",
     "test": "npm run build && node --test dist/test/*.test.js"
