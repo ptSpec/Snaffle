@@ -36,6 +36,17 @@ export type DesktopEntry = {
   message: Message;
 };
 
+export type DesktopSearchResult = {
+  entryId: string;
+  workspaceId: string;
+  workspaceName: string;
+  threadId: string;
+  threadTitle: string;
+  sequence: number;
+  role: "user" | "assistant";
+  excerpt: string;
+};
+
 export type SavedMessage = {
   id: string;
   sourceEntryId: string | null;
@@ -126,6 +137,7 @@ export interface DesktopApi {
   setThreadBookmarked(threadId: string, bookmarked: boolean): Promise<DesktopState>;
   deleteThreads(threadIds: string[]): Promise<DesktopState>;
   removeWorkspace(workspaceId: string): Promise<DesktopState>;
+  searchConversations(query: string): Promise<DesktopSearchResult[]>;
   listOpenRouterModels(): Promise<OpenRouterModel[]>;
   setSelectedModel(model: string): Promise<void>;
   chooseAttachments(): Promise<AttachmentPreview[]>;

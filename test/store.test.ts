@@ -152,6 +152,24 @@ test("forking a thread copies history through one message and preserves its sour
   assert.equal((await store.messages(sourceThreadId)).length, 5);
 });
 
+test("conversation search finds prefixes and follows updated messages", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "harness-search-store-"));
+  const store = await openStore(path.join(root, "store.db"));
+  t.after(async () => {
+    store.close();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  await store.addWorkspace(root, "example");
+  const threadId = (await store.state()).activeThreadId!;
+  await store.appendMessage(threadId, 0, { role: "user", content: "Investigate the walrus parser" });
+  assert.equal((await store.searchConversations("walr"))[0]?.threadId, threadId);
+
+  await store.appendMessage(threadId, 0, { role: "user", content: "Investigate the capybara parser" });
+  assert.equal((await store.searchConversations("walrus")).length, 0);
+  assert.equal((await store.searchConversations("capy"))[0]?.entryId, (await store.entries(threadId))[0]?.id);
+});
+
 test("context checkpoints preserve the full transcript and project only the tail", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "harness-context-store-"));
   const store = await openStore(path.join(root, "store.db"));

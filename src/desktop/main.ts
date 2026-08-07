@@ -33,6 +33,7 @@ import { openStore, type DesktopStore } from "./store.js";
 import { registerAttachmentIpc } from "./ipc/attachments.js";
 import { registerGitIpc } from "./ipc/git.js";
 import { registerSavedMessageIpc } from "./ipc/saved-messages.js";
+import { registerSearchIpc } from "./ipc/search.js";
 import { registerWorkspaceIpc } from "./ipc/workspaces.js";
 import { registerRunIpc, type RunIpc } from "./ipc/runs.js";
 import {
@@ -192,6 +193,7 @@ function registerIpc(): void {
     threadsDeleted: runs.forgetThreads,
   });
   registerSavedMessageIpc(store, desktopState);
+  registerSearchIpc(store);
   ipcMain.handle("desktop:get-state", (): Promise<DesktopState> => desktopState());
 
   ipcMain.handle("desktop:get-context-report", async (

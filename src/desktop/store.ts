@@ -5,7 +5,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Message } from "../protocol.js";
 import { ContextStore } from "../context/store.js";
-import type { DesktopEntry, DesktopThread, DesktopWorkspace } from "./api.js";
+import type { DesktopEntry, DesktopSearchResult, DesktopThread, DesktopWorkspace } from "./api.js";
 import { SavedMessageStore } from "./saved-messages-store.js";
 
 export type StoreState = {
@@ -79,6 +79,11 @@ export class DesktopStore {
           INSERT INTO entries_search(entries_search, rowid, text)
           VALUES ('delete', old.rowid, old.text);
         END`,
+        `CREATE TRIGGER IF NOT EXISTS entries_search_update AFTER UPDATE OF text ON entries BEGIN
+          INSERT INTO entries_search(entries_search, rowid, text)
+          VALUES ('delete', old.rowid, old.text);
+          INSERT INTO entries_search(rowid, text) VALUES (new.rowid, new.text);
+        END`,
         `CREATE TABLE IF NOT EXISTS app_state (
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL
@@ -103,6 +108,19 @@ export class DesktopStore {
       await this.database.execute("ALTER TABLE threads ADD COLUMN branch_label TEXT");
     }
     await this.database.execute("PRAGMA foreign_keys = ON");
+    const searchVersion = await this.database.execute({
+      sql: "SELECT value FROM app_state WHERE key = ?",
+      args: ["search_index_version"],
+    });
+    if (rowOptionalText(searchVersion.rows[0], "value") !== "1") {
+      await this.database.batch(
+        [
+          "INSERT INTO entries_search(entries_search) VALUES ('rebuild')",
+          stateStatement("search_index_version", "1"),
+        ],
+        "write",
+      );
+    }
     await this.savedMessages.initialize();
     await this.context.initialize();
   }
@@ -299,6 +317,35 @@ export class DesktopStore {
 
   async messages(threadId: string | null): Promise<Message[]> {
     return (await this.entries(threadId)).map((entry) => entry.message);
+  }
+
+  async searchConversations(query: string, limit = 50): Promise<DesktopSearchResult[]> {
+    const expression = searchExpression(query);
+    if (!expression) return [];
+    const result = await this.database.execute({
+      sql: `SELECT e.id AS entry_id, e.sequence, e.role,
+          snippet(entries_search, 0, '', '', ' … ', 32) AS excerpt,
+          t.id AS thread_id, t.title AS thread_title,
+          w.id AS workspace_id, w.name AS workspace_name
+        FROM entries_search
+        JOIN entries e ON e.rowid = entries_search.rowid
+        JOIN threads t ON t.id = e.thread_id
+        JOIN workspaces w ON w.id = t.workspace_id
+        WHERE entries_search MATCH ? AND e.role IN ('user', 'assistant')
+        ORDER BY bm25(entries_search), e.created_at DESC
+        LIMIT ?`,
+      args: [expression, limit],
+    });
+    return result.rows.map((row) => ({
+      entryId: rowText(row, "entry_id"),
+      workspaceId: rowText(row, "workspace_id"),
+      workspaceName: rowText(row, "workspace_name"),
+      threadId: rowText(row, "thread_id"),
+      threadTitle: rowText(row, "thread_title"),
+      sequence: rowNumber(row, "sequence"),
+      role: rowText(row, "role") as "user" | "assistant",
+      excerpt: rowText(row, "excerpt"),
+    }));
   }
 
   async lastSequence(threadId: string): Promise<number> {
@@ -524,6 +571,13 @@ function threadFromRow(row: Row): DesktopThread {
 function forkTitle(title: string): string {
   const suffix = " · fork";
   return `${title.slice(0, 48 - suffix.length)}${suffix}`;
+}
+
+function searchExpression(query: string): string {
+  return (query.match(/[\p{L}\p{N}_]+/gu) ?? [])
+    .slice(0, 12)
+    .map((token) => `${token}*`)
+    .join(" AND ");
 }
 
 function entryFromRow(row: Row): DesktopEntry {
