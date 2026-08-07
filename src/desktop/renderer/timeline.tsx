@@ -14,6 +14,7 @@ import hljs from "highlight.js/lib/common";
 import type { AttachmentRef } from "../../attachments/types.js";
 import type { CommandApprovalDecision, RunEvent, SourceReference, ToolCall, Usage } from "../../protocol.js";
 import type { DesktopEntry } from "../api.js";
+import type { ContextCheckpoint } from "../../context/projection.js";
 import { JsonInspector } from "./json-inspector.js";
 
 export type TimelineItem =
@@ -24,6 +25,18 @@ export type TimelineItem =
   | { id: string; kind: "reasoning"; step: number; text: string; streaming: boolean; status?: string | undefined }
   | { id: string; kind: "tool-preparing"; step: number; index: number; name: string; argumentChars: number; startedAt: number }
   | { id: string; kind: "retry"; step: number; attempt: number; maxRetries: number; text: string }
+  | {
+      id: string;
+      kind: "context";
+      status: "prepared" | "applied" | "failed";
+      sourceCharacters?: number;
+      summaryCharacters?: number;
+      injectedCharacters?: number;
+      estimatedTokens?: number;
+      model?: string;
+      summary?: string;
+      text?: string;
+    }
   | { id: string; kind: "approval"; command: string; cwd: string; reason: string; decision?: CommandApprovalDecision }
   | {
       id: string;
@@ -72,6 +85,8 @@ export function TimelineEntry({
   }
 
   if (item.kind === "reasoning") return <ReasoningEntry item={item} />;
+
+  if (item.kind === "context") return <ContextEntry item={item} />;
 
   if (item.kind === "approval") {
     return (
@@ -463,6 +478,31 @@ function ReasoningEntry({
   );
 }
 
+function ContextEntry({ item }: { item: Extract<TimelineItem, { kind: "context" }> }): JSX.Element {
+  const label = item.status === "applied"
+    ? "Context compacted"
+    : item.status === "failed"
+      ? "Context preparation failed"
+      : item.text ?? "Compact context prepared";
+  const details = [
+    item.sourceCharacters === undefined ? null : `${formatCount(item.sourceCharacters)} source characters`,
+    item.summaryCharacters === undefined ? null : `${formatCount(item.summaryCharacters)} summary characters`,
+    item.injectedCharacters === undefined ? null : `${formatCount(item.injectedCharacters)} characters injected`,
+  ].filter(Boolean).join(" · ");
+  return (
+    <details className={`context-event ${item.status}`}>
+      <summary><span>{label}</span>{details ? <small>{details}</small> : null}</summary>
+      {item.model ? <p>Summary model: {item.model}</p> : null}
+      {item.summary ? <pre>{item.summary}</pre> : null}
+      {item.status === "failed" && item.text ? <p>{item.text}</p> : null}
+    </details>
+  );
+}
+
+function formatCount(value: number): string {
+  return new Intl.NumberFormat().format(value);
+}
+
 const markdownComponents: Components = {
   a({ href, children, className, title }) {
     const external = href?.startsWith("https://") || href?.startsWith("http://");
@@ -638,6 +678,47 @@ export function addRunEvent(
   event: RunEvent,
   setTimeline: (update: (items: TimelineItem[]) => TimelineItem[]) => void,
 ): void {
+  if (event.type === "context.compaction.started") {
+    setTimeline((items) => [
+      ...items,
+      { id: `context-pending-${event.afterSequence}`, kind: "context", status: "prepared", text: "Preparing compact context…" },
+    ]);
+    return;
+  }
+
+  if (event.type === "context.compaction.completed") {
+    setTimeline((items) => [
+      ...items.filter((item) => item.id !== `context-pending-${event.afterSequence}`),
+      {
+        id: `context-${event.id}`,
+        kind: "context",
+        status: "prepared",
+        sourceCharacters: event.sourceCharacters,
+        summaryCharacters: event.summaryCharacters,
+        summary: event.summary,
+        model: event.model,
+      },
+    ]);
+    return;
+  }
+
+  if (event.type === "context.compaction.failed") {
+    setTimeline((items) => [
+      ...items.filter((item) => item.kind !== "context" || item.text !== "Preparing compact context…"),
+      { id: newTimelineId(), kind: "context", status: "failed", text: event.message },
+    ]);
+    return;
+  }
+
+  if (event.type === "context.applied") {
+    setTimeline((items) => items.map((item) =>
+      item.id === `context-${event.id}` && item.kind === "context"
+        ? { ...item, status: "applied", injectedCharacters: event.injectedCharacters, estimatedTokens: event.estimatedTokens }
+        : item,
+    ));
+    return;
+  }
+
   if (event.type === "permission.requested") {
     setTimeline((items) => [
       ...items,
@@ -830,7 +911,7 @@ export function addRunEvent(
 
 }
 
-export function timelineFromEntries(entries: DesktopEntry[]): TimelineItem[] {
+export function timelineFromEntries(entries: DesktopEntry[], checkpoints: ContextCheckpoint[] = []): TimelineItem[] {
   const items: TimelineItem[] = [];
   const calls = new Map<string, ToolCall>();
 
@@ -891,6 +972,23 @@ export function timelineFromEntries(entries: DesktopEntry[]): TimelineItem[] {
       ...(message.exitCode === undefined ? {} : { exitCode: message.exitCode }),
     });
   });
+
+  for (const checkpoint of checkpoints) {
+    const contextItem: TimelineItem = {
+      id: `context-${checkpoint.id}`,
+      kind: "context",
+      status: checkpoint.appliedAt ? "applied" : "prepared",
+      sourceCharacters: checkpoint.sourceCharacters,
+      summaryCharacters: checkpoint.summaryCharacters,
+      ...(checkpoint.injectedCharacters === null ? {} : { injectedCharacters: checkpoint.injectedCharacters }),
+      model: checkpoint.model,
+      summary: checkpoint.summary,
+    };
+    const index = items.findIndex((item) => "sequence" in item &&
+      typeof item.sequence === "number" && item.sequence > checkpoint.createdAfterSequence);
+    if (index === -1) items.push(contextItem);
+    else items.splice(index, 0, contextItem);
+  }
 
   return collapseCompletedRuns(items);
 }
@@ -1012,5 +1110,6 @@ function labelFor(kind: Exclude<TimelineItem["kind"], "tool">): string {
   if (kind === "tool-preparing") return "Tool call";
   if (kind === "retry") return "Model retry";
   if (kind === "activity-group") return "Work details";
+  if (kind === "context") return "Context";
   return "Run failed";
 }

@@ -77,6 +77,7 @@ test("agent loop executes a tool and completes naturally", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "agent-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const trace = new MemoryTrace();
+  const persisted: Array<{ sequence: number; role: Message["role"] }> = [];
 
   const result = await runAgent({
     task: "Create answer.txt",
@@ -85,11 +86,20 @@ test("agent loop executes a tool and completes naturally", async (t) => {
     workspace: new LocalWorkspace(root, "disabled"),
     trace,
     signal: new AbortController().signal,
+    sequenceStart: 10,
+    onMessage: (message, sequence) => {
+      persisted.push({ sequence, role: message.role });
+    },
   });
 
   assert.equal(result.text, "Created answer.txt.");
   assert.equal(result.steps, 2);
   assert.equal(await readFile(path.join(root, "answer.txt"), "utf8"), "done\n");
+  assert.deepEqual(persisted, [
+    { sequence: 10, role: "assistant" },
+    { sequence: 11, role: "tool" },
+    { sequence: 12, role: "assistant" },
+  ]);
   assert.deepEqual(
     trace.events.map((event) => event.type),
     [
