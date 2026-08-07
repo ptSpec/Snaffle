@@ -1,4 +1,4 @@
-import { exec, execFile } from "node:child_process";
+import { exec, spawn } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { chmod, mkdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -8,7 +8,6 @@ import { hostEnvironmentDescription, runRestrictedCommand } from "./sandbox.js";
 import type { CommandApprovalDecision } from "./protocol.js";
 
 const execAsync = promisify(exec);
-const execFileAsync = promisify(execFile);
 
 export type SearchOptions = {
   path?: string;
@@ -83,21 +82,43 @@ export class LocalWorkspace implements Workspace {
 
   async search(query: string, options: SearchOptions): Promise<string[]> {
     const searchPath = this.relative(await this.resolveExisting(options.path ?? "."));
-    const args = ["--line-number", "--no-heading", "--color", "never"];
+    const args = [
+      "--line-number", "--no-heading", "--color", "never",
+      "--max-columns", "1000", "--max-columns-preview",
+    ];
 
     if (options.glob) args.push("--glob", options.glob);
     args.push(query, searchPath || ".");
 
-    try {
-      const { stdout } = await execFileAsync(rgPath, args, {
-        cwd: this.root,
-        maxBuffer: 512 * 1024,
+    return new Promise((resolve, reject) => {
+      const child = spawn(rgPath, args, { cwd: this.root });
+      const matches: string[] = [];
+      let pending = "";
+      let errorOutput = "";
+      let stopped = false;
+
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => {
+        const lines = `${pending}${chunk}`.split("\n");
+        pending = lines.pop() ?? "";
+        for (const line of lines) {
+          if (line) matches.push(line);
+          if (matches.length >= options.maxResults) {
+            stopped = true;
+            child.kill();
+            break;
+          }
+        }
       });
-      return stdout.split("\n").filter(Boolean).slice(0, options.maxResults);
-    } catch (error) {
-      if (isProcessError(error) && error.code === 1) return [];
-      throw error;
-    }
+      child.stderr.setEncoding("utf8");
+      child.stderr.on("data", (chunk: string) => { errorOutput += chunk; });
+      child.once("error", reject);
+      child.once("close", (code) => {
+        if (!stopped && pending && matches.length < options.maxResults) matches.push(pending);
+        if (stopped || code === 0 || code === 1) resolve(matches);
+        else reject(new Error(errorOutput.trim() || `ripgrep exited ${code}`));
+      });
+    });
   }
 
   async run(

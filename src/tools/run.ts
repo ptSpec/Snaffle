@@ -1,9 +1,10 @@
 import { integerField, objectInput, stringField, ToolInputError, type Tool } from "./tool.js";
+import { DEFAULT_TOOL_OUTPUT_CHARS, truncateTail } from "./output.js";
 
 export const runTool: Tool = {
   name: "run_command",
   description:
-    "Run one shell command in the workspace and return bounded output. For a long multiline program, use write_file to create a script, then run that file with a short command.",
+    "Run one shell command in the workspace and return bounded output. If output is long, the final portion is kept because it usually contains the result or error. For a long multiline program, use write_file to create a script, then run that file with a short command.",
   exampleInput: { command: "npm test" },
   inputSchema: {
     type: "object",
@@ -26,13 +27,15 @@ export const runTool: Tool = {
     }
 
     const result = await workspace.run(command, cwd, timeoutMs);
-    const output = [
+    const header = [
       result.approval === "thread"
         ? "permission: user allowed unrestricted commands for this thread"
         : result.approval === "once"
           ? "permission: user allowed this command once"
           : "",
       `exit code: ${result.exitCode ?? "unknown"}`,
+    ].filter(Boolean).join("\n");
+    const output = [
       result.stdout,
       result.stderr ? `[stderr]\n${result.stderr}` : "",
     ]
@@ -40,7 +43,9 @@ export const runTool: Tool = {
       .join("\n");
 
     return {
-      content: output.slice(0, 12000),
+      content: output
+        ? `${header}\n${truncateTail(output, DEFAULT_TOOL_OUTPUT_CHARS - header.length - 1)}`
+        : header,
       exitCode: result.exitCode,
     };
   },
