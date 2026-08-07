@@ -9,6 +9,120 @@
   border-radius: 14px;
 }
 
+.context-rail {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.context-rail rect {
+  vector-effect: non-scaling-stroke;
+}
+
+.context-rail-base {
+  stroke: color-mix(in srgb, var(--border-default) 55%, transparent);
+  stroke-width: 1;
+}
+
+.context-rail-fill {
+  stroke: color-mix(in srgb, var(--text-muted) 55%, transparent);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  transition: stroke-dasharray 240ms ease, stroke 240ms ease;
+}
+
+.context-rail.warning .context-rail-fill {
+  stroke: var(--status-warning-text);
+}
+
+.context-rail.danger .context-rail-fill {
+  stroke: var(--status-danger-text);
+}
+
+.context-gauge {
+  position: relative;
+  flex: 0 0 auto;
+  color: var(--text-faint);
+}
+
+.context-gauge > summary {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.context-gauge > summary::-webkit-details-marker {
+  display: none;
+}
+
+.context-gauge > summary:hover,
+.context-gauge[open] > summary {
+  color: var(--text-secondary);
+  background: var(--hover-background);
+}
+
+.context-gauge > summary svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.context-gauge-details {
+  position: absolute;
+  right: 0;
+  bottom: 34px;
+  z-index: 8;
+  display: grid;
+  gap: 5px;
+  width: 220px;
+  padding: 12px;
+  color: var(--text-secondary);
+  background: var(--card-background);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 24%);
+}
+
+.context-gauge-details strong {
+  color: var(--text-primary);
+}
+
+.context-gauge-details p {
+  margin: 0;
+}
+
+.context-gauge-details small {
+  color: var(--text-muted);
+}
+
+.context-gauge-details button {
+  justify-self: start;
+  margin-top: 5px;
+  padding: 6px 9px;
+  color: var(--text-primary);
+  background: var(--control-background);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+}
+
+.context-gauge-details button:hover:not(:disabled) {
+  background: var(--hover-background);
+  border-color: var(--border-focus);
+}
+
 .composer.dragging {
   outline: 2px dashed var(--border-focus);
   outline-offset: 3px;

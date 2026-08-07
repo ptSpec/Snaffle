@@ -78,3 +78,79 @@ test("sent attachments can leave and rejoin model context", async (t) => {
   const restored = (await store.messages(threadId))[1];
   assert.equal(restored?.role === "user" && restored.attachments?.[0]?.includeInContext, undefined);
 });
+
+test("restoring a thread removes the failed turn and newer context checkpoints", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "esch-restore-store-"));
+  const store = await openStore(path.join(root, "esch.db"));
+  t.after(async () => {
+    store.close();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  await store.addWorkspace(root, "example");
+  const threadId = (await store.state()).activeThreadId!;
+  await store.saveMessages(threadId, [
+    { role: "system", content: "system" },
+    { role: "user", content: "first" },
+    { role: "assistant", content: "first answer" },
+    { role: "user", content: "retry this" },
+    { role: "assistant", content: "malformed call" },
+  ]);
+  await store.context.save({
+    threadId,
+    throughSequence: 2,
+    createdAfterSequence: 4,
+    summary: "First turn completed.",
+    sourceCharacters: 50,
+    model: "test-model",
+  });
+
+  await store.restoreThread(threadId, 3);
+
+  assert.deepEqual((await store.messages(threadId)).map((message) => message.content), [
+    "system",
+    "first",
+    "first answer",
+  ]);
+  assert.equal((await store.state()).workspaces[0]?.threads[0]?.draft, "retry this");
+  assert.equal(await store.context.latest(threadId), null);
+});
+
+test("context checkpoints preserve the full transcript and project only the tail", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "esch-context-store-"));
+  const store = await openStore(path.join(root, "esch.db"));
+  t.after(async () => {
+    store.close();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  await store.addWorkspace(root, "example");
+  const threadId = (await store.state()).activeThreadId!;
+  const messages: Message[] = [
+    { role: "system", content: "system" },
+    { role: "user", content: "first" },
+    { role: "assistant", content: "first answer", reasoning: "scratch" },
+    { role: "user", content: "second" },
+    { role: "assistant", content: "second answer" },
+  ];
+  await store.saveMessages(threadId, messages);
+  const checkpoint = await store.context.save({
+    threadId,
+    throughSequence: 2,
+    createdAfterSequence: 4,
+    summary: "First turn completed.",
+    sourceCharacters: 100,
+    model: "test-model",
+  });
+  await store.context.markApplied(checkpoint.id, 60, 4);
+
+  assert.equal((await store.entries(threadId)).length, messages.length);
+  assert.deepEqual(
+    (await store.context.entries(threadId, checkpoint)).map((entry) => entry.sequence),
+    [0, 3, 4],
+  );
+  const stored = await store.context.latest(threadId);
+  assert.equal(stored?.summary, "First turn completed.");
+  assert.equal(stored?.injectedCharacters, 60);
+  assert.equal(stored?.appliedThroughSequence, 4);
+});

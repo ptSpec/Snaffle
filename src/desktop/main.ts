@@ -11,6 +11,16 @@ import { AttachmentStore, MAX_ATTACHMENTS } from "../attachments/store.js";
 import type { AttachmentRef } from "../attachments/types.js";
 import { builtInCapabilities } from "../capabilities/active.js";
 import { initialMessages } from "../context.js";
+import {
+  DEFAULT_COMPACTION_THRESHOLD,
+  compactionThreshold,
+  estimateContextCharacters,
+  estimateContextTokens,
+  type CompactionMode,
+} from "../context/budget.js";
+import { compactionBoundary, ContextCompactor } from "../context/compaction.js";
+import { projectContext } from "../context/projection.js";
+import { buildContextReport, type ContextReport } from "../context/report.js";
 import { commitGitChanges, initializeGitRepository, saveGitFile } from "../git/actions.js";
 import { safeWorkspacePath } from "../git/process.js";
 import { gitChanges, gitDiffPreview, gitFileContents } from "../git/repository.js";
@@ -62,6 +72,7 @@ const activeRuns = new Map<
   }
 >();
 const unsafeThreads = new Set<string>();
+let contextCompactor: ContextCompactor;
 const pendingApprovals = new Map<
   string,
   { threadId: string; resolve: (decision: CommandApprovalDecision) => void }
@@ -80,6 +91,8 @@ let editorArguments = "";
 let maxSteps = DEFAULT_MAX_STEPS;
 let providerTimeoutMinutes = DEFAULT_PROVIDER_TIMEOUT_MS / 60_000;
 let providerRetries = DEFAULT_PROVIDER_RETRIES;
+let compactionMode: CompactionMode = "automatic";
+let customCompactionThreshold = DEFAULT_COMPACTION_THRESHOLD;
 let webSearchEnabled = true;
 let webSearchBackend: WebSearchBackend = "ddg";
 const storedWebSearchApiKeys: Partial<Record<KetchSearchBackend, string>> = {};
@@ -112,6 +125,8 @@ async function start(): Promise<void> {
   maxSteps = validMaxSteps(settings.maxSteps) ?? DEFAULT_MAX_STEPS;
   providerTimeoutMinutes = validProviderTimeout(settings.providerTimeoutMinutes) ?? providerTimeoutMinutes;
   providerRetries = validProviderRetries(settings.providerRetries) ?? DEFAULT_PROVIDER_RETRIES;
+  compactionMode = settings.compactionMode === "custom" ? "custom" : "automatic";
+  customCompactionThreshold = validCompactionThreshold(settings.compactionThreshold) ?? DEFAULT_COMPACTION_THRESHOLD;
   selectedModel = typeof settings.selectedModel === "string" ? settings.selectedModel : DEVELOPMENT_MODEL;
   webSearchEnabled = settings.webSearchEnabled !== false;
   webSearchBackend = validWebSearchBackend(settings.webSearchBackend) ?? "ddg";
@@ -122,6 +137,17 @@ async function start(): Promise<void> {
     saveWebSearchApiKeys();
   }
   store = await openStore(path.join(app.getPath("userData"), `${PRODUCT.slug}.db`));
+  contextCompactor = new ContextCompactor({
+    repository: store.context,
+    settings: () => ({ mode: compactionMode, threshold: customCompactionThreshold }),
+    provider: (model) => new OpenRouterProvider({
+      model,
+      apiKey: openRouterApiKey(),
+      streamIdleTimeoutMs: providerTimeoutMinutes * 60_000,
+      maxRetries: providerRetries,
+    }),
+    onEvent: sendRunEvent,
+  });
   attachments = new AttachmentStore(path.join(app.getPath("userData"), "attachments"));
   if (process.platform === "darwin" && !app.isPackaged) app.dock?.setIcon(applicationIcon());
   if (!app.isPackaged && (await store.state()).workspaces.length === 0) {
@@ -189,6 +215,42 @@ function applicationIcon(): string {
 
 function registerIpc(): void {
   ipcMain.handle("desktop:get-state", (): Promise<DesktopState> => desktopState());
+
+  ipcMain.handle("desktop:get-context-report", async (
+    _event,
+    rawThreadId: unknown,
+    rawContextLength: unknown,
+  ): Promise<ContextReport> => {
+    const threadId = parseId(rawThreadId, "Thread");
+    const contextLength = parseContextLength(rawContextLength);
+    const checkpoint = await store.context.latest(threadId);
+    return buildContextReport({
+      entries: await store.context.entries(threadId, checkpoint),
+      checkpoint,
+      tools: currentToolSpecs(),
+      contextLength,
+      mode: compactionMode,
+      threshold: customCompactionThreshold,
+      preparing: contextCompactor.isRunning(threadId),
+    });
+  });
+
+  ipcMain.handle("desktop:compact-context", async (
+    _event,
+    rawThreadId: unknown,
+    rawModel: unknown,
+    rawContextLength: unknown,
+  ): Promise<void> => {
+    const threadId = parseId(rawThreadId, "Thread");
+    const model = typeof rawModel === "string" ? rawModel.trim() : "";
+    if (!model) throw new Error("Choose a model before compacting context");
+    await contextCompactor.force({
+      threadId,
+      model,
+      contextLength: parseContextLength(rawContextLength),
+      tools: currentToolSpecs(),
+    });
+  });
 
   ipcMain.handle("desktop:choose-workspace", async (event): Promise<DesktopState | null> => {
     const owner = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
@@ -343,21 +405,66 @@ function registerIpc(): void {
     };
     activeRuns.set(threadId, run);
     let conversation: Message[];
+    let nextSequence: number;
+    const capabilities = currentCapabilities(apiKey);
+    const toolSpecs = capabilities.tools.map(({ tool }) => ({
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema,
+    }));
+    const compactionInput = {
+      threadId,
+      model: input.model,
+      contextLength: input.contextLength,
+      tools: toolSpecs,
+    };
     try {
-      conversation = await store.messages(threadId);
-      await store.saveMessages(
-        threadId,
-        conversation.length
-          ? [
-              ...conversation,
-              {
-                role: "user",
-                content: input.task,
-                ...(input.attachments?.length ? { attachments: input.attachments } : {}),
-              },
-            ]
-          : initialMessages(input.task, workspace.environment, input.attachments),
-      );
+      const storedLastSequence = await store.lastSequence(threadId);
+      if (storedLastSequence < 0) {
+        const initial = initialMessages(input.task, workspace.environment, input.attachments);
+        await store.appendMessage(threadId, 0, initial[0]!);
+        await store.appendMessage(threadId, 1, initial[1]!);
+        conversation = [initial[0]!];
+        nextSequence = 2;
+      } else {
+        let checkpoint = await store.context.latest(threadId);
+        let entries = await store.context.entries(threadId, checkpoint);
+        let projection = projectContext(entries, checkpoint, toolSpecs);
+        contextCompactor.schedule({
+          ...compactionInput,
+          throughSequence: compactionBoundary(entries),
+        });
+        const safetyThreshold = compactionThreshold(
+          input.contextLength,
+          compactionMode,
+          customCompactionThreshold,
+        );
+        if (projection.estimatedTokens >= input.contextLength * safetyThreshold / 100) {
+          await contextCompactor.ready(threadId);
+          checkpoint = await store.context.latest(threadId);
+          entries = await store.context.entries(threadId, checkpoint);
+          projection = projectContext(entries, checkpoint, toolSpecs);
+        }
+        conversation = projection.messages;
+        const userMessage: Message = {
+          role: "user",
+          content: input.task,
+          ...(input.attachments?.length ? { attachments: input.attachments } : {}),
+        };
+        nextSequence = storedLastSequence + 1;
+        await store.appendMessage(threadId, nextSequence, userMessage);
+        nextSequence += 1;
+        if (checkpoint) {
+          const injectedCharacters = estimateContextCharacters([...conversation, userMessage], toolSpecs);
+          await store.context.markApplied(checkpoint.id, injectedCharacters, storedLastSequence);
+          sendRunEvent(threadId, {
+            type: "context.applied",
+            id: checkpoint.id,
+            injectedCharacters,
+            estimatedTokens: estimateContextTokens(injectedCharacters),
+          });
+        }
+      }
     } catch (error) {
       activeRuns.delete(threadId);
       throw error;
@@ -372,22 +479,15 @@ function registerIpc(): void {
         maxRetries: providerRetries,
         resolveAttachment: (attachment) => attachments.resolve(attachment),
       }),
-      capabilities: builtInCapabilities(
-        defaultTools(webSearchEnabled
-          ? {
-              webSearchEnabled: true,
-              backend: webSearchBackend,
-              apiKey: webSearchApiKey(webSearchBackend),
-              openRouterApiKey: apiKey,
-            }
-          : {}),
-      ),
+      capabilities,
       workspace,
       trace: memoryTrace,
       signal: controller.signal,
       history: conversation,
       ...(input.attachments?.length ? { attachments: input.attachments } : {}),
       maxSteps,
+      sequenceStart: nextSequence,
+      onMessage: (message, sequence) => store.appendMessage(threadId, sequence, message),
       takeSteering: () => run.steering.splice(0),
       onEvent: (event) => {
         if (event.type === "run.completed" || event.type === "run.failed") {
@@ -396,15 +496,29 @@ function registerIpc(): void {
         sendRunEvent(threadId, event);
       },
     })
-      .then(async (result) => {
-        await store.saveMessages(threadId, result.messages);
+      .then(async () => {
         sendRunEvent(threadId, { type: "run.persisted" });
+        contextCompactor.schedule(compactionInput);
       })
       .catch(() => undefined)
       .finally(() => {
         if (activeRuns.get(threadId) === run) activeRuns.delete(threadId);
       });
   });
+
+  ipcMain.handle(
+    "desktop:restore-thread",
+    async (_event, rawThreadId: unknown, rawSequence: unknown): Promise<DesktopState> => {
+      const threadId = parseId(rawThreadId, "Thread");
+      if (!Number.isInteger(rawSequence) || Number(rawSequence) < 0) {
+        throw new Error("Invalid restore point");
+      }
+      if (activeRuns.has(threadId)) throw new Error("Wait for the current run to finish before restoring");
+      await contextCompactor.ready(threadId);
+      await store.restoreThread(threadId, Number(rawSequence));
+      return desktopState();
+    },
+  );
 
   ipcMain.handle("desktop:steer-run", (_event, rawThreadId: unknown, rawMessage: unknown): boolean => {
     const run = activeRuns.get(parseId(rawThreadId, "Thread"));
@@ -545,6 +659,15 @@ function registerIpc(): void {
     if (next === undefined) throw new Error("Provider retries must be an integer from 0 to 10");
     providerRetries = next;
     saveSettings({ providerRetries });
+  });
+
+  ipcMain.handle("desktop:set-compaction", (_event, modeValue: unknown, thresholdValue: unknown): void => {
+    if (modeValue !== "automatic" && modeValue !== "custom") throw new Error("Unknown compaction mode");
+    const threshold = validCompactionThreshold(thresholdValue);
+    if (threshold === undefined) throw new Error("Compaction threshold must be an integer from 30 to 90");
+    compactionMode = modeValue;
+    customCompactionThreshold = threshold;
+    saveSettings({ compactionMode, compactionThreshold: customCompactionThreshold });
   });
 
   ipcMain.handle("desktop:set-web-search-backend", async (_event, value: unknown): Promise<DesktopState> => {
@@ -690,6 +813,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     workspaces: state.workspaces,
     activeThreadId: state.activeThreadId,
     conversation: includeConversation ? await store.entries(state.activeThreadId) : [],
+    contextCheckpoints: includeConversation ? await store.context.checkpoints(state.activeThreadId) : [],
     savedMessages: await store.savedMessages.summaries(),
     openRouterAvailable: Boolean(process.env.OPENROUTER_API_KEY),
     ketchAvailable: Boolean(findKetch()),
@@ -717,6 +841,8 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     maxSteps,
     providerTimeoutMinutes,
     providerRetries,
+    compactionMode,
+    compactionThreshold: customCompactionThreshold,
   };
 }
 
@@ -739,6 +865,8 @@ type SavedSettings = {
   maxSteps?: unknown;
   providerTimeoutMinutes?: unknown;
   providerRetries?: unknown;
+  compactionMode?: unknown;
+  compactionThreshold?: unknown;
   selectedModel?: unknown;
   tavilyApiKey?: unknown;
   webSearchEnabled?: unknown;
@@ -774,6 +902,8 @@ function saveSettings(update: {
   maxSteps?: number;
   providerTimeoutMinutes?: number;
   providerRetries?: number;
+  compactionMode?: CompactionMode;
+  compactionThreshold?: number;
   selectedModel?: string;
   tavilyApiKey?: string | undefined;
   webSearchEnabled?: boolean;
@@ -793,6 +923,37 @@ function validEditorFontSize(value: unknown): number | undefined {
 
 function validCodeFontSize(value: unknown): number | undefined {
   return validEditorFontSize(value);
+}
+
+function validCompactionThreshold(value: unknown): number | undefined {
+  return Number.isInteger(value) && Number(value) >= 30 && Number(value) <= 90
+    ? Number(value)
+    : undefined;
+}
+
+function parseContextLength(value: unknown): number {
+  return Number.isInteger(value) && Number(value) > 0 ? Number(value) : 128_000;
+}
+
+function currentCapabilities(apiKey = process.env.OPENROUTER_API_KEY ?? "") {
+  return builtInCapabilities(
+    defaultTools(webSearchEnabled
+      ? {
+          webSearchEnabled: true,
+          backend: webSearchBackend,
+          apiKey: webSearchApiKey(webSearchBackend),
+          openRouterApiKey: apiKey,
+        }
+      : {}),
+  );
+}
+
+function currentToolSpecs() {
+  return currentCapabilities().tools.map(({ tool }) => ({
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
+  }));
 }
 
 async function launchEditor(target: string): Promise<void> {
@@ -850,6 +1011,9 @@ function parseStartRunInput(input: unknown): StartRunInput {
   const value = input as Record<string, unknown>;
   const task = typeof value.task === "string" ? value.task.trim() : "";
   const model = typeof value.model === "string" ? value.model.trim() : "";
+  const contextLength = Number.isInteger(value.contextLength) && Number(value.contextLength) > 0
+    ? Number(value.contextLength)
+    : 128_000;
 
   const attachmentList = Array.isArray(value.attachments)
     ? value.attachments.map(parseAttachment)
@@ -864,7 +1028,7 @@ function parseStartRunInput(input: unknown): StartRunInput {
   if (!model) throw new Error("Choose an OpenRouter model before starting a run");
   const threadId = typeof value.threadId === "string" ? value.threadId : "";
   if (!threadId) throw new Error("Choose a thread before starting a run");
-  return { threadId, task, model, ...(attachmentList.length ? { attachments: attachmentList } : {}) };
+  return { threadId, task, model, contextLength, ...(attachmentList.length ? { attachments: attachmentList } : {}) };
 }
 
 function parseAttachment(input: unknown): AttachmentRef {

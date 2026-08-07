@@ -8,7 +8,8 @@ import { activeCapabilities, builtInCapabilities } from "../src/capabilities/act
 import type { ModelProvider } from "../src/providers/provider.js";
 import type { Message, ModelResponse, RunEvent, ToolSpec } from "../src/protocol.js";
 import { defaultTools } from "../src/tools/default-tools.js";
-import { toolErrorContent, type Tool } from "../src/tools/tool.js";
+import { editTool } from "../src/tools/edit.js";
+import { ToolInputError, toolErrorContent, type Tool } from "../src/tools/tool.js";
 import { writeTool } from "../src/tools/write.js";
 import type { Trace } from "../src/trace.js";
 import { LocalWorkspace } from "../src/workspace.js";
@@ -77,6 +78,7 @@ test("agent loop executes a tool and completes naturally", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "agent-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const trace = new MemoryTrace();
+  const persisted: Array<{ sequence: number; role: Message["role"] }> = [];
 
   const result = await runAgent({
     task: "Create answer.txt",
@@ -85,11 +87,20 @@ test("agent loop executes a tool and completes naturally", async (t) => {
     workspace: new LocalWorkspace(root, "disabled"),
     trace,
     signal: new AbortController().signal,
+    sequenceStart: 10,
+    onMessage: (message, sequence) => {
+      persisted.push({ sequence, role: message.role });
+    },
   });
 
   assert.equal(result.text, "Created answer.txt.");
   assert.equal(result.steps, 2);
   assert.equal(await readFile(path.join(root, "answer.txt"), "utf8"), "done\n");
+  assert.deepEqual(persisted, [
+    { sequence: 10, role: "assistant" },
+    { sequence: 11, role: "tool" },
+    { sequence: 12, role: "assistant" },
+  ]);
   assert.deepEqual(
     trace.events.map((event) => event.type),
     [
@@ -188,7 +199,8 @@ test("tool examples are shown after failure, not sent in every tool description"
       }
 
       const failure = messages.at(-1);
-      assert.equal(failure?.role, "tool");
+      assert.equal(failure?.role, "user");
+      assert.match(failure?.content ?? "", /tool input correction notice/);
       assert.match(failure?.content ?? "", /Here is a valid example input for the write_file tool/);
       assert.match(failure?.content ?? "", /"path": "src\/config.ts"/);
       return { text: "Corrected the tool input.", toolCalls: [] };
@@ -207,6 +219,10 @@ test("tool examples are shown after failure, not sent in every tool description"
   assert.equal(result.text, "Corrected the tool input.");
   assert.equal(call, 2);
   assert.equal(toolErrorContent(writeTool, new Error("Disk is full")), "Error: Disk is full");
+  assert.match(
+    toolErrorContent(editTool, new ToolInputError("edits must be a non-empty array")),
+    /Prefer correcting and retrying edit_file/,
+  );
 });
 
 test("web fetch guidance follows web search availability", () => {
