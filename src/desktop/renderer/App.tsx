@@ -506,6 +506,26 @@ export function App(): JSX.Element {
     }
   }
 
+  async function restoreThread(sequence: number): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId) return;
+    const user = timeline.find((item) => item.kind === "user" && item.sequence === sequence);
+    const restoredAttachments: AttachmentPreview[] = user?.kind === "user"
+      ? (user.attachments ?? []).map((attachment) => ({ ...attachment, fingerprint: attachment.id }))
+      : [];
+
+    try {
+      const state = await window.desktop.restoreThread(threadId, sequence);
+      threadTimelines.current.delete(threadId);
+      showDesktopState(state);
+      threadAttachments.current.set(threadId, restoredAttachments);
+      setPendingAttachments(restoredAttachments);
+      window.requestAnimationFrame(() => taskInput.current?.focus());
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   function appendUserMessage(
     threadId: string,
     text: string,
@@ -1139,6 +1159,7 @@ export function App(): JSX.Element {
                     input?.setSelectionRange(text.length, text.length);
                   });
                 }}
+                {...(!running ? { onRestore: (sequence) => void restoreThread(sequence) } : {})}
               />
             ))}
           </div>

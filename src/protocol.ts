@@ -32,6 +32,7 @@ export type Message =
       toolCallId: string;
       content: string;
       isError?: boolean;
+      inputError?: boolean;
       exitCode?: number | null;
       inputRepair?: string;
     };

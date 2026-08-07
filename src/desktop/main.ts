@@ -506,6 +506,20 @@ function registerIpc(): void {
       });
   });
 
+  ipcMain.handle(
+    "desktop:restore-thread",
+    async (_event, rawThreadId: unknown, rawSequence: unknown): Promise<DesktopState> => {
+      const threadId = parseId(rawThreadId, "Thread");
+      if (!Number.isInteger(rawSequence) || Number(rawSequence) < 0) {
+        throw new Error("Invalid restore point");
+      }
+      if (activeRuns.has(threadId)) throw new Error("Wait for the current run to finish before restoring");
+      await contextCompactor.ready(threadId);
+      await store.restoreThread(threadId, Number(rawSequence));
+      return desktopState();
+    },
+  );
+
   ipcMain.handle("desktop:steer-run", (_event, rawThreadId: unknown, rawMessage: unknown): boolean => {
     const run = activeRuns.get(parseId(rawThreadId, "Thread"));
     const message = parseSteeringMessage(rawMessage);

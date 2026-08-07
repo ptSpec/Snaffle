@@ -19,7 +19,7 @@ import { JsonInspector } from "./json-inspector.js";
 
 export type TimelineItem =
   | { id: string; kind: "user"; text: string; attachments?: AttachmentRef[]; sequence: number; entryId?: string }
-  | { id: string; kind: "error"; text: string }
+  | { id: string; kind: "error"; text: string; restoreSequence?: number }
   | { id: string; kind: "assistant"; text: string; streaming: boolean; intermediate?: boolean; model?: string; usage?: Usage; durationMs?: number; sources?: SourceReference[]; sequence?: number; entryId?: string }
   | { id: string; kind: "activity-group"; items: TimelineItem[] }
   | { id: string; kind: "reasoning"; step: number; text: string; streaming: boolean; status?: string | undefined }
@@ -60,6 +60,7 @@ export function TimelineEntry({
   savedId,
   onToggleSaved,
   onToggleAttachmentContext,
+  onRestore,
 }: {
   item: TimelineItem;
   selectedId: string | null;
@@ -72,6 +73,7 @@ export function TimelineEntry({
     item: Extract<TimelineItem, { kind: "user" }>,
     attachment: AttachmentRef,
   ) => void;
+  onRestore?: (sequence: number) => void;
 }): JSX.Element {
   if (item.kind === "activity-group") {
     return (
@@ -167,6 +169,11 @@ export function TimelineEntry({
     <article className={`message ${item.kind}`}>
       {item.kind === "error" ? <span className="message-label">Run failed</span> : null}
       <p>{item.text}</p>
+      {item.kind === "error" && item.restoreSequence !== undefined && onRestore ? (
+        <button className="restore-thread" type="button" onClick={() => onRestore(item.restoreSequence!)}>
+          Restore previous context
+        </button>
+      ) : null}
     </article>
   );
 }
@@ -911,10 +918,18 @@ export function addRunEvent(
   }
 
   if (event.type === "run.failed") {
-    setTimeline((items) => [
-      ...stopActivity(items),
-      { id: newTimelineId(), kind: "error", text: event.message },
-    ]);
+    setTimeline((items) => {
+      const restoreSequence = [...items].reverse().find((item) => item.kind === "user")?.sequence;
+      return [
+        ...stopActivity(items),
+        {
+          id: newTimelineId(),
+          kind: "error",
+          text: event.message,
+          ...(restoreSequence === undefined ? {} : { restoreSequence }),
+        },
+      ];
+    });
     return;
   }
 

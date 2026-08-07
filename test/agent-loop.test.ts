@@ -8,7 +8,8 @@ import { activeCapabilities, builtInCapabilities } from "../src/capabilities/act
 import type { ModelProvider } from "../src/providers/provider.js";
 import type { Message, ModelResponse, RunEvent, ToolSpec } from "../src/protocol.js";
 import { defaultTools } from "../src/tools/default-tools.js";
-import { toolErrorContent, type Tool } from "../src/tools/tool.js";
+import { editTool } from "../src/tools/edit.js";
+import { ToolInputError, toolErrorContent, type Tool } from "../src/tools/tool.js";
 import { writeTool } from "../src/tools/write.js";
 import type { Trace } from "../src/trace.js";
 import { LocalWorkspace } from "../src/workspace.js";
@@ -198,7 +199,8 @@ test("tool examples are shown after failure, not sent in every tool description"
       }
 
       const failure = messages.at(-1);
-      assert.equal(failure?.role, "tool");
+      assert.equal(failure?.role, "user");
+      assert.match(failure?.content ?? "", /tool input correction notice/);
       assert.match(failure?.content ?? "", /Here is a valid example input for the write_file tool/);
       assert.match(failure?.content ?? "", /"path": "src\/config.ts"/);
       return { text: "Corrected the tool input.", toolCalls: [] };
@@ -217,6 +219,10 @@ test("tool examples are shown after failure, not sent in every tool description"
   assert.equal(result.text, "Corrected the tool input.");
   assert.equal(call, 2);
   assert.equal(toolErrorContent(writeTool, new Error("Disk is full")), "Error: Disk is full");
+  assert.match(
+    toolErrorContent(editTool, new ToolInputError("edits must be a non-empty array")),
+    /Prefer correcting and retrying edit_file/,
+  );
 });
 
 test("web fetch guidance follows web search availability", () => {

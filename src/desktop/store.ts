@@ -261,6 +261,36 @@ export class DesktopStore {
     );
   }
 
+  async restoreThread(threadId: string, sequence: number): Promise<void> {
+    const result = await this.database.execute({
+      sql: "SELECT data FROM entries WHERE thread_id = ? AND sequence = ?",
+      args: [threadId, sequence],
+    });
+    const message = result.rows[0]
+      ? JSON.parse(rowText(result.rows[0], "data")) as Message
+      : null;
+    if (message?.role !== "user") throw new Error("The restore point is no longer available");
+
+    await this.database.batch(
+      [
+        {
+          sql: `DELETE FROM context_checkpoints
+            WHERE thread_id = ? AND (through_sequence >= ? OR created_after_sequence >= ?)`,
+          args: [threadId, sequence, sequence],
+        },
+        {
+          sql: "DELETE FROM entries WHERE thread_id = ? AND sequence >= ?",
+          args: [threadId, sequence],
+        },
+        {
+          sql: "UPDATE threads SET draft = ?, updated_at = ? WHERE id = ?",
+          args: [message.content, Date.now(), threadId],
+        },
+      ],
+      "write",
+    );
+  }
+
   async entries(threadId: string | null): Promise<DesktopEntry[]> {
     if (!threadId) return [];
     const result = await this.database.execute({

@@ -487,6 +487,21 @@
   background: var(--message-danger-background);
 }
 
+.restore-thread {
+  margin-top: 12px;
+  padding: 7px 10px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.restore-thread:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
 .message-label {
   display: block;
   margin-bottom: 6px;

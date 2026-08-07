@@ -144,6 +144,7 @@ export interface DesktopApi {
   createThread(workspaceId: string): Promise<DesktopState>;
   selectThread(threadId: string): Promise<DesktopState>;
   setThreadDraft(threadId: string, draft: string): Promise<void>;
+  restoreThread(threadId: string, sequence: number): Promise<DesktopState>;
   setThreadBookmarked(threadId: string, bookmarked: boolean): Promise<DesktopState>;
   deleteThreads(threadIds: string[]): Promise<DesktopState>;
   removeWorkspace(workspaceId: string): Promise<DesktopState>;
