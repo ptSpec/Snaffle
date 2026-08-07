@@ -7,7 +7,7 @@ import {
   estimateContextTokens,
 } from "../src/context/budget.js";
 import { compactionBoundary } from "../src/context/compaction.js";
-import { projectContext, type ContextCheckpoint } from "../src/context/projection.js";
+import { projectContext, type ContextCheckpoint, withoutMalformedToolCalls } from "../src/context/projection.js";
 import {
   serializeForSummary,
   summaryMessages,
@@ -73,6 +73,19 @@ test("summary serialization excludes reasoning but retains tool continuity", () 
   assert.match(serialized, /\/workspace/);
 });
 
+test("malformed tool calls become provider-safe correction notices", () => {
+  const messages: Message[] = [
+    { role: "assistant", content: "", toolCalls: [{ id: "bad", name: "edit_file", input: "{bad" }] },
+    { role: "tool", toolCallId: "bad", content: "Error: edits must be an array", isError: true },
+  ];
+  const projected = withoutMalformedToolCalls(messages);
+
+  assert.deepEqual(projected.map((message) => message.role), ["user"]);
+  assert.match(projected[0]?.content ?? "", /previous edit_file call had malformed arguments/);
+  assert.match(projected[0]?.content ?? "", /edits must be an array/);
+  assert.equal(messages[0]?.role === "assistant" && messages[0].toolCalls?.[0]?.input, "{bad");
+});
+
 test("summary serialization bounds large tool results while retaining their beginning and end", () => {
   const content = `BEGIN${"x".repeat(4_000)}END`;
   const serialized = serializeForSummary([{ role: "tool", toolCallId: "large", content }]);
@@ -91,7 +104,8 @@ test("compaction prompt supports general conversations and preserves user prefer
   assert.match(SUMMARY_SYSTEM_PROMPT, /without any previous information/);
   assert.match(SUMMARY_TEMPLATE, /User preferences/);
   assert.match(SUMMARY_TEMPLATE, /Lessons from failures/);
-  assert.match(SUMMARY_TEMPLATE, /what the next assistant should do better/);
+  assert.match(SUMMARY_SYSTEM_PROMPT, /do not present an expensive or destructive fallback as the preferred approach/);
+  assert.match(SUMMARY_TEMPLATE, /preferred first approach/);
   assert.match(SUMMARY_TEMPLATE, /Relevant files or artifacts/);
   assert.match(SUMMARY_TEMPLATE, /If relevant: path or artifact/);
   assert.match(summaryMessages([])[1]?.content ?? "", /Use exactly this Markdown structure/);

@@ -10,6 +10,7 @@ export type ToolResult = {
 export interface Tool extends ToolSpec {
   inputSchema: JsonSchema;
   exampleInput?: Record<string, unknown>;
+  inputErrorHint?: string;
   execute(workspace: Workspace, input: unknown): Promise<ToolResult>;
 }
 
@@ -20,6 +21,7 @@ export function toolErrorContent(tool: Tool, error: unknown): string {
   if (!tool.exampleInput || !(error instanceof ToolInputError)) return message;
   return (
     `${message}\n\n` +
+    (tool.inputErrorHint ? `${tool.inputErrorHint}\n\n` : "") +
     `Here is a valid example input for the ${tool.name} tool. ` +
     `Replace the sample values with values for the current task:\n` +
     JSON.stringify(tool.exampleInput, null, 2)

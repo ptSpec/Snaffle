@@ -15,6 +15,8 @@ const api: DesktopApi = {
   selectThread: (threadId: string) => ipcRenderer.invoke("desktop:select-thread", threadId),
   setThreadDraft: (threadId: string, draft: string) =>
     ipcRenderer.invoke("desktop:set-thread-draft", threadId, draft),
+  restoreThread: (threadId: string, sequence: number) =>
+    ipcRenderer.invoke("desktop:restore-thread", threadId, sequence),
   setThreadBookmarked: (threadId: string, bookmarked: boolean) =>
     ipcRenderer.invoke("desktop:set-thread-bookmarked", threadId, bookmarked),
   deleteThreads: (threadIds: string[]) =>

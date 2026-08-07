@@ -79,6 +79,43 @@ test("sent attachments can leave and rejoin model context", async (t) => {
   assert.equal(restored?.role === "user" && restored.attachments?.[0]?.includeInContext, undefined);
 });
 
+test("restoring a thread removes the failed turn and newer context checkpoints", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "esch-restore-store-"));
+  const store = await openStore(path.join(root, "esch.db"));
+  t.after(async () => {
+    store.close();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  await store.addWorkspace(root, "example");
+  const threadId = (await store.state()).activeThreadId!;
+  await store.saveMessages(threadId, [
+    { role: "system", content: "system" },
+    { role: "user", content: "first" },
+    { role: "assistant", content: "first answer" },
+    { role: "user", content: "retry this" },
+    { role: "assistant", content: "malformed call" },
+  ]);
+  await store.context.save({
+    threadId,
+    throughSequence: 2,
+    createdAfterSequence: 4,
+    summary: "First turn completed.",
+    sourceCharacters: 50,
+    model: "test-model",
+  });
+
+  await store.restoreThread(threadId, 3);
+
+  assert.deepEqual((await store.messages(threadId)).map((message) => message.content), [
+    "system",
+    "first",
+    "first answer",
+  ]);
+  assert.equal((await store.state()).workspaces[0]?.threads[0]?.draft, "retry this");
+  assert.equal(await store.context.latest(threadId), null);
+});
+
 test("context checkpoints preserve the full transcript and project only the tail", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "esch-context-store-"));
   const store = await openStore(path.join(root, "esch.db"));

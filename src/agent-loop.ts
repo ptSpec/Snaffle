@@ -1,10 +1,11 @@
 import { initialMessages } from "./context.js";
 import type { AttachmentRef } from "./attachments/types.js";
 import type { ActiveCapabilities } from "./capabilities/active.js";
+import { withoutMalformedToolCalls } from "./context/projection.js";
 import type { ModelProvider, ModelStreamEvent } from "./providers/provider.js";
 import type { Message, RunEvent, SourceReference } from "./protocol.js";
 import { healToolCall } from "./tool-input.js";
-import { toolErrorContent } from "./tools/tool.js";
+import { ToolInputError, toolErrorContent } from "./tools/tool.js";
 import type { Trace } from "./trace.js";
 import type { Workspace } from "./workspace.js";
 
@@ -35,7 +36,7 @@ export const DEFAULT_MAX_STEPS = 50;
 export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
   const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
   const tools = options.capabilities.tools.map(({ tool }) => tool);
-  const messages = options.history?.length
+  let messages = withoutMalformedToolCalls(options.history?.length
     ? [
         ...options.history,
         {
@@ -44,7 +45,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           ...(options.attachments?.length ? { attachments: options.attachments } : {}),
         },
       ]
-    : initialMessages(options.task, options.workspace.environment, options.attachments);
+    : initialMessages(options.task, options.workspace.environment, options.attachments));
   const toolSpecs = tools.map(({ name, description, inputSchema }) => ({
     name,
     description,
@@ -119,6 +120,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         return { text: response.text, steps: step, messages };
       }
 
+      let malformedInput = false;
       for (const [index, call] of response.toolCalls.entries()) {
         await emit(options, { type: "tool.started", step, index, call });
         const tool = toolsByName.get(call.name);
@@ -126,6 +128,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         let exitCode: number | null | undefined;
         let resultSources: SourceReference[] | undefined;
         let isError = false;
+        let inputError = false;
 
         try {
           if (!tool) throw new Error(`Unknown tool: ${call.name}`);
@@ -136,6 +139,8 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           for (const source of resultSources ?? []) sources.set(source.url, source);
         } catch (error) {
           isError = true;
+          inputError = error instanceof ToolInputError;
+          malformedInput ||= inputError;
           content = tool ? toolErrorContent(tool, error) : `Error: ${errorMessage(error)}`;
         }
 
@@ -145,6 +150,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           toolCallId: call.id,
           content,
           ...(isError ? { isError: true } : {}),
+          ...(inputError ? { inputError: true } : {}),
           ...(exitCode === undefined ? {} : { exitCode }),
           ...(call.inputRepair ? { inputRepair: call.inputRepair } : {}),
         };
@@ -162,6 +168,8 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         });
         nextSequence += 1;
       }
+
+      if (malformedInput) messages = withoutMalformedToolCalls(messages);
 
       nextSequence += await appendSteering(messages, options.takeSteering?.(), options, nextSequence);
     }
