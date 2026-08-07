@@ -32,6 +32,7 @@ export type Message =
       toolCallId: string;
       content: string;
       isError?: boolean;
+      inputError?: boolean;
       exitCode?: number | null;
       inputRepair?: string;
     };
@@ -61,6 +62,23 @@ export type ModelResponse = {
 
 export type RunEvent =
   | { type: "run.started"; task: string; model: string }
+  | { type: "context.compaction.started"; afterSequence: number }
+  | {
+      type: "context.compaction.completed";
+      id: string;
+      afterSequence: number;
+      sourceCharacters: number;
+      summaryCharacters: number;
+      summary: string;
+      model: string;
+    }
+  | { type: "context.compaction.failed"; message: string }
+  | {
+      type: "context.applied";
+      id: string;
+      injectedCharacters: number;
+      estimatedTokens: number;
+    }
   | { type: "model.started"; step: number }
   | { type: "model.delta"; step: number; text: string }
   | { type: "model.reasoning.delta"; step: number; text: string }

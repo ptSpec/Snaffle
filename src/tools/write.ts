@@ -3,7 +3,7 @@ import { objectInput, stringField, ToolInputError, type Tool } from "./tool.js";
 export const writeTool: Tool = {
   name: "write_file",
   description:
-    "Create a file or replace its complete contents. Use edit_file for targeted changes to an existing file.",
+    "Create a new file or intentionally replace an entire file. For changes to an existing file, prefer edit_file: rewriting the whole file uses more output tokens and may overwrite unrelated changes. Use write_file as an edit fallback only when full replacement is genuinely necessary.",
   exampleInput: { path: "src/config.ts", content: "export const port = 3000;\n" },
   inputSchema: {
     type: "object",

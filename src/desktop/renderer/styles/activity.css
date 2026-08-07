@@ -180,6 +180,45 @@
   line-height: 1.45;
 }
 
+.context-event {
+  margin: 8px 0;
+  color: var(--text-muted);
+  font-size: calc(13px * var(--conversation-font-scale));
+}
+
+.context-event summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: fit-content;
+  cursor: pointer;
+}
+
+.context-event summary small {
+  color: var(--text-subtle);
+}
+
+.context-event.applied summary span {
+  color: var(--text-secondary);
+}
+
+.context-event.failed summary span {
+  color: var(--danger-text);
+}
+
+.context-event p,
+.context-event pre {
+  margin: 8px 0 0 18px;
+}
+
+.context-event pre {
+  max-height: 280px;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+  font: inherit;
+}
+
 .activity-spinner {
   width: 7px;
   height: 7px;

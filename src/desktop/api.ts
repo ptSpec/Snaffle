@@ -3,6 +3,9 @@ import type { OpenRouterModel } from "../providers/openrouter.js";
 import type { CommandApprovalDecision, Message, RunEvent } from "../protocol.js";
 import type { FontId } from "./typography.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js";
+import type { CompactionMode } from "../context/budget.js";
+import type { ContextCheckpoint } from "../context/projection.js";
+import type { ContextReport } from "../context/report.js";
 
 export type GitFileChange = {
   path: string;
@@ -90,6 +93,7 @@ export type DesktopState = {
   workspaces: DesktopWorkspace[];
   activeThreadId: string | null;
   conversation: DesktopEntry[];
+  contextCheckpoints: ContextCheckpoint[];
   savedMessages: SavedMessageSummary[];
   openRouterAvailable: boolean;
   ketchAvailable: boolean;
@@ -115,12 +119,15 @@ export type DesktopState = {
   maxSteps: number;
   providerTimeoutMinutes: number;
   providerRetries: number;
+  compactionMode: CompactionMode;
+  compactionThreshold: number;
 };
 
 export type StartRunInput = {
   threadId: string;
   task: string;
   model: string;
+  contextLength: number;
   attachments?: AttachmentRef[];
 };
 
@@ -137,6 +144,7 @@ export interface DesktopApi {
   createThread(workspaceId: string): Promise<DesktopState>;
   selectThread(threadId: string): Promise<DesktopState>;
   setThreadDraft(threadId: string, draft: string): Promise<void>;
+  restoreThread(threadId: string, sequence: number): Promise<DesktopState>;
   setThreadBookmarked(threadId: string, bookmarked: boolean): Promise<DesktopState>;
   deleteThreads(threadIds: string[]): Promise<DesktopState>;
   removeWorkspace(workspaceId: string): Promise<DesktopState>;
@@ -164,6 +172,9 @@ export interface DesktopApi {
   setMaxSteps(maxSteps: number): Promise<void>;
   setProviderTimeoutMinutes(minutes: number): Promise<void>;
   setProviderRetries(retries: number): Promise<void>;
+  setCompaction(mode: CompactionMode, threshold: number): Promise<void>;
+  getContextReport(threadId: string, contextLength: number): Promise<ContextReport>;
+  compactContext(threadId: string, model: string, contextLength: number): Promise<void>;
   setWebSearchEnabled(enabled: boolean): Promise<void>;
   setWebSearchBackend(backend: WebSearchBackend): Promise<DesktopState>;
   setWebSearchApiKey(backend: KetchSearchBackend, apiKey: string): Promise<DesktopState>;

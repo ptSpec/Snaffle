@@ -216,6 +216,28 @@ test("tool input healer accepts one edit without an array", () => {
   assert.equal(healed.inputRepair, '"edits" was one object; wrapped it in an array');
 });
 
+test("tool input healer parses stringified array properties", () => {
+  const healed = healToolCall(
+    {
+      id: "call-1",
+      name: "edit_file",
+      input: {
+        path: "src/app.ts",
+        edits: JSON.stringify([
+          { oldText: "const port = 3000;", newText: "const port = 4000;" },
+        ]),
+      },
+    },
+    editTool.inputSchema,
+  );
+
+  assert.deepEqual(healed.input, {
+    path: "src/app.ts",
+    edits: [{ oldText: "const port = 3000;", newText: "const port = 4000;" }],
+  });
+  assert.equal(healed.inputRepair, '"edits" was array JSON sent as a string; parsed it');
+});
+
 test("edit rejects ambiguous and overlapping exact matches", async (t) => {
   const { root, workspace } = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));

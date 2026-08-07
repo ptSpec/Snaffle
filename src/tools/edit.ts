@@ -4,6 +4,8 @@ export const editTool: Tool = {
   name: "edit_file",
   description:
     "Apply one or more exact-text replacements to one file. Each oldText must match exactly once in the original file, including whitespace. Multiple edits must identify distinct, non-overlapping regions of that original file. Reuse current text already known from a successful read, write, or edit; reread only when the text is unknown or a match fails.",
+  inputErrorHint:
+    "This failure concerns the edit_file input shape, not the editing strategy. Prefer correcting and retrying edit_file with the working shape below; rewriting an existing file with write_file usually uses more tokens and may overwrite unrelated changes.",
   exampleInput: {
     path: "src/app.ts",
     edits: [
