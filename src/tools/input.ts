@@ -51,16 +51,64 @@ function parseStringifiedProperties(
   for (const [name, definition] of Object.entries(schema.properties)) {
     if (!isObject(definition) || typeof input[name] !== "string") continue;
     if (definition.type !== "array" && definition.type !== "object") continue;
+    const parsed = parseStructuredString(input[name]);
+    const matches = definition.type === "array" ? Array.isArray(parsed.value) : isObject(parsed.value);
+    if (!matches) continue;
+    if (result === input) result = { ...input };
+    result[name] = parsed.value;
+    repairs.push(
+      `"${name}" was ${definition.type} JSON sent as a string` +
+      `${parsed.repaired ? " with unescaped control characters; repaired and" : ";"} parsed it`,
+    );
+  }
+
+  return result;
+}
+
+function parseStructuredString(input: string): { value: unknown; repaired: boolean } {
+  try {
+    return { value: JSON.parse(input), repaired: false };
+  } catch {
     try {
-      const parsed: unknown = JSON.parse(input[name]);
-      const matches = definition.type === "array" ? Array.isArray(parsed) : isObject(parsed);
-      if (!matches) continue;
-      if (result === input) result = { ...input };
-      result[name] = parsed;
-      repairs.push(`"${name}" was ${definition.type} JSON sent as a string; parsed it`);
+      return { value: JSON.parse(escapeJsonControls(input)), repaired: true };
     } catch {
-      // Leave invalid strings for normal tool validation and its useful error.
+      return { value: undefined, repaired: false };
     }
+  }
+}
+
+function escapeJsonControls(input: string): string {
+  let result = "";
+  let quoted = false;
+  let escaped = false;
+
+  for (const character of input) {
+    if (!quoted) {
+      if (character === '"') quoted = true;
+      result += character;
+      continue;
+    }
+    if (escaped) {
+      escaped = false;
+      result += character;
+      continue;
+    }
+    if (character === "\\") {
+      escaped = true;
+      result += character;
+      continue;
+    }
+    if (character === '"') {
+      quoted = false;
+      result += character;
+      continue;
+    }
+    if (character === "\n") result += "\\n";
+    else if (character === "\r") result += "\\r";
+    else if (character === "\t") result += "\\t";
+    else if (character.charCodeAt(0) < 32) {
+      result += `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`;
+    } else result += character;
   }
 
   return result;

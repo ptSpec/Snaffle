@@ -310,6 +310,29 @@ test("tool input healer parses stringified array properties", () => {
   assert.equal(healed.inputRepair, '"edits" was array JSON sent as a string; parsed it');
 });
 
+test("tool input healer repairs raw newlines in stringified arrays", () => {
+  const healed = healToolCall(
+    {
+      id: "call-1",
+      name: "edit_file",
+      input: {
+        path: "src/app.ts",
+        edits: '[{"oldText":"first\nsecond","newText":"changed\ntext"}]',
+      },
+    },
+    editTool.inputSchema,
+  );
+
+  assert.deepEqual(healed.input, {
+    path: "src/app.ts",
+    edits: [{ oldText: "first\nsecond", newText: "changed\ntext" }],
+  });
+  assert.equal(
+    healed.inputRepair,
+    '"edits" was array JSON sent as a string with unescaped control characters; repaired and parsed it',
+  );
+});
+
 test("edit rejects ambiguous and overlapping exact matches", async (t) => {
   const { root, workspace } = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));
