@@ -1,4 +1,4 @@
-import { PRODUCT } from "../../../../identity.js";
+import { PROJECT } from "../../../../identity.js";
 import { THEMES } from "../../../themes/index.js";
 import type { FontId } from "../../../typography.js";
 import type { SettingsPage } from "../../sections/sidebar/sidebar.js";
@@ -145,7 +145,7 @@ export function Settings({
       <div className="settings-content">
         <p className="eyebrow">Settings</p>
         <h1>Appearance</h1>
-        <p className="settings-description">Choose how {PRODUCT.name} looks.</p>
+        <p className="settings-description">Choose how {PROJECT.name} looks.</p>
 
         <div className="theme-list">
           {THEMES.map((theme) => (

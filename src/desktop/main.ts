@@ -13,7 +13,7 @@ import {
 } from "../context/budget.js";
 import { ContextCompactor } from "../context/compaction.js";
 import { buildContextReport, type ContextReport } from "../context/report.js";
-import { PRODUCT } from "../identity.js";
+import { PROJECT } from "../identity.js";
 import { OpenRouterProvider, listOpenRouterModels } from "../providers/openrouter.js";
 import {
   DEFAULT_PROVIDER_RETRIES,
@@ -120,7 +120,7 @@ async function start(): Promise<void> {
     storedWebSearchApiKeys.tavily = oldTavilyKey;
     saveWebSearchApiKeys();
   }
-  store = await openStore(path.join(app.getPath("userData"), `${PRODUCT.slug}.db`));
+  store = await openStore(path.join(app.getPath("userData"), `${PROJECT.slug}.db`));
   contextCompactor = new ContextCompactor({
     repository: store.context,
     settings: () => ({ mode: compactionMode, threshold: customCompactionThreshold }),

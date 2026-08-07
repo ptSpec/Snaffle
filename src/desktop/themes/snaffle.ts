@@ -1,4 +1,4 @@
-import { PRODUCT } from "../../identity.js";
+import { PROJECT } from "../../identity.js";
 import type { Theme } from "./contract.js";
 import { darkTheme } from "./dark.js";
 
@@ -6,8 +6,8 @@ const SNAFFLE_YELLOW = "#feff00";
 
 export const snaffleTheme = {
   ...darkTheme,
-  id: PRODUCT.slug,
-  name: PRODUCT.name,
+  id: PROJECT.slug,
+  name: PROJECT.name,
   accented: true,
   colors: {
     ...darkTheme.colors,
