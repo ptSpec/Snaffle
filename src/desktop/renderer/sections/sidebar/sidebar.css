@@ -307,8 +307,18 @@
   flex-basis: 29px;
   width: 29px;
   height: 29px;
-  color: var(--text-secondary);
+  color: var(--text-strong);
   opacity: 1;
+}
+
+.workspace-row.active .workspace-item {
+  color: var(--text-strong);
+}
+
+html[data-accented-theme="true"] .workspace-row.active .workspace-item,
+html[data-accented-theme="true"] .workspace-row.active .thread-action,
+html[data-accented-theme="true"] .workspace-row.active .workspace-icon {
+  color: var(--primary);
 }
 
 .workspace-row.active .thread-action svg {
@@ -693,6 +703,15 @@ html[data-accented-theme="true"] .thread-row.active .thread-fork-marker {
 .thread-selection-actions button:hover {
   color: var(--text-primary);
   background: var(--hover-background);
+}
+
+.thread-selection-actions .workspace-delete-action {
+  margin-right: auto;
+  color: var(--danger);
+}
+
+.thread-selection-actions .workspace-delete-action:hover {
+  color: var(--danger);
 }
 
 .inactive-workspaces {
