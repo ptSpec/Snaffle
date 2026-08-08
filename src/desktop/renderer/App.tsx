@@ -360,7 +360,7 @@ export function App(): JSX.Element {
         if (state.activeThreadId) threadTimelines.current.set(state.activeThreadId, initialTimeline);
         setTimeline(initialTimeline);
         setTask(activeDraft(state));
-        setSelectedModel(state.defaultModel ?? "");
+        setSelectedModel(activeModel(state));
         if (state.openRouterAvailable) void loadModels();
       })
       .catch((cause: unknown) => setError(errorMessage(cause)));
@@ -381,6 +381,7 @@ export function App(): JSX.Element {
     () => findTimelineItem(timeline, selectedItemId),
     [selectedItemId, timeline],
   );
+  const previousAssistantModels = useMemo(() => modelTransitions(timeline), [timeline]);
   const visibleLeftWidth = leftCollapsed ? 0 : leftWidth;
   const visibleRightWidth = view !== "conversation" || rightCollapsed ? 0 : rightWidth;
   const activeContextAttachments = useMemo(() => {
@@ -782,6 +783,7 @@ export function App(): JSX.Element {
       threadTimelines.current.set(state.activeThreadId, nextTimeline);
     }
     setTimeline(nextTimeline);
+    setSelectedModel(activeModel(state));
     setSelectedItemId(null);
     setTask(activeDraft(state));
     setPendingAttachments(
@@ -977,7 +979,9 @@ export function App(): JSX.Element {
 
   function selectModel(model: string): void {
     setSelectedModel(model);
-    void window.desktop.setSelectedModel(model).catch((cause) => setError(errorMessage(cause)));
+    const threadId = desktopState.activeThreadId;
+    setDesktopState((state) => setStateModel(state, threadId, model));
+    void window.desktop.setSelectedModel(threadId, model).catch((cause) => setError(errorMessage(cause)));
   }
 
   async function setTypography(interfaceFont: FontId, primaryFont: FontId, secondaryFont: FontId, codeFont: FontId): Promise<void> {
@@ -1219,6 +1223,7 @@ export function App(): JSX.Element {
               <TimelineEntry
                 key={item.id}
                 item={item}
+                previousModel={previousAssistantModels.get(item.id)}
                 selectedId={selectedItemId}
                 onSelect={(id) => {
                   setSelectedItemId(id);
@@ -1430,6 +1435,38 @@ function errorMessage(cause: unknown): string {
 
 function activeDraft(state: DesktopState): string {
   return state.workspace?.threads.find((thread) => thread.id === state.activeThreadId)?.draft ?? "";
+}
+
+function activeModel(state: DesktopState): string {
+  return state.workspace?.threads.find((thread) => thread.id === state.activeThreadId)?.model
+    ?? state.defaultModel
+    ?? "";
+}
+
+function setStateModel(state: DesktopState, threadId: string | null, model: string): DesktopState {
+  const updateWorkspace = (workspace: DesktopState["workspace"]): DesktopState["workspace"] => workspace
+    ? {
+        ...workspace,
+        threads: workspace.threads.map((thread) => thread.id === threadId ? { ...thread, model } : thread),
+      }
+    : null;
+  return {
+    ...state,
+    defaultModel: model,
+    workspace: updateWorkspace(state.workspace),
+    workspaces: state.workspaces.map((workspace) => updateWorkspace(workspace)!),
+  };
+}
+
+function modelTransitions(items: TimelineItem[]): Map<string, string> {
+  const transitions = new Map<string, string>();
+  let previous: string | undefined;
+  for (const item of items) {
+    if (item.kind !== "assistant" || item.intermediate || item.streaming || !item.model) continue;
+    if (previous && previous !== item.model) transitions.set(item.id, previous);
+    previous = item.model;
+  }
+  return transitions;
 }
 
 function withoutConversation(state: DesktopState): DesktopState {

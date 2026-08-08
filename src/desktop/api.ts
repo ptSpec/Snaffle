@@ -15,6 +15,7 @@ export type DesktopThread = {
   workspaceId: string;
   title: string;
   draft: string;
+  model: string | null;
   bookmarked: boolean;
   sourceThreadId: string | null;
   sourceEntryId: string | null;
@@ -139,7 +140,7 @@ export interface DesktopApi {
   removeWorkspace(workspaceId: string): Promise<DesktopState>;
   searchConversations(query: string): Promise<DesktopSearchResult[]>;
   listOpenRouterModels(): Promise<OpenRouterModel[]>;
-  setSelectedModel(model: string): Promise<void>;
+  setSelectedModel(threadId: string | null, model: string): Promise<void>;
   chooseAttachments(): Promise<AttachmentPreview[]>;
   importDroppedFiles(files: File[]): Promise<AttachmentPreview[]>;
   importClipboardImage(): Promise<AttachmentPreview>;

@@ -46,6 +46,7 @@ export class DesktopStore {
           workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
           title TEXT NOT NULL,
           draft TEXT NOT NULL DEFAULT '',
+          model TEXT,
           bookmarked INTEGER NOT NULL DEFAULT 0,
           source_thread_id TEXT,
           source_entry_id TEXT,
@@ -98,6 +99,9 @@ export class DesktopStore {
     if (!threadColumns.has("draft")) {
       await this.database.execute("ALTER TABLE threads ADD COLUMN draft TEXT NOT NULL DEFAULT ''");
     }
+    if (!threadColumns.has("model")) {
+      await this.database.execute("ALTER TABLE threads ADD COLUMN model TEXT");
+    }
     if (!threadColumns.has("source_thread_id")) {
       await this.database.execute("ALTER TABLE threads ADD COLUMN source_thread_id TEXT");
     }
@@ -147,7 +151,7 @@ export class DesktopStore {
     };
   }
 
-  async addWorkspace(workspacePath: string, name: string): Promise<void> {
+  async addWorkspace(workspacePath: string, name: string, model?: string): Promise<void> {
     const existing = await this.database.execute({
       sql: "SELECT id FROM workspaces WHERE path = ?",
       args: [workspacePath],
@@ -163,17 +167,17 @@ export class DesktopStore {
       });
     }
 
-    const threadId = await this.ensureThread(workspaceId);
+    const threadId = await this.ensureThread(workspaceId, model);
     await this.setActive(workspaceId, threadId);
   }
 
-  async selectWorkspace(workspaceId: string): Promise<void> {
+  async selectWorkspace(workspaceId: string, model?: string): Promise<void> {
     await this.requireWorkspace(workspaceId);
-    const threadId = await this.ensureThread(workspaceId);
+    const threadId = await this.ensureThread(workspaceId, model);
     await this.setActive(workspaceId, threadId);
   }
 
-  async createThread(workspaceId: string): Promise<void> {
+  async createThread(workspaceId: string, model?: string): Promise<void> {
     await this.requireWorkspace(workspaceId);
     const count = await this.database.execute({
       sql: "SELECT COUNT(*) AS count FROM threads WHERE workspace_id = ?",
@@ -183,16 +187,16 @@ export class DesktopStore {
     const now = Date.now();
     const number = rowNumber(count.rows[0], "count") + 1;
     await this.database.execute({
-      sql: `INSERT INTO threads(id, workspace_id, title, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?)`,
-      args: [threadId, workspaceId, `Thread ${number}`, now, now],
+      sql: `INSERT INTO threads(id, workspace_id, title, model, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [threadId, workspaceId, `Thread ${number}`, model ?? null, now, now],
     });
     await this.setActive(workspaceId, threadId);
   }
 
-  async forkThread(sourceThreadId: string, throughSequence: number, branchLabel?: string): Promise<void> {
+  async forkThread(sourceThreadId: string, throughSequence: number, branchLabel?: string, fallbackModel?: string): Promise<void> {
     const source = await this.database.execute({
-      sql: `SELECT t.workspace_id, t.title, e.id AS source_entry_id
+      sql: `SELECT t.workspace_id, t.title, t.model, e.id AS source_entry_id
         FROM threads t
         JOIN entries e ON e.thread_id = t.id
         WHERE t.id = ? AND e.sequence = ? AND e.role IN ('user', 'assistant')`,
@@ -215,13 +219,14 @@ export class DesktopStore {
       [
         {
           sql: `INSERT INTO threads(
-              id, workspace_id, title, source_thread_id, source_entry_id, branch_label,
+              id, workspace_id, title, model, source_thread_id, source_entry_id, branch_label,
               created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           args: [
             threadId,
             workspaceId,
             title,
+            rowOptionalText(sourceRow, "model") ?? fallbackModel ?? null,
             sourceThreadId,
             rowText(sourceRow, "source_entry_id"),
             label,
@@ -270,6 +275,14 @@ export class DesktopStore {
     const result = await this.database.execute({
       sql: "UPDATE threads SET draft = ? WHERE id = ?",
       args: [draft, threadId],
+    });
+    if (result.rowsAffected === 0) throw new Error("Thread no longer exists");
+  }
+
+  async setThreadModel(threadId: string, model: string): Promise<void> {
+    const result = await this.database.execute({
+      sql: "UPDATE threads SET model = ? WHERE id = ?",
+      args: [model, threadId],
     });
     if (result.rowsAffected === 0) throw new Error("Thread no longer exists");
   }
@@ -506,7 +519,7 @@ export class DesktopStore {
     this.database.close();
   }
 
-  private async ensureThread(workspaceId: string): Promise<string> {
+  private async ensureThread(workspaceId: string, model?: string): Promise<string> {
     const existing = await this.database.execute({
       sql: "SELECT id FROM threads WHERE workspace_id = ? ORDER BY updated_at DESC LIMIT 1",
       args: [workspaceId],
@@ -516,9 +529,9 @@ export class DesktopStore {
     const threadId = randomUUID();
     const now = Date.now();
     await this.database.execute({
-      sql: `INSERT INTO threads(id, workspace_id, title, created_at, updated_at)
-        VALUES (?, ?, 'Thread 1', ?, ?)`,
-      args: [threadId, workspaceId, now, now],
+      sql: `INSERT INTO threads(id, workspace_id, title, model, created_at, updated_at)
+        VALUES (?, ?, 'Thread 1', ?, ?, ?)`,
+      args: [threadId, workspaceId, model ?? null, now, now],
     });
     return threadId;
   }
@@ -560,6 +573,7 @@ function threadFromRow(row: Row): DesktopThread {
     workspaceId: rowText(row, "workspace_id"),
     title: rowText(row, "title"),
     draft: rowText(row, "draft"),
+    model: rowOptionalText(row, "model"),
     bookmarked: rowNumber(row, "bookmarked") === 1,
     sourceThreadId: rowOptionalText(row, "source_thread_id"),
     sourceEntryId: rowOptionalText(row, "source_entry_id"),

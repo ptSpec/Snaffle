@@ -6,9 +6,9 @@ export const snaffleSunsetTheme = {
   appearance: "light",
   accented: true,
   colors: {
-    background: "#ddedfd",
-    panel: "#ecdfe4",
-    surface: "#ecdfe4",
+    background: "#e5f1fc",
+    panel: "#e9d9e6",
+    surface: "#e9d9e6",
     border: "#b8accd",
     text: "#2d2638",
     "muted-text": "#71657d",

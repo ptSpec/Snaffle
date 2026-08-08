@@ -59,6 +59,14 @@
   padding-bottom: 3px;
 }
 
+.model-change-marker {
+  align-self: center;
+  margin: 2px 0 8px;
+  color: var(--text-muted);
+  font-family: var(--font-secondary);
+  font-size: calc(12px * var(--conversation-font-scale));
+}
+
 .markdown-content .source-reference {
   display: inline-flex;
   align-items: center;

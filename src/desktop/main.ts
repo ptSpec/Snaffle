@@ -191,6 +191,7 @@ function registerIpc(): void {
     runningThread: runs.isThreadRunning,
     runningWorkspace: runs.isWorkspaceRunning,
     threadsDeleted: runs.forgetThreads,
+    defaultModel: () => selectedModel,
   });
   registerSavedMessageIpc(store, desktopState);
   registerSearchIpc(store);
@@ -290,8 +291,12 @@ function registerIpc(): void {
     saveSettings({ codeBlockFontSize });
   });
 
-  ipcMain.handle("desktop:set-selected-model", (_event, value: unknown): void => {
+  ipcMain.handle("desktop:set-selected-model", async (_event, threadId: unknown, value: unknown): Promise<void> => {
+    if (threadId !== null && (typeof threadId !== "string" || !threadId)) {
+      throw new Error("Thread ID must be text");
+    }
     if (typeof value !== "string") throw new Error("Model must be text");
+    if (threadId) await store.setThreadModel(threadId, value);
     selectedModel = value;
     saveSettings({ selectedModel });
   });

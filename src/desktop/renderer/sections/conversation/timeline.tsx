@@ -12,6 +12,7 @@ import {
 
 export function TimelineEntry({
   item,
+  previousModel,
   selectedId,
   onSelect,
   onEditUser,
@@ -23,6 +24,7 @@ export function TimelineEntry({
   onFork,
 }: {
   item: TimelineItem;
+  previousModel?: string | undefined;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onEditUser?: (text: string) => void;
@@ -93,29 +95,34 @@ export function TimelineEntry({
 
   if (item.kind === "assistant") {
     return (
-      <article
-        className={item.intermediate ? "message assistant intermediate" : "message assistant"}
-        {...(item.entryId ? { "data-entry-id": item.entryId } : {})}
-      >
-        <div className={item.streaming ? "markdown-content streaming" : "markdown-content"}>
-          {item.streaming ? (
-            <>{item.text}<span className="streaming-cursor" aria-hidden="true" /></>
-          ) : (
-            <MarkdownContent text={item.text} {...(item.sources ? { sources: item.sources } : {})} />
-          )}
-        </div>
-        {!item.streaming && !item.intermediate ? (
-          <MessageFooter
-            text={item.text}
-            metadata={modelMetadata(item)}
-            saved={Boolean(savedId)}
-            {...(onFork && item.sequence !== undefined
-              ? { onFork: () => onFork(item.sequence!) }
-              : {})}
-            {...(onToggleSaved ? { onSave: () => onToggleSaved(item, savedId) } : {})}
-          />
+      <>
+        {previousModel && item.model && previousModel !== item.model ? (
+          <div className="model-change-marker">Model changed · {item.model}</div>
         ) : null}
-      </article>
+        <article
+          className={item.intermediate ? "message assistant intermediate" : "message assistant"}
+          {...(item.entryId ? { "data-entry-id": item.entryId } : {})}
+        >
+          <div className={item.streaming ? "markdown-content streaming" : "markdown-content"}>
+            {item.streaming ? (
+              <>{item.text}<span className="streaming-cursor" aria-hidden="true" /></>
+            ) : (
+              <MarkdownContent text={item.text} {...(item.sources ? { sources: item.sources } : {})} />
+            )}
+          </div>
+          {!item.streaming && !item.intermediate ? (
+            <MessageFooter
+              text={item.text}
+              metadata={modelMetadata(item)}
+              saved={Boolean(savedId)}
+              {...(onFork && item.sequence !== undefined
+                ? { onFork: () => onFork(item.sequence!) }
+                : {})}
+              {...(onToggleSaved ? { onSave: () => onToggleSaved(item, savedId) } : {})}
+            />
+          ) : null}
+        </article>
+      </>
     );
   }
 

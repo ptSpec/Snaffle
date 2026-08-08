@@ -125,19 +125,19 @@
 
 .composer-add {
   position: relative;
-  flex: 0 0 30px;
+  flex: 0 0 32px;
 }
 
 .composer-add > summary {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   color: var(--text-muted);
   background: transparent;
-  border: 0;
-  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--border-default) 70%, transparent);
+  border-radius: 999px;
   font-size: 19px;
   cursor: pointer;
   list-style: none;
@@ -159,25 +159,29 @@
   bottom: 35px;
   z-index: 8;
   display: grid;
-  width: 190px;
+  width: max-content;
+  min-width: 230px;
   padding: 5px;
   background: var(--card-background);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: 14px;
   box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
 }
 
 .composer-add-menu button {
-  padding: 7px 9px;
+  min-height: 32px;
+  padding: 6px 12px;
   color: var(--text-primary);
   background: transparent;
-  border: 0;
-  border-radius: 5px;
+  border: 1px solid transparent;
+  border-radius: 999px;
   text-align: left;
+  white-space: nowrap;
 }
 
 .composer-add-menu button:hover {
   background: var(--hover-background);
+  border-color: var(--border-default);
 }
 
 .message-attachments {

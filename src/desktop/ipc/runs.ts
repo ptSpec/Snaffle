@@ -105,6 +105,7 @@ export function registerRunIpc(options: {
 
     const apiKey = options.apiKey();
     const settings = options.settings();
+    await options.store.setThreadModel(input.threadId, input.model);
     const controller = new AbortController();
     const threadId = input.threadId;
     const workspace = new LocalWorkspace(
