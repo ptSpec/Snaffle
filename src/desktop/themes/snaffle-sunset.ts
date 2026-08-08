@@ -1,0 +1,30 @@
+import type { Theme } from "./contract.js";
+
+export const snaffleSunsetTheme = {
+  id: "snaffle-sunset",
+  name: "Snaffle Sunset",
+  appearance: "light",
+  accented: true,
+  colors: {
+    background: "#ddedfd",
+    panel: "#ecdfe4",
+    surface: "#ecdfe4",
+    border: "#b8accd",
+    text: "#2d2638",
+    "muted-text": "#71657d",
+    primary: "#a13f64",
+    "primary-text": "#ffffff",
+    brand: "#f0a36a",
+    "brand-detail": "#2d2638",
+    success: "#277a5a",
+    warning: "#94621e",
+    danger: "#c34f64",
+    "code-background": "#ddedfd",
+    "code-text": "#29263a",
+    "code-comment": "#6d7392",
+    "code-keyword": "#8c3fa8",
+    "code-string": "#26705d",
+    "code-number": "#5367b8",
+    "code-type": "#5d4ac3",
+  },
+} satisfies Theme;

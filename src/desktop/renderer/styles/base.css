@@ -9,9 +9,20 @@
 
   /* Component roles derived from the small public theme palette. */
   --app-background: var(--background);
-  --sidebar-background: color-mix(in srgb, var(--panel) 92%, transparent);
+  --panel-surface-gradient: radial-gradient(
+    ellipse at top right,
+    color-mix(in srgb, var(--background) 42%, var(--panel)) 0%,
+    var(--panel) 60%
+  );
+  --input-surface-gradient: radial-gradient(
+    ellipse at top right,
+    color-mix(in srgb, var(--background) 42%, var(--surface)) 0%,
+    var(--surface) 60%
+  );
+  --sidebar-background: var(--panel-surface-gradient);
   --inspector-background: var(--panel);
   --composer-background: var(--surface);
+  --input-background: var(--input-surface-gradient);
   --card-background: var(--panel);
   --hover-background: color-mix(in srgb, var(--text) 7%, var(--surface));
   --selected-background: color-mix(in srgb, var(--primary) 6%, var(--panel));
@@ -48,7 +59,7 @@
   --syntax-function: var(--primary);
   --syntax-type: var(--code-type);
   --syntax-operator: var(--code-text);
-  --code-block-background: color-mix(in srgb, var(--code-text) 7%, var(--code-background));
+  --code-block-background: var(--code-background);
   --editor-selection-background: var(--primary);
   --editor-cursor: var(--code-text);
   --diff-added-text: var(--success);
@@ -67,6 +78,32 @@
 
 html[data-appearance="dark"] {
   --pane-depth-shadow: rgb(0 0 0 / 0.46);
+}
+
+html[data-theme="snaffle-sunset"] {
+  --panel-surface-gradient: radial-gradient(
+    ellipse at top right,
+    color-mix(in srgb, var(--background) 52%, var(--panel)) 0%,
+    var(--panel) 60%
+  );
+  --input-surface-gradient: radial-gradient(
+    ellipse at top right,
+    color-mix(in srgb, var(--background) 52%, var(--surface)) 0%,
+    var(--surface) 60%
+  );
+}
+
+html[data-theme="morning-brew"] {
+  --panel-surface-gradient: radial-gradient(
+    ellipse at top right,
+    color-mix(in srgb, var(--background) 42%, #fffdee) 0%,
+    var(--panel) 60%
+  );
+  --input-surface-gradient: radial-gradient(
+    ellipse at top right,
+    color-mix(in srgb, var(--background) 42%, #fffdee) 0%,
+    var(--surface) 60%
+  );
 }
 
 * {
