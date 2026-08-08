@@ -418,7 +418,6 @@ export function Sidebar({
                         setSelecting((value) => !value);
                         setSelectedIds([]);
                       }}
-                      disabled={state.workspace.threads.length === 0}
                       aria-label="Manage threads"
                       aria-pressed={selecting}
                       title="Manage threads"
@@ -426,16 +425,6 @@ export function Sidebar({
                       <PencilIcon />
                     </button>
                   </span>
-                  <button
-                    className="row-action"
-                    type="button"
-                    onClick={() => void removeWorkspace(state.workspace!.id, state.workspace!.name)}
-                    disabled={state.workspace.threads.some((thread) => isRunning(thread.id))}
-                    aria-label={`Remove ${state.workspace.name}`}
-                    title={`Remove workspace from ${PROJECT.name}`}
-                  >
-                    ×
-                  </button>
                 </div>
                 <div
                   ref={threadList}
@@ -478,6 +467,16 @@ export function Sidebar({
                     {selecting ? (
                       <div className="thread-selection-actions">
                         <button
+                          className="workspace-delete-action"
+                          type="button"
+                          disabled={state.workspace.threads.some((thread) => isRunning(thread.id))}
+                          onClick={() =>
+                            void removeWorkspace(state.workspace!.id, state.workspace!.name)
+                          }
+                        >
+                          Delete workspace
+                        </button>
+                        <button
                           type="button"
                           onClick={() => {
                             setSelecting(false);
@@ -513,16 +512,6 @@ export function Sidebar({
                         >
                           <WorkspaceIcon />
                           <span>{workspace.name}</span>
-                        </button>
-                        <button
-                          className="row-action"
-                          type="button"
-                          onClick={() => void removeWorkspace(workspace.id, workspace.name)}
-                          disabled={workspace.threads.some((thread) => isRunning(thread.id))}
-                          aria-label={`Remove ${workspace.name}`}
-                          title={`Remove workspace from ${PROJECT.name}`}
-                        >
-                          ×
                         </button>
                       </div>
                     ))}
