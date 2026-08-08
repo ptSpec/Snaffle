@@ -140,6 +140,8 @@ export function Settings({
     );
   }
 
+  const selectedTheme = THEMES.find((theme) => theme.id === themeId) ?? THEMES[0]!;
+
   return (
     <section className="settings view-enter" aria-label="Settings">
       <div className="settings-content">
@@ -147,28 +149,35 @@ export function Settings({
         <h1>Appearance</h1>
         <p className="settings-description">Choose how {PROJECT.name} looks.</p>
 
-        <div className="theme-list">
-          {THEMES.map((theme) => (
+        <details className="theme-picker">
+          <summary className="theme-option selected">
+            <ThemePreview theme={selectedTheme} />
+            <span>{selectedTheme.name}</span>
+            <svg className="theme-picker-caret" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="m4 6 4 4 4-4" />
+            </svg>
+          </summary>
+          <div className="theme-list">
+            {THEMES.map((theme) => (
             <button
               className={theme.id === themeId ? "theme-option selected" : "theme-option"}
               type="button"
               key={theme.id}
-              onClick={() => onSelectTheme(theme.id)}
+              onClick={(event) => {
+                onSelectTheme(theme.id);
+                event.currentTarget.closest("details")?.removeAttribute("open");
+              }}
               aria-pressed={theme.id === themeId}
             >
-              <span className="theme-preview" aria-hidden="true">
-                <span style={{ background: theme.colors.panel }} />
-                <span style={{ background: theme.colors.background }} />
-                <span style={{ background: theme.colors.surface }} />
-                <span style={{ background: theme.colors.primary }} />
-              </span>
+              <ThemePreview theme={theme} />
               <span>{theme.name}</span>
               <span className="theme-check" aria-hidden="true">
                 {theme.id === themeId ? "✓" : ""}
               </span>
             </button>
-          ))}
-        </div>
+            ))}
+          </div>
+        </details>
 
         <div className="typography-settings">
           <section className="typography-card">
@@ -235,5 +244,16 @@ export function Settings({
         {error ? <p className="settings-error">{error}</p> : null}
       </div>
     </section>
+  );
+}
+
+function ThemePreview({ theme }: { theme: (typeof THEMES)[number] }): JSX.Element {
+  return (
+    <span className="theme-preview" aria-hidden="true">
+      <span style={{ background: theme.colors.panel }} />
+      <span style={{ background: theme.colors.background }} />
+      <span style={{ background: theme.colors.surface }} />
+      <span style={{ background: theme.colors.primary }} />
+    </span>
   );
 }

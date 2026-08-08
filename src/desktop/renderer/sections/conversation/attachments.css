@@ -138,9 +138,22 @@
   background: transparent;
   border: 1px solid color-mix(in srgb, var(--border-default) 70%, transparent);
   border-radius: 999px;
-  font-size: 19px;
   cursor: pointer;
   list-style: none;
+}
+
+.composer-add-icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.8;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.composer-add[open] .composer-add-icon {
+  transform: rotate(90deg);
 }
 
 .composer-add > summary::-webkit-details-marker {
@@ -182,6 +195,12 @@
 .composer-add-menu button:hover {
   background: var(--hover-background);
   border-color: var(--border-default);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-add-icon {
+    transition: none;
+  }
 }
 
 .message-attachments {
