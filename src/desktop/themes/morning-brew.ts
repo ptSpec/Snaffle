@@ -1,0 +1,30 @@
+import type { Theme } from "./contract.js";
+
+export const morningBrewTheme = {
+  id: "morning-brew",
+  name: "Snaffle Sun",
+  appearance: "light",
+  accented: true,
+  colors: {
+    background: "#fcffea",
+    panel: "#fffede",
+    surface: "#fffede",
+    border: "#d9d3a7",
+    text: "#30291f",
+    "muted-text": "#746b58",
+    primary: "#806f00",
+    "primary-text": "#fffde7",
+    brand: "#d8c900",
+    "brand-detail": "#30291f",
+    success: "#28643b",
+    warning: "#8a5a00",
+    danger: "#a13d37",
+    "code-background": "#fffee1",
+    "code-text": "#30291f",
+    "code-comment": "#7b725a",
+    "code-keyword": "#a4265b",
+    "code-string": "#147253",
+    "code-number": "#c2412d",
+    "code-type": "#5c4aa5",
+  },
+} satisfies Theme;

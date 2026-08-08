@@ -25,6 +25,8 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:delete-threads", threadIds),
   removeWorkspace: (workspaceId: string) =>
     ipcRenderer.invoke("desktop:remove-workspace", workspaceId),
+  searchConversations: (query: string) =>
+    ipcRenderer.invoke("desktop:search-conversations", query),
   listOpenRouterModels: () => ipcRenderer.invoke("desktop:list-openrouter-models"),
   setSelectedModel: (model: string) => ipcRenderer.invoke("desktop:set-selected-model", model),
   chooseAttachments: () => ipcRenderer.invoke("desktop:choose-attachments"),

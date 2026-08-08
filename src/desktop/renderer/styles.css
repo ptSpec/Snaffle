@@ -7,6 +7,7 @@
 @import "./sections/conversation/attachments.css";
 @import "./screens/settings/settings.css";
 @import "./screens/bookmarks/bookmarks.css";
+@import "./screens/search/search.css";
 @import "./sections/inspector/inspector.css";
 @import "./sections/inspector/panel.css";
 @import "./sections/inspector/json-inspector.css";

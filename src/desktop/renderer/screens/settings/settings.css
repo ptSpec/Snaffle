@@ -152,7 +152,7 @@
   width: 84px;
   padding: 7px 9px;
   color: var(--text-primary);
-  background: var(--composer-background);
+  background: var(--input-background);
   border: 1px solid var(--border-default);
   border-radius: 7px;
   outline: none;

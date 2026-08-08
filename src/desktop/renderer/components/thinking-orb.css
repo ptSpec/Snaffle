@@ -120,6 +120,41 @@ html[data-accented-theme="true"] .thinking-orb {
   --thinking-orb-ambient: color-mix(in srgb, var(--primary) 36%, #a58b99);
 }
 
+html[data-theme="morning-brew"] .thinking-orb {
+  --thinking-orb-deep-blue: #315cce;
+  --thinking-orb-pale-blue: #b6ccff;
+  --thinking-orb-pale-red: #ffc0cd;
+  --thinking-orb-light-blue: #72a3ff;
+  --thinking-orb-light-red: #ff7898;
+  --thinking-orb-yellow-left: #fff200;
+  --thinking-orb-yellow-right: #ffd84d;
+  --thinking-orb-ambient: #d8a7b5;
+  filter:
+    drop-shadow(0 0 5px color-mix(in srgb, #fff200 62%, transparent))
+    drop-shadow(0 1px 3px color-mix(in srgb, #ff7898 35%, transparent));
+}
+
+html[data-theme="morning-brew"] .thinking-orb.preview {
+  filter:
+    drop-shadow(0 0 14px color-mix(in srgb, #fff200 68%, transparent))
+    drop-shadow(0 2px 11px color-mix(in srgb, #ff7898 34%, transparent));
+}
+
+html[data-theme="snaffle-sunset"] .thinking-orb {
+  --thinking-orb-yellow-left: #ff4fa3;
+  --thinking-orb-yellow-right: #ff94c7;
+  --thinking-orb-ambient: #d3a3bd;
+  filter:
+    drop-shadow(0 0 5px color-mix(in srgb, #ff4fa3 58%, transparent))
+    drop-shadow(0 1px 3px color-mix(in srgb, #9d86fc 32%, transparent));
+}
+
+html[data-theme="snaffle-sunset"] .thinking-orb.preview {
+  filter:
+    drop-shadow(0 0 14px color-mix(in srgb, #ff4fa3 64%, transparent))
+    drop-shadow(0 2px 11px color-mix(in srgb, #9d86fc 30%, transparent));
+}
+
 .thinking-orb.stopped:not(.preview) .thinking-orb-flow-a {
   animation: thinking-orb-idle-a 8s ease-in-out infinite;
 }

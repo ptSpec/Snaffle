@@ -121,7 +121,10 @@
   border-radius: 6px;
 }
 
-.sidebar-row:hover,
+.sidebar-row:hover {
+  background: var(--hover-background);
+}
+
 .sidebar-row.active {
   background: var(--composer-background);
 }
@@ -378,7 +381,7 @@
 }
 
 .workspace-navigation .workspace-row:not(.active) {
-  --inverted-corner-fill: var(--composer-background);
+  --inverted-corner-fill: var(--hover-background);
 
   position: relative;
 }
@@ -446,7 +449,11 @@
 }
 
 .workspace-item:hover,
-.thread-item:hover,
+.thread-item:hover {
+  color: var(--text-strong);
+  background: var(--hover-background);
+}
+
 .workspace-item.active,
 .thread-item.active {
   color: var(--text-strong);
@@ -507,7 +514,13 @@
 }
 
 .thread-row {
+  --thread-row-fill: var(--hover-background);
+
   position: relative;
+}
+
+.thread-row.active {
+  --thread-row-fill: var(--composer-background);
 }
 
 .thread-row.focused {
@@ -542,7 +555,7 @@ html[data-accented-theme="true"] .thread-row.active .thread-item {
   background: radial-gradient(
     circle at 0 0,
     transparent 10px,
-    var(--composer-background) 10.5px
+    var(--thread-row-fill) 10.5px
   );
 }
 
@@ -551,7 +564,7 @@ html[data-accented-theme="true"] .thread-row.active .thread-item {
   background: radial-gradient(
     circle at 0 100%,
     transparent 10px,
-    var(--composer-background) 10.5px
+    var(--thread-row-fill) 10.5px
   );
 }
 
@@ -564,7 +577,7 @@ html[data-accented-theme="true"] .thread-row.active .thread-item {
   height: 100%;
   content: "";
   pointer-events: none;
-  background: linear-gradient(to right, transparent, var(--composer-background) 28%);
+  background: linear-gradient(to right, transparent, var(--thread-row-fill) 28%);
   border-radius: 0 6px 6px 0;
 }
 
@@ -578,7 +591,7 @@ html[data-accented-theme="true"] .thread-row.active .thread-item {
   position: absolute;
   z-index: 2;
   top: 50%;
-  background: var(--composer-background);
+  background: var(--thread-row-fill);
   font-size: calc(15px * var(--interface-font-scale));
   transform: translateY(-50%);
 }
@@ -711,6 +724,14 @@ html[data-accented-theme="true"] .thread-row.active .thread-fork-marker {
   height: 16px;
   stroke: currentColor;
   stroke-linejoin: round;
+}
+
+.search-icon {
+  width: 21px;
+  height: 21px;
+  flex-basis: 21px;
+  stroke-linecap: round;
+  stroke-width: 1.9;
 }
 
 .sidebar-settings-icon {
