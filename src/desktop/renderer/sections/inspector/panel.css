@@ -112,7 +112,7 @@
   margin: 6px 0 8px;
   padding: 0;
   color: var(--commit-ink);
-  background: transparent;
+  background: var(--panel);
   border-block: 1px solid var(--border-default);
 }
 
@@ -180,7 +180,7 @@
   min-width: 0;
   padding: 7px 8px;
   color: var(--text-primary);
-  background: var(--surface);
+  background: var(--app-background);
   border: 1px solid var(--border-default);
   border-radius: 7px;
   outline: none;
@@ -212,7 +212,7 @@
   padding: 7px 8px;
   resize: none;
   color: var(--text-primary);
-  background: var(--surface);
+  background: var(--app-background);
   border: 1px solid var(--border-default);
   border-radius: 7px;
   outline: none;
@@ -277,7 +277,7 @@
   margin: 6px 12px 8px;
   padding: 7px 8px;
   color: var(--text-primary);
-  background: var(--composer-background);
+  background: var(--input-background);
   border: 0;
   border-radius: 7px;
   outline: none;
