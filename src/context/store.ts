@@ -18,6 +18,7 @@ export class ContextStore {
           source_characters INTEGER NOT NULL,
           summary_characters INTEGER NOT NULL,
           model TEXT NOT NULL,
+          provider_connection_id TEXT NOT NULL DEFAULT 'openrouter',
           created_at INTEGER NOT NULL,
           applied_at INTEGER,
           injected_characters INTEGER,
@@ -29,6 +30,15 @@ export class ContextStore {
       ],
       "write",
     );
+    const columns = new Set(
+      (await this.database.execute("PRAGMA table_info(context_checkpoints)"))
+        .rows.map((row) => rowText(row, "name")),
+    );
+    if (!columns.has("provider_connection_id")) {
+      await this.database.execute(
+        "ALTER TABLE context_checkpoints ADD COLUMN provider_connection_id TEXT NOT NULL DEFAULT 'openrouter'",
+      );
+    }
   }
 
   async entries(threadId: string, checkpoint: ContextCheckpoint | null): Promise<ContextEntry[]> {
@@ -78,19 +88,21 @@ export class ContextStore {
     summary: string;
     sourceCharacters: number;
     model: string;
+    providerConnectionId: string;
   }): Promise<ContextCheckpoint> {
     const id = randomUUID();
     const createdAt = Date.now();
     await this.database.execute({
       sql: `INSERT INTO context_checkpoints(
           id, thread_id, through_sequence, created_after_sequence, summary,
-          source_characters, summary_characters, model, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          source_characters, summary_characters, model, provider_connection_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(thread_id, through_sequence) DO UPDATE SET
           summary = excluded.summary,
           source_characters = excluded.source_characters,
           summary_characters = excluded.summary_characters,
           model = excluded.model,
+          provider_connection_id = excluded.provider_connection_id,
           created_after_sequence = excluded.created_after_sequence,
           created_at = excluded.created_at`,
       args: [
@@ -102,6 +114,7 @@ export class ContextStore {
         input.sourceCharacters,
         input.summary.length,
         input.model,
+        input.providerConnectionId,
         createdAt,
       ],
     });
@@ -137,6 +150,7 @@ function checkpointFromRow(row: Row): ContextCheckpoint {
     sourceCharacters: rowNumber(row, "source_characters"),
     summaryCharacters: rowNumber(row, "summary_characters"),
     model: rowText(row, "model"),
+    providerConnectionId: rowText(row, "provider_connection_id"),
     createdAt: rowNumber(row, "created_at"),
     appliedAt: rowOptionalNumber(row, "applied_at"),
     injectedCharacters: rowOptionalNumber(row, "injected_characters"),

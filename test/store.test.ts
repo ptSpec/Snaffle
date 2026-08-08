@@ -103,6 +103,7 @@ test("restoring a thread removes the failed turn and newer context checkpoints",
     summary: "First turn completed.",
     sourceCharacters: 50,
     model: "test-model",
+    providerConnectionId: "test",
   });
 
   await store.restoreThread(threadId, 3);
@@ -126,7 +127,7 @@ test("forking a thread copies history through one message and preserves its sour
 
   await store.addWorkspace(root, "example");
   const sourceThreadId = (await store.state()).activeThreadId!;
-  await store.setThreadModel(sourceThreadId, "test/model");
+  await store.setThreadModel(sourceThreadId, "test", "test/model");
   await store.saveMessages(sourceThreadId, [
     { role: "system", content: "system" },
     { role: "user", content: "first" },
@@ -197,6 +198,7 @@ test("context checkpoints preserve the full transcript and project only the tail
     summary: "First turn completed.",
     sourceCharacters: 100,
     model: "test-model",
+    providerConnectionId: "test",
   });
   await store.context.markApplied(checkpoint.id, 60, 4);
 

@@ -27,6 +27,7 @@ const checkpoint: ContextCheckpoint = {
   sourceCharacters: 500,
   summaryCharacters: 53,
   model: "test-model",
+  providerConnectionId: "test",
   createdAt: 1,
   appliedAt: null,
   injectedCharacters: null,

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { CommandApprovalDecision } from "../protocol.js";
+import type { ProviderConnectionInput } from "../providers/provider.js";
 import type { DesktopApi, DesktopRunEvent, GitFileContents, SaveMessageInput, StartRunInput } from "./api.js";
 import type { FontId } from "./typography.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js";
@@ -27,9 +28,12 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:remove-workspace", workspaceId),
   searchConversations: (query: string) =>
     ipcRenderer.invoke("desktop:search-conversations", query),
-  listOpenRouterModels: () => ipcRenderer.invoke("desktop:list-openrouter-models"),
-  setSelectedModel: (threadId: string | null, model: string) =>
-    ipcRenderer.invoke("desktop:set-selected-model", threadId, model),
+  listProviderModels: () => ipcRenderer.invoke("desktop:list-provider-models"),
+  getProviderStatus: (connectionId: string) => ipcRenderer.invoke("desktop:get-provider-status", connectionId),
+  saveProviderConnection: (input: ProviderConnectionInput) => ipcRenderer.invoke("desktop:save-provider-connection", input),
+  removeProviderConnection: (connectionId: string) => ipcRenderer.invoke("desktop:remove-provider-connection", connectionId),
+  setSelectedModel: (threadId: string | null, connectionId: string, model: string) =>
+    ipcRenderer.invoke("desktop:set-selected-model", threadId, connectionId, model),
   chooseAttachments: () => ipcRenderer.invoke("desktop:choose-attachments"),
   importDroppedFiles: (files: File[]) =>
     ipcRenderer.invoke("desktop:import-dropped-files", files.map((file) => webUtils.getPathForFile(file))),
@@ -66,8 +70,8 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:set-compaction", mode, threshold),
   getContextReport: (threadId, contextLength) =>
     ipcRenderer.invoke("desktop:get-context-report", threadId, contextLength),
-  compactContext: (threadId, model, contextLength) =>
-    ipcRenderer.invoke("desktop:compact-context", threadId, model, contextLength),
+  compactContext: (threadId, connectionId, model, contextLength) =>
+    ipcRenderer.invoke("desktop:compact-context", threadId, connectionId, model, contextLength),
   setWebSearchEnabled: (enabled: boolean) =>
     ipcRenderer.invoke("desktop:set-web-search-enabled", enabled),
   setWebSearchBackend: (backend: WebSearchBackend) =>

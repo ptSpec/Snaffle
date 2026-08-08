@@ -2,7 +2,12 @@ import type { AttachmentRef, ResolvedAttachment } from "../attachments/types.js"
 import { PROJECT } from "../identity.js";
 import type { Message, ModelResponse, ToolCall, ToolSpec } from "../protocol.js";
 import { healToolInput } from "../tools/input.js";
-import type { ModelProvider, ModelStreamEvent } from "./provider.js";
+import {
+  DEFAULT_MODEL_CONTEXT_LENGTH,
+  type ModelProvider,
+  type ModelStreamEvent,
+  type ProviderModel,
+} from "./provider.js";
 
 const MAX_STREAM_BUFFER_CHARS = 8 * 1024 * 1024;
 const MAX_STREAM_FIELD_CHARS = 4 * 1024 * 1024;
@@ -12,32 +17,41 @@ export const DEFAULT_PROVIDER_RETRIES = 2;
 export type OpenAICompatibleOptions = {
   baseUrl: string;
   model: string;
+  providerId?: string;
+  connectionId?: string;
   apiKey?: string;
   streamIdleTimeoutMs?: number;
   maxRetries?: number;
   temperature?: number;
   seed?: number;
+  sendParallelToolCalls?: boolean;
   resolveAttachment?: (attachment: AttachmentRef) => Promise<ResolvedAttachment>;
 };
 
 export class OpenAICompatibleProvider implements ModelProvider {
   readonly model: string;
+  readonly providerId: string;
+  readonly connectionId: string;
   private readonly baseUrl: string;
   private readonly apiKey: string | undefined;
   private readonly streamIdleTimeoutMs: number;
   private readonly maxRetries: number;
   private readonly temperature: number | undefined;
   private readonly seed: number | undefined;
+  private readonly sendParallelToolCalls: boolean;
   private readonly resolveAttachment: OpenAICompatibleOptions["resolveAttachment"];
 
   constructor(options: OpenAICompatibleOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
     this.model = options.model;
+    this.providerId = options.providerId ?? "openai-compatible";
+    this.connectionId = options.connectionId ?? this.providerId;
     this.apiKey = options.apiKey;
     this.streamIdleTimeoutMs = options.streamIdleTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
     this.maxRetries = options.maxRetries ?? DEFAULT_PROVIDER_RETRIES;
     this.temperature = options.temperature;
     this.seed = options.seed;
+    this.sendParallelToolCalls = options.sendParallelToolCalls ?? true;
     this.resolveAttachment = options.resolveAttachment;
   }
 
@@ -74,7 +88,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
                 parameters: tool.inputSchema,
               },
             })),
-            parallel_tool_calls: false,
+            ...(this.sendParallelToolCalls ? { parallel_tool_calls: false } : {}),
             stream: true,
             ...(this.temperature === undefined ? {} : { temperature: this.temperature }),
             ...(this.seed === undefined ? {} : { seed: this.seed }),
@@ -115,6 +129,29 @@ export class OpenAICompatibleProvider implements ModelProvider {
 
     throw new Error("Provider retry loop ended unexpectedly");
   }
+}
+
+export async function listOpenAICompatibleModels(
+  baseUrl: string,
+  apiKey?: string,
+  signal?: AbortSignal,
+  defaultContextLength = DEFAULT_MODEL_CONTEXT_LENGTH,
+): Promise<ProviderModel[]> {
+  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/models`, {
+    headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {},
+    ...(signal ? { signal } : {}),
+  });
+  if (!response.ok) throw new Error(`Model request failed (${response.status})`);
+  const body = await response.json() as { data?: Array<{ id?: unknown; name?: unknown; context_length?: unknown }> };
+  if (!Array.isArray(body.data)) throw new Error("The endpoint returned an invalid model list");
+  return body.data.flatMap((model) => typeof model.id === "string" ? [{
+    id: model.id,
+    name: typeof model.name === "string" ? model.name : model.id,
+    contextLength: typeof model.context_length === "number"
+      ? model.context_length
+      : defaultContextLength,
+    inputModalities: ["text"],
+  }] : []);
 }
 
 function requiredBody(response: Response): ReadableStream<Uint8Array> {
@@ -389,6 +426,13 @@ function parseUsage(usage: UsageResponse): NonNullable<ModelResponse["usage"]> {
     ...(usage.prompt_tokens === undefined ? {} : { inputTokens: usage.prompt_tokens }),
     ...(usage.completion_tokens === undefined ? {} : { outputTokens: usage.completion_tokens }),
     ...(usage.total_tokens === undefined ? {} : { totalTokens: usage.total_tokens }),
+    ...(usage.prompt_tokens_details?.cached_tokens === undefined && usage.prompt_cache_hit_tokens === undefined
+      ? {}
+      : { cachedInputTokens: usage.prompt_tokens_details?.cached_tokens ?? usage.prompt_cache_hit_tokens }),
+    ...(usage.completion_tokens_details?.reasoning_tokens === undefined
+      ? {}
+      : { reasoningTokens: usage.completion_tokens_details.reasoning_tokens }),
+    ...(usage.cost === undefined ? {} : { costUsd: usage.cost }),
   };
 }
 
@@ -439,6 +483,10 @@ type UsageResponse = {
   prompt_tokens?: number;
   completion_tokens?: number;
   total_tokens?: number;
+  cost?: number;
+  prompt_tokens_details?: { cached_tokens?: number };
+  prompt_cache_hit_tokens?: number;
+  completion_tokens_details?: { reasoning_tokens?: number };
 };
 
 type OpenAIToolCall = {

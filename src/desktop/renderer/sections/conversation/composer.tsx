@@ -4,14 +4,13 @@ import type {
   FormEvent,
   RefObject,
 } from "react";
-import { OPENROUTER_BASE_URL, type OpenRouterModel } from "../../../../providers/openrouter.js";
+import type { ProviderCatalog } from "../../../../providers/provider.js";
+import { providerProfile } from "../../../../providers/profiles.js";
 import type { ContextReport } from "../../../../context/report.js";
 import { ThinkingOrb, type OrbMotion } from "../../components/thinking-orb.js";
 import { ContextGauge } from "./context-gauge.js";
 import { ModelPicker } from "./model-picker.js";
 import { providerVisual } from "./provider-mark.js";
-
-const openRouterVisual = providerVisual(OPENROUTER_BASE_URL);
 
 export function Composer({
   task,
@@ -22,6 +21,7 @@ export function Composer({
   running,
   pendingAttachmentCount,
   models,
+  selectedProviderConnectionId,
   selectedModel,
   loadingModels,
   providerAvailable,
@@ -102,13 +102,18 @@ export function Composer({
         <div className="adaptive-model-control">
           <ModelPicker
             value={selectedModel}
-            providers={[{
-              id: openRouterVisual.id,
-              name: openRouterVisual.name,
-              mark: openRouterVisual.mark,
-              logo: openRouterVisual.logo,
-              models: models.map((model) => ({ value: model.id, label: model.name })),
-            }]}
+            providerId={selectedProviderConnectionId}
+            providers={models.map(({ connection, models }) => {
+              const visual = providerVisual(connection.baseUrl);
+              return {
+                id: connection.id,
+                name: connection.name,
+                mark: visual.mark,
+                logo: visual.logo,
+                variants: providerProfile(connection.providerId).modelVariants ?? [],
+                models: models.map((model) => ({ value: model.id, label: model.name })),
+              };
+            })}
             placeholder={loadingModels ? "Loading models…" : "Select model"}
             searchPlaceholder="Search models…"
             disabled={loadingModels || !providerAvailable || running}
@@ -204,7 +209,8 @@ type ComposerProps = {
   dragging: boolean;
   running: boolean;
   pendingAttachmentCount: number;
-  models: OpenRouterModel[];
+  models: ProviderCatalog[];
+  selectedProviderConnectionId: string;
   selectedModel: string;
   loadingModels: boolean;
   providerAvailable: boolean;
@@ -225,7 +231,7 @@ type ComposerProps = {
   onPastePlain(): void;
   onPasteMarkdown(): void;
   onChooseAttachments(): void;
-  onModel(value: string): void;
+  onModel(providerConnectionId: string, value: string): void;
   onCompact(): void;
   onUnsafe(value: boolean): void;
   onStop(): void;

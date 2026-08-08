@@ -1,5 +1,10 @@
 import type { AttachmentPreview, AttachmentRef } from "../attachments/types.js";
-import type { OpenRouterModel } from "../providers/openrouter.js";
+import type {
+  ProviderCatalog,
+  ProviderConnection,
+  ProviderConnectionInput,
+  ProviderStatus,
+} from "../providers/provider.js";
 import type { CommandApprovalDecision, Message, RunEvent } from "../protocol.js";
 import type { FontId } from "./typography.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js";
@@ -16,6 +21,7 @@ export type DesktopThread = {
   title: string;
   draft: string;
   model: string | null;
+  providerConnectionId: string;
   bookmarked: boolean;
   sourceThreadId: string | null;
   sourceEntryId: string | null;
@@ -84,6 +90,7 @@ export type DesktopState = {
   conversation: DesktopEntry[];
   contextCheckpoints: ContextCheckpoint[];
   savedMessages: SavedMessageSummary[];
+  providerConnections: ProviderConnection[];
   openRouterAvailable: boolean;
   ketchAvailable: boolean;
   webSearchEnabled: boolean;
@@ -92,6 +99,7 @@ export type DesktopState = {
   runningThreadIds: string[];
   unsafeThreadIds: string[];
   defaultModel: string | null;
+  defaultProviderConnectionId: string;
   restrictedHostAvailable: boolean;
   restrictedHostDetail: string;
   themeId: string;
@@ -116,6 +124,7 @@ export type StartRunInput = {
   threadId: string;
   task: string;
   model: string;
+  providerConnectionId: string;
   contextLength: number;
   attachments?: AttachmentRef[];
 };
@@ -139,8 +148,11 @@ export interface DesktopApi {
   deleteThreads(threadIds: string[]): Promise<DesktopState>;
   removeWorkspace(workspaceId: string): Promise<DesktopState>;
   searchConversations(query: string): Promise<DesktopSearchResult[]>;
-  listOpenRouterModels(): Promise<OpenRouterModel[]>;
-  setSelectedModel(threadId: string | null, model: string): Promise<void>;
+  listProviderModels(): Promise<ProviderCatalog[]>;
+  getProviderStatus(connectionId: string): Promise<ProviderStatus>;
+  saveProviderConnection(input: ProviderConnectionInput): Promise<DesktopState>;
+  removeProviderConnection(connectionId: string): Promise<DesktopState>;
+  setSelectedModel(threadId: string | null, connectionId: string, model: string): Promise<void>;
   chooseAttachments(): Promise<AttachmentPreview[]>;
   importDroppedFiles(files: File[]): Promise<AttachmentPreview[]>;
   importClipboardImage(): Promise<AttachmentPreview>;
@@ -165,7 +177,7 @@ export interface DesktopApi {
   setProviderRetries(retries: number): Promise<void>;
   setCompaction(mode: CompactionMode, threshold: number): Promise<void>;
   getContextReport(threadId: string, contextLength: number): Promise<ContextReport>;
-  compactContext(threadId: string, model: string, contextLength: number): Promise<void>;
+  compactContext(threadId: string, connectionId: string, model: string, contextLength: number): Promise<void>;
   setWebSearchEnabled(enabled: boolean): Promise<void>;
   setWebSearchBackend(backend: WebSearchBackend): Promise<DesktopState>;
   setWebSearchApiKey(backend: KetchSearchBackend, apiKey: string): Promise<DesktopState>;

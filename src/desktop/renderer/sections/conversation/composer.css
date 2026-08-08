@@ -273,6 +273,13 @@ textarea {
   transform: translateX(1px);
 }
 
+.model-provider-mark.logo img {
+  width: 23.35px;
+  height: 23.35px;
+  border-radius: 6px;
+  transform: translateX(1px);
+}
+
 .model-provider-mark svg {
   width: 17px;
   height: 17px;
@@ -340,12 +347,110 @@ textarea {
   white-space: nowrap;
 }
 
-.model-picker-trigger > i {
+.model-picker-caret {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
   color: var(--text-muted);
-  font-size: 18px;
-  font-style: normal;
-  line-height: 1;
-  transform: translateY(-3px);
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+  transform-origin: center;
+  transition: transform 160ms ease;
+}
+
+.model-picker-trigger[aria-expanded="true"] .model-picker-caret,
+.model-variant-trigger[aria-expanded="true"] .model-picker-caret {
+  transform: rotate(-90deg);
+}
+
+.model-variant-picker {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-4px);
+  transition:
+    max-width 180ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    opacity 130ms ease,
+    transform 180ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.model-variant-picker.visible {
+  max-width: 130px;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.model-variant-picker:has(.model-variant-menu) {
+  overflow: visible;
+}
+
+.model-variant-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 25px;
+  padding: 0 8px;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--border-default) 38%, transparent);
+  font-size: calc(10px * var(--interface-font-scale));
+  white-space: nowrap;
+}
+
+.model-variant-trigger:hover,
+.model-variant-trigger[aria-expanded="true"] {
+  color: var(--text-secondary);
+  background: var(--hover-background);
+}
+
+.model-variant-menu {
+  position: absolute;
+  right: 0;
+  bottom: 33px;
+  z-index: 31;
+  width: min(290px, 72vw);
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 24%);
+}
+
+.model-variant-menu button {
+  display: block;
+  width: 100%;
+  padding: 7px 9px;
+  color: var(--text-primary);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+}
+
+.model-variant-menu button:hover,
+.model-variant-menu button.active {
+  background: var(--hover-background);
+}
+
+.model-variant-menu span,
+.model-variant-menu small {
+  display: block;
+}
+
+.model-variant-menu small {
+  margin-top: 2px;
+  color: var(--text-muted);
+  line-height: 1.25;
 }
 
 .model-picker-menu {
@@ -406,14 +511,65 @@ textarea {
   background: var(--hover-background);
 }
 
-.model-provider-filter svg {
-  width: 20px;
-  height: 20px;
+.model-provider-filter .all-providers-mark {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  stroke: none;
+}
+
+.provider-filter-mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.provider-filter-mark.logo {
+  width: 26px;
+  height: 26px;
+}
+
+.provider-filter-mark svg,
+.provider-filter-mark img {
+  width: 100%;
+  height: 100%;
+}
+
+.provider-filter-mark svg {
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.6;
+}
+
+.provider-filter-mark .openrouter-mark,
+.provider-filter-mark .llama-cpp-mark {
+  stroke: none;
+}
+
+.provider-filter-mark .openrouter-mark {
+  fill: #f8fafc;
+}
+
+.provider-filter-mark .openrouter-mark-background {
+  fill: #010608;
+}
+
+.provider-filter-mark .llama-cpp-mark {
+  fill: currentColor;
+}
+
+.provider-filter-mark img,
+.provider-filter-mark .openrouter-mark {
+  border-radius: 6px;
+}
+
+.provider-filter-mark .provider-monogram {
+  font-size: 11px;
 }
 
 .model-picker-options {
@@ -714,6 +870,14 @@ html[data-accented-theme="true"] .send-button:not(.stop) .send-button-orb {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .model-variant-picker {
+    transition: none;
+  }
+
+  .model-picker-caret {
+    transition: none;
+  }
+
   .send-button.stop .thinking-orb {
     animation: none;
   }
