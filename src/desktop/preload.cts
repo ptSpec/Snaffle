@@ -28,7 +28,8 @@ const api: DesktopApi = {
   searchConversations: (query: string) =>
     ipcRenderer.invoke("desktop:search-conversations", query),
   listOpenRouterModels: () => ipcRenderer.invoke("desktop:list-openrouter-models"),
-  setSelectedModel: (model: string) => ipcRenderer.invoke("desktop:set-selected-model", model),
+  setSelectedModel: (threadId: string | null, model: string) =>
+    ipcRenderer.invoke("desktop:set-selected-model", threadId, model),
   chooseAttachments: () => ipcRenderer.invoke("desktop:choose-attachments"),
   importDroppedFiles: (files: File[]) =>
     ipcRenderer.invoke("desktop:import-dropped-files", files.map((file) => webUtils.getPathForFile(file))),

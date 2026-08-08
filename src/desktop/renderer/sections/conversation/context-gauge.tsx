@@ -15,9 +15,10 @@ export function ContextGauge({
   const details = useRef<HTMLDetailsElement>(null);
   const tokens = (report?.estimatedTokens ?? 0) + extraTokens;
   const limit = report?.contextLength ?? 1;
-  const progress = Math.min(tokens / limit, 1);
+  const progress = report ? Math.min(tokens / limit, 1) : 0;
   const compactAt = report?.compactAtTokens ?? limit;
-  const state = tokens >= limit ? "danger" : tokens >= compactAt ? "warning" : "normal";
+  const state = !report ? "normal" : tokens >= limit ? "danger" : tokens >= compactAt ? "warning" : "normal";
+  const activity = compacting ? "Compacting" : report?.preparing ? "Preparing" : "Context";
 
   useEffect(() => {
     function close(event: PointerEvent): void {
@@ -30,53 +31,42 @@ export function ContextGauge({
   }, []);
 
   return (
-    <>
-      <svg className={`context-rail ${state}`} aria-hidden="true">
-        <rect className="context-rail-base" x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)" rx="13" pathLength="1" />
-        <rect
-          className="context-rail-fill"
-          x="1"
-          y="1"
-          width="calc(100% - 2px)"
-          height="calc(100% - 2px)"
-          rx="13"
-          pathLength="1"
-          style={{ strokeDasharray: `${progress} 1` }}
-        />
-      </svg>
-      <details ref={details} className="context-gauge">
-        <summary aria-label="Context details" title="Context details">
-          <svg viewBox="0 0 18 18" aria-hidden="true">
-            <circle cx="9" cy="9" r="6.5" />
-            <path d="M9 2.5a6.5 6.5 0 0 1 6.5 6.5" />
-          </svg>
-        </summary>
-        <div className="context-gauge-details">
-          <strong>Context</strong>
-          {report ? (
-            <>
-              <p>{formatTokens(tokens)} of {formatTokens(limit)} estimated</p>
-              <small>
-                Prepares near {formatTokens(report.prepareAtTokens)} · applies near {formatTokens(compactAt)}
-              </small>
-              <small>{report.preparing || compacting
-                ? "Preparing a checkpoint…"
-                : report.checkpointPrepared
-                  ? "A checkpoint is ready"
-                  : "No checkpoint prepared"}</small>
-              <button
-                type="button"
-                disabled={!report.canCompact || report.preparing || compacting}
-                onClick={onCompact}
-              >
-                {report.preparing || compacting ? "Compacting…" : "Compact now"}
-              </button>
-              {!report.canCompact ? <small>Nothing older to compact yet</small> : null}
-            </>
-          ) : <p>Calculating…</p>}
-        </div>
-      </details>
-    </>
+    <details ref={details} className={`context-gauge ${state}${compacting || report?.preparing ? " busy" : ""}`}>
+      <summary
+        aria-label="Context details"
+        title={report ? `${formatTokens(tokens)} of ${formatTokens(limit)} tokens` : "Calculating context"}
+      >
+        <span>{activity}</span>
+        <span className="context-gauge-meter" aria-hidden="true">
+          <span style={{ width: `${progress * 100}%` }} />
+        </span>
+      </summary>
+      <div className="context-gauge-details">
+        <strong>Context</strong>
+        {report ? (
+          <>
+            <p>{formatTokens(tokens)} of {formatTokens(limit)} tokens</p>
+            <div className="context-gauge-progress" aria-hidden="true">
+              <span style={{ width: `${progress * 100}%` }} />
+            </div>
+            <small>Context compaction ~{formatTokens(report.prepareAtTokens)} tokens</small>
+            <small>{report.preparing || compacting
+              ? "Preparing a context checkpoint…"
+              : report.checkpointPrepared
+                ? "A checkpoint is ready"
+                : "No checkpoint prepared"}</small>
+            <button
+              type="button"
+              disabled={!report.canCompact || report.preparing || compacting}
+              onClick={onCompact}
+            >
+              {report.preparing || compacting ? "Compacting…" : "Compact now"}
+            </button>
+            {!report.canCompact ? <small>Nothing older to compact yet</small> : null}
+          </>
+        ) : <p>Calculating…</p>}
+      </div>
+    </details>
   );
 }
 

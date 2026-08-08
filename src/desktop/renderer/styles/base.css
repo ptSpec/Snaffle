@@ -84,12 +84,12 @@ html[data-theme="snaffle-sunset"] {
   --panel-surface-gradient: radial-gradient(
     ellipse at top right,
     color-mix(in srgb, var(--background) 52%, var(--panel)) 0%,
-    var(--panel) 60%
+    #fdf4fb 60%
   );
   --input-surface-gradient: radial-gradient(
     ellipse at top right,
-    color-mix(in srgb, var(--background) 52%, var(--surface)) 0%,
-    var(--surface) 60%
+    color-mix(in srgb, var(--background) 52%, var(--panel)) 0%,
+    #fdf4fb 60%
   );
 }
 
