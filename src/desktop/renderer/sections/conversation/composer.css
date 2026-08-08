@@ -363,7 +363,7 @@ textarea {
 
 .model-picker-trigger[aria-expanded="true"] .model-picker-caret,
 .model-variant-trigger[aria-expanded="true"] .model-picker-caret {
-  transform: rotate(-90deg);
+  transform: rotate(-180deg);
 }
 
 .model-variant-picker {

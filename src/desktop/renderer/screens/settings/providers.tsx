@@ -29,6 +29,7 @@ export function ProviderSettings({
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
   const connectionsBeforeSave = useRef<Set<string> | null>(null);
+  const providerPicker = useRef<HTMLDetailsElement>(null);
   const profile = providerProfile(draft.providerId);
 
   const visibleConnections = connections.filter((connection) => {
@@ -50,6 +51,17 @@ export function ProviderSettings({
     if (connection) setDraft(connectionDraft(connection));
     else if (selectedId !== NEW_CONNECTION) select(connections[0]?.id ?? NEW_CONNECTION);
   }, [connections]);
+
+  useEffect(() => {
+    function closeProviderPicker(event: PointerEvent): void {
+      if (event.target instanceof Node && !providerPicker.current?.contains(event.target)) {
+        providerPicker.current?.removeAttribute("open");
+      }
+    }
+
+    document.addEventListener("pointerdown", closeProviderPicker);
+    return () => document.removeEventListener("pointerdown", closeProviderPicker);
+  }, []);
 
   function select(id: string): void {
     setSelectedId(id);
@@ -145,7 +157,7 @@ export function ProviderSettings({
           Add new provider
         </button>
 
-        <details className="provider-picker">
+        <details className="provider-picker" ref={providerPicker}>
           <summary className="provider-picker-summary">
             <span className={draft.enabled ? "provider-dot" : "provider-dot disabled"} />
             <span className="provider-row-copy">
