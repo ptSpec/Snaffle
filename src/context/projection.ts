@@ -11,6 +11,7 @@ export type ContextCheckpoint = {
   sourceCharacters: number;
   summaryCharacters: number;
   model: string;
+  providerConnectionId: string;
   createdAt: number;
   appliedAt: number | null;
   injectedCharacters: number | null;

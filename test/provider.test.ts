@@ -1,8 +1,25 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
-import { OpenAICompatibleProvider } from "../src/providers/openai-compatible.js";
+import {
+  OpenAICompatibleProvider,
+  listOpenAICompatibleModels,
+} from "../src/providers/openai-compatible.js";
+import { createProvider, providerCatalog, providerStatus } from "../src/providers/registry.js";
+import { applyModelVariant, providerProfile, splitModelVariant } from "../src/providers/profiles.js";
 import type { ModelStreamEvent } from "../src/providers/provider.js";
+
+test("provider-declared model variants preserve the base model identity", () => {
+  const variants = providerProfile("openrouter").modelVariants;
+
+  assert.deepEqual(splitModelVariant("qwen/qwen3:nitro", variants), {
+    baseModelId: "qwen/qwen3",
+    variantId: "nitro",
+    routable: true,
+  });
+  assert.equal(applyModelVariant("qwen/qwen3:nitro", "floor", variants), "qwen/qwen3:floor");
+  assert.equal(applyModelVariant("qwen/qwen3:free", "exacto", variants), "qwen/qwen3:free");
+});
 
 test("OpenAI-compatible provider sends attachment content without storing payloads in messages", async (t) => {
   let content: unknown;
@@ -64,6 +81,90 @@ test("OpenAI-compatible provider sends attachment content without storing payloa
     { type: "text", text: '<attachment name="old-notes.md" available="false" />' },
   ]);
   assert.equal(resolutions, 1);
+});
+
+test("OpenAI-compatible model discovery works for local or hosted connections", async (t) => {
+  const server = createServer((request, response) => {
+    assert.equal(request.url, "/v1/models");
+    assert.equal(request.headers.authorization, "Bearer secret");
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({
+      data: [{ id: "local/qwen", name: "Qwen Local", context_length: 262_144 }],
+    }));
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Test server did not start");
+
+  assert.deepEqual(
+    await listOpenAICompatibleModels(`http://127.0.0.1:${address.port}/v1`, "secret"),
+    [{
+      id: "local/qwen",
+      name: "Qwen Local",
+      contextLength: 262_144,
+      inputModalities: ["text"],
+    }],
+  );
+});
+
+test("DeepSeek uses the shared model catalog and adds account balance", async (t) => {
+  let chatRequest: Record<string, unknown> | undefined;
+  const server = createServer((request, response) => {
+    assert.equal(request.headers.authorization, "Bearer secret");
+    if (request.url === "/chat/completions") {
+      let body = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk: string) => (body += chunk));
+      request.on("end", () => {
+        chatRequest = JSON.parse(body) as Record<string, unknown>;
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          choices: [{ message: { content: "Done" } }],
+          usage: { prompt_tokens: 10, prompt_cache_hit_tokens: 6 },
+        }));
+      });
+      return;
+    }
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(request.url === "/models"
+      ? JSON.stringify({ data: [{ id: "deepseek-v4-flash", owned_by: "deepseek" }] })
+      : JSON.stringify({
+        is_available: true,
+        balance_infos: [{ currency: "USD", total_balance: "12.50" }],
+      }));
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Test server did not start");
+  const connection = {
+    id: "deepseek-test",
+    providerId: "deepseek",
+    name: "DeepSeek",
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    enabled: true,
+    hasApiKey: true,
+    apiKey: "secret",
+    manualModels: [],
+  };
+
+  const catalog = await providerCatalog(connection);
+  assert.equal(catalog.models[0]?.id, "deepseek-v4-flash");
+  assert.equal(catalog.models[0]?.contextLength, 1_000_000);
+  assert.deepEqual(await providerStatus(connection), {
+    message: "Connected",
+    details: [{ label: "USD balance", value: "12.50" }],
+  });
+  const completion = await createProvider(connection, "deepseek-v4-flash", {}).complete(
+    [{ role: "user", content: "Hello" }],
+    [],
+    new AbortController().signal,
+  );
+  assert.equal(chatRequest?.parallel_tool_calls, undefined);
+  assert.equal(completion.usage?.cachedInputTokens, 6);
 });
 
 test("OpenAI-compatible provider repairs a common double-encoded tool call", async (t) => {
@@ -192,7 +293,7 @@ test("OpenAI-compatible provider streams text and assembles tool calls", async (
       'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","function":{"name":"read_file","arguments":"{\\"path\\":"}}]}}]}\n\n',
     );
     response.write(
-      'data: {"choices":[{"finish_reason":"tool_calls","delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"package.json\\"}"}}]}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}\n\n',
+      'data: {"choices":[{"finish_reason":"tool_calls","delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"package.json\\"}"}}]}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"cost":0.001,"prompt_tokens_details":{"cached_tokens":4},"completion_tokens_details":{"reasoning_tokens":2}}}\n\n',
     );
     response.end("data: [DONE]\n\n");
   });
@@ -237,5 +338,12 @@ test("OpenAI-compatible provider streams text and assembles tool calls", async (
   assert.deepEqual(result.toolCalls, [
     { id: "call-1", name: "read_file", input: { path: "package.json" } },
   ]);
-  assert.deepEqual(result.usage, { inputTokens: 10, outputTokens: 5, totalTokens: 15 });
+  assert.deepEqual(result.usage, {
+    inputTokens: 10,
+    outputTokens: 5,
+    totalTokens: 15,
+    cachedInputTokens: 4,
+    reasoningTokens: 2,
+    costUsd: 0.001,
+  });
 });

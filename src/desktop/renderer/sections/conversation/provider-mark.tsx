@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import deepSeekLogo from "../../assets/deepseek-logo.svg?url";
 
 export type ProviderVisual = {
   id: string;
@@ -23,6 +24,7 @@ const knownProviders: Array<{
   { id: "together", name: "Together AI", hosts: ["api.together.xyz"], short: "TO" },
   { id: "fireworks", name: "Fireworks AI", hosts: ["api.fireworks.ai"], short: "FW" },
   { id: "deepinfra", name: "DeepInfra", hosts: ["api.deepinfra.com"], short: "DI" },
+  { id: "deepseek", name: "DeepSeek", hosts: ["api.deepseek.com"] },
   { id: "ollama", name: "Ollama", localPort: "11434", short: "OL" },
   { id: "lm-studio", name: "LM Studio", localPort: "1234", short: "LM" },
   { id: "llama-cpp", name: "llama.cpp", hosts: ["llama.app"], localPort: "8080" },
@@ -38,9 +40,11 @@ export function providerVisual(baseUrl: string): ProviderVisual {
   return {
     id: provider.id,
     name: provider.name,
-    logo: provider.id === "openrouter" || provider.id === "llama-cpp",
+    logo: provider.id === "openrouter" || provider.id === "deepseek" || provider.id === "llama-cpp",
     mark: provider.id === "openrouter"
       ? <OpenRouterMark />
+      : provider.id === "deepseek"
+        ? <img src={deepSeekLogo} alt="" className="deepseek-mark" />
       : provider.id === "llama-cpp"
         ? <LlamaCppMark />
         : <span className="provider-monogram" aria-hidden="true">{provider.short}</span>,

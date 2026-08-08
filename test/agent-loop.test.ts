@@ -16,6 +16,8 @@ import { LocalWorkspace } from "../src/execution/workspace.js";
 
 class ScriptedProvider implements ModelProvider {
   readonly model = "scripted-test-model";
+  readonly providerId = "test";
+  readonly connectionId = "test";
   private call = 0;
 
   async complete(
@@ -54,6 +56,8 @@ class MemoryTrace implements Trace {
 
 class DirectProvider implements ModelProvider {
   readonly model = "direct-test-model";
+  readonly providerId = "test";
+  readonly connectionId = "test";
   messages: Message[] = [];
 
   constructor(private readonly reply: string) {}
@@ -155,6 +159,8 @@ test("agent loop applies steering after the current model output", async (t) => 
   const seen: Message[][] = [];
   const provider: ModelProvider = {
     model: "steering-test-model",
+    providerId: "test",
+    connectionId: "test",
     async complete(messages) {
       seen.push([...messages]);
       return { text: replies.shift() ?? "", toolCalls: [] };
@@ -187,6 +193,8 @@ test("tool examples are shown after failure, not sent in every tool description"
   let call = 0;
   const provider: ModelProvider = {
     model: "tool-example-test-model",
+    providerId: "test",
+    connectionId: "test",
     async complete(messages, tools) {
       call += 1;
       if (call === 1) {
@@ -266,6 +274,8 @@ test("only explicitly cited tool sources reach the final answer", async (t) => {
   let call = 0;
   const provider: ModelProvider = {
     model: "source-test-model",
+    providerId: "test",
+    connectionId: "test",
     async complete() {
       call += 1;
       return call === 1
