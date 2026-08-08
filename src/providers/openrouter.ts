@@ -2,7 +2,7 @@ import type { AttachmentRef, ResolvedAttachment } from "../attachments/types.js"
 import { OpenAICompatibleProvider } from "./openai-compatible.js";
 import { DEFAULT_MODEL_CONTEXT_LENGTH } from "./provider.js";
 
-const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 export type OpenRouterModel = {
   id: string;

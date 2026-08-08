@@ -4,11 +4,14 @@ import type {
   FormEvent,
   RefObject,
 } from "react";
-import type { OpenRouterModel } from "../../../../providers/openrouter.js";
+import { OPENROUTER_BASE_URL, type OpenRouterModel } from "../../../../providers/openrouter.js";
 import type { ContextReport } from "../../../../context/report.js";
-import { SearchPicker } from "../../components/search-picker.js";
 import { ThinkingOrb, type OrbMotion } from "../../components/thinking-orb.js";
 import { ContextGauge } from "./context-gauge.js";
+import { ModelPicker } from "./model-picker.js";
+import { providerVisual } from "./provider-mark.js";
+
+const openRouterVisual = providerVisual(OPENROUTER_BASE_URL);
 
 export function Composer({
   task,
@@ -85,29 +88,39 @@ export function Composer({
 
       <div className="composer-controls">
         <details ref={composerAdd} className="composer-add">
-          <summary aria-label="Add to message" title="Add to message">＋</summary>
+          <summary aria-label="Add to message" title="Add to message">
+            <svg className="composer-add-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M8 3v10M3 8h10" />
+            </svg>
+          </summary>
           <div className="composer-add-menu">
             <MenuButton label="Attach files" disabled={running || pendingAttachmentCount >= 8} onClick={onChooseAttachments} />
             <MenuButton label="Paste as Markdown" onClick={onPasteMarkdown} />
             <MenuButton label="Paste without formatting" onClick={onPastePlain} />
           </div>
         </details>
-        <SearchPicker
-          className={selectedModel ? "model-search" : "model-search empty"}
-          value={selectedModel}
-          options={models.map((model) => ({ value: model.id, label: model.name }))}
-          placeholder={loadingModels ? "Loading models…" : "Select model"}
-          searchPlaceholder="Search models…"
-          disabled={loadingModels || !providerAvailable || running}
-          allowCustom
-          onChange={onModel}
-        />
-        <ContextGauge
-          report={contextReport}
-          extraTokens={pendingContextTokens}
-          compacting={compactingContext}
-          onCompact={onCompact}
-        />
+        <div className="adaptive-model-control">
+          <ModelPicker
+            value={selectedModel}
+            providers={[{
+              id: openRouterVisual.id,
+              name: openRouterVisual.name,
+              mark: openRouterVisual.mark,
+              logo: openRouterVisual.logo,
+              models: models.map((model) => ({ value: model.id, label: model.name })),
+            }]}
+            placeholder={loadingModels ? "Loading models…" : "Select model"}
+            searchPlaceholder="Search models…"
+            disabled={loadingModels || !providerAvailable || running}
+            onChange={onModel}
+          />
+          <ContextGauge
+            report={contextReport}
+            extraTokens={pendingContextTokens}
+            compacting={compactingContext}
+            onCompact={onCompact}
+          />
+        </div>
         <details ref={executionMode} className={unsafe ? "execution-mode unsafe" : "execution-mode"}>
           <summary>
             {unsafe ? <span className="execution-dot" aria-hidden="true" /> : <Shield />}
@@ -125,7 +138,7 @@ export function Composer({
             <p>
               {unsafe
                 ? "Shell commands run as your user and can access host files, network, and inherited environment. File tools remain workspace-only."
-                : "Shell commands can write in this workspace and use private temporary files. Personal host files, network access, and Git metadata are blocked."}
+                : <>Shell commands can write in this workspace and use private temporary files.<br />Personal host files, network access, and Git metadata are blocked.</>}
             </p>
             <label className={unsafe ? "host-toggle enabled" : "host-toggle"}>
               <input

@@ -241,7 +241,7 @@ async function runProcess(
         exitCode,
         stdout,
         stderr,
-        ...(exitCode && sandboxDenied(stderr) ? { permissionDenied: true } : {}),
+        ...(sandboxDenied(`${stderr}\n${stdout}`) ? { permissionDenied: true } : {}),
       });
     });
     const timer = setTimeout(() => {
@@ -360,7 +360,7 @@ function errorMessage(error: unknown): string {
 }
 
 function sandboxDenied(stderr: string): boolean {
-  return /operation not permitted|permission denied|read-only file system|could not resolve host|network is unreachable|temporary failure in name resolution/i.test(stderr);
+  return /operation not permitted|permission denied|read-only file system|could not resolve host|network is unreachable|temporary failure in name resolution|nodename nor servname provided/i.test(stderr);
 }
 
 function findExecutable(name: string): string | undefined {

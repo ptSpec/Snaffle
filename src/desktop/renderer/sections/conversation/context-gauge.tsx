@@ -18,7 +18,7 @@ export function ContextGauge({
   const progress = report ? Math.min(tokens / limit, 1) : 0;
   const compactAt = report?.compactAtTokens ?? limit;
   const state = !report ? "normal" : tokens >= limit ? "danger" : tokens >= compactAt ? "warning" : "normal";
-  const activity = compacting ? "Compacting" : report?.preparing ? "Preparing" : "Context";
+  const activity = compacting ? "Compacting" : report?.preparing ? "Preparing context" : "Context";
 
   useEffect(() => {
     function close(event: PointerEvent): void {
@@ -33,10 +33,9 @@ export function ContextGauge({
   return (
     <details ref={details} className={`context-gauge ${state}${compacting || report?.preparing ? " busy" : ""}`}>
       <summary
-        aria-label="Context details"
-        title={report ? `${formatTokens(tokens)} of ${formatTokens(limit)} tokens` : "Calculating context"}
+        aria-label={`${activity} details`}
+        title={report ? `Context · ${formatTokens(tokens)} of ${formatTokens(limit)} tokens` : "Context · calculating"}
       >
-        <span>{activity}</span>
         <span className="context-gauge-meter" aria-hidden="true">
           <span style={{ width: `${progress * 100}%` }} />
         </span>
