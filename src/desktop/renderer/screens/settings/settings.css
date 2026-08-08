@@ -23,9 +23,47 @@
   color: var(--text-muted);
 }
 
+.theme-picker {
+  position: relative;
+}
+
+.theme-picker > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.theme-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.theme-picker-caret {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+  transition: transform 160ms ease;
+}
+
+.theme-picker[open] .theme-picker-caret {
+  transform: rotate(180deg);
+}
+
 .theme-list {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  left: 0;
+  z-index: 20;
   display: grid;
   gap: 8px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--text-primary) 14%, transparent);
 }
 
 .typography-settings {
