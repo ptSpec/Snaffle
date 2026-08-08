@@ -593,8 +593,9 @@ function compactRunEvent(event: RunEvent): RunEvent {
 }
 
 function loadDevelopmentEnvironment(): void {
-  const environmentPath = path.join(process.cwd(), ".env");
-  if (!app.isPackaged && existsSync(environmentPath)) loadEnvFile(environmentPath);
+  const projectRoot = path.resolve(desktopDirectory, "../../..");
+  const environmentPath = path.join(projectRoot, ".env");
+  if (existsSync(environmentPath)) loadEnvFile(environmentPath);
 }
 
 app.whenReady().then(start).catch(reportStartupError);
