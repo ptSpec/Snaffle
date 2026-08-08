@@ -12,7 +12,7 @@ import {
 } from "react";
 import type { AttachmentPreview, AttachmentRef } from "../../attachments/types.js";
 import type { CommandApprovalDecision } from "../../protocol.js";
-import type { DesktopApi, DesktopRunEvent, DesktopState, DesktopThread, SavedMessage } from "../api.js";
+import type { DesktopApi, DesktopRunEvent, DesktopSearchResult, DesktopState, DesktopThread, SavedMessage } from "../api.js";
 import type { OpenRouterModel } from "../../providers/openrouter.js";
 import type { CompactionMode } from "../../context/budget.js";
 import type { ContextReport } from "../../context/report.js";
@@ -33,6 +33,7 @@ import { AttachmentTray } from "./sections/conversation/attachment-tray.js";
 import { htmlToMarkdown } from "./sections/conversation/attachment-markdown.js";
 import { Settings } from "./screens/settings/settings.js";
 import { Bookmarks, type BookmarksPage } from "./screens/bookmarks/bookmarks.js";
+import { Search } from "./screens/search/search.js";
 import { Sidebar, type AppView, type SettingsPage } from "./sections/sidebar/sidebar.js";
 import { InspectorPanel, type InspectorTab } from "./sections/inspector/panel.js";
 import type { OrbMotion } from "./components/thinking-orb.js";
@@ -118,6 +119,24 @@ export function App(): JSX.Element {
   const timelineView = useRef<HTMLDivElement>(null);
   const executionMode = useRef<HTMLDetailsElement>(null);
   const composerAdd = useRef<HTMLDetailsElement>(null);
+  const searchOpenedAt = useRef(0);
+
+  useEffect(() => {
+    function toggleSearch(event: KeyboardEvent): void {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
+      event.preventDefault();
+      if (view === "search") {
+        if (performance.now() - searchOpenedAt.current >= 300) setView("conversation");
+        return;
+      }
+      setError(null);
+      searchOpenedAt.current = performance.now();
+      setView("search");
+    }
+
+    window.addEventListener("keydown", toggleSearch);
+    return () => window.removeEventListener("keydown", toggleSearch);
+  }, [view]);
   const followTimeline = useRef(true);
   const leftAutoCollapsed = useRef(false);
   const fileEditorExpanded = useRef(false);
@@ -772,6 +791,17 @@ export function App(): JSX.Element {
     setView("conversation");
   }
 
+  function showView(next: AppView): void {
+    if (next === "search") {
+      if (view === "search") {
+        if (performance.now() - searchOpenedAt.current >= 300) setView("conversation");
+        return;
+      }
+      searchOpenedAt.current = performance.now();
+    }
+    setView(next);
+  }
+
   async function saveDraft(): Promise<void> {
     if (desktopState.activeThreadId) {
       await window.desktop.setThreadDraft(desktopState.activeThreadId, task);
@@ -847,6 +877,17 @@ export function App(): JSX.Element {
     try {
       await saveDraft();
       showDesktopState(await window.desktop.selectThread(thread.id));
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function openSearchResult(result: DesktopSearchResult): Promise<void> {
+    try {
+      await saveDraft();
+      threadTimelines.current.delete(result.threadId);
+      showDesktopState(await window.desktop.selectThread(result.threadId));
+      scrollToEntry(result.entryId, "Search result no longer exists");
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -1091,7 +1132,7 @@ export function App(): JSX.Element {
           onNavigate={showDesktopState}
           onUpdate={(state) => setDesktopState(withoutConversation(state))}
           onError={setError}
-          onView={setView}
+          onView={showView}
           onSettingsPage={(page) => {
             setSettingsPage(page);
             setError(null);
@@ -1157,6 +1198,11 @@ export function App(): JSX.Element {
             onRemoveThread={(thread) => void removeThreadBookmark(thread)}
             onOpenMessage={(message) => void openSavedMessage(message)}
             onDeleteMessage={(id) => void deleteSavedMessage(id)}
+          />
+        ) : view === "search" ? (
+          <Search
+            onOpen={(result) => void openSearchResult(result)}
+            onError={setError}
           />
         ) : (
           <section className="conversation view-enter" aria-label="Conversation">
