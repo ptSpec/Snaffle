@@ -225,7 +225,7 @@ export function ModelPicker({
 function PickerCaret(): JSX.Element {
   return (
     <svg className="model-picker-caret" viewBox="0 0 10 10" aria-hidden="true">
-      <path d="m3 1 4 4-4 4" />
+      <path d="m1 3 4 4 4-4" />
     </svg>
   );
 }

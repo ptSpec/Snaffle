@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { PROJECT } from "../../../../identity.js";
 import { THEMES } from "../../../themes/index.js";
 import type { FontId } from "../../../typography.js";
@@ -97,6 +98,19 @@ export function Settings({
   onRemoveProvider(id: string): Promise<void>;
   onTestProvider(id: string): Promise<ProviderStatus>;
 }): JSX.Element {
+  const themePicker = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    function closeThemePicker(event: PointerEvent): void {
+      if (event.target instanceof Node && !themePicker.current?.contains(event.target)) {
+        themePicker.current?.removeAttribute("open");
+      }
+    }
+
+    document.addEventListener("pointerdown", closeThemePicker);
+    return () => document.removeEventListener("pointerdown", closeThemePicker);
+  }, []);
+
   if (page === "providers") {
     return (
       <ProviderSettings
@@ -171,7 +185,7 @@ export function Settings({
         <h1>Appearance</h1>
         <p className="settings-description">Choose how {PROJECT.name} looks.</p>
 
-        <details className="theme-picker">
+        <details className="theme-picker" ref={themePicker}>
           <summary className="theme-option selected">
             <ThemePreview theme={selectedTheme} />
             <span>{selectedTheme.name}</span>
