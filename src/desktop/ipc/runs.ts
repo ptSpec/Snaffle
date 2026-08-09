@@ -1,11 +1,14 @@
 import { ipcMain } from "electron";
 import { randomUUID } from "node:crypto";
 import { runAgent } from "../../agent/loop.js";
+import { activeSubagent, type SubagentProfile } from "../../agent/subagents/profile.js";
+import { runSubagents } from "../../agent/subagents/runner.js";
+import { delegateTaskTool } from "../../agent/subagents/tool.js";
 import type { Trace } from "../../agent/trace.js";
 import type { AttachmentStore } from "../../attachments/store.js";
 import { MAX_ATTACHMENTS } from "../../attachments/store.js";
 import type { AttachmentRef } from "../../attachments/types.js";
-import type { ActiveCapabilities } from "../../capabilities/active.js";
+import { activeCapabilities, type ActiveCapabilities } from "../../capabilities/active.js";
 import { compactionThreshold, type CompactionMode } from "../../context/budget.js";
 import { compactionBoundary, type ContextCompactor } from "../../context/compaction.js";
 import { initialMessages } from "../../context/prompt.js";
@@ -44,6 +47,7 @@ export function registerRunIpc(options: {
     providerRetries: number;
     compactionMode: CompactionMode;
     compactionThreshold: number;
+    subagent: SubagentProfile;
   };
   sendEvent: (threadId: string, event: RunEvent) => void;
 }): RunIpc {
@@ -124,7 +128,28 @@ export function registerRunIpc(options: {
       acceptingSteering: true,
     };
     active.set(threadId, run);
-    const capabilities = options.capabilities();
+    const baseCapabilities = options.capabilities();
+    const subagent = activeSubagent(settings.subagent);
+    const capabilities = subagent
+      ? activeCapabilities([
+          ...baseCapabilities.tools,
+          {
+            source: { type: "built-in" },
+            tool: delegateTaskTool((request, onUpdate) => runSubagents({
+              ...request,
+              provider: options.provider(
+                subagent.providerConnectionId,
+                subagent.model,
+                (attachment) => options.attachments.resolve(attachment),
+              ),
+              workspace,
+              signal: controller.signal,
+              maxSteps: subagent.maxSteps,
+              ...(onUpdate ? { onUpdate } : {}),
+            })),
+          },
+        ])
+      : baseCapabilities;
     const toolSpecs = capabilities.tools.map(({ tool }) => ({
       name: tool.name,
       description: tool.description,

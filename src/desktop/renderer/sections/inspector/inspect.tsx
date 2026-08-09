@@ -1,5 +1,6 @@
 import { JsonInspector } from "./json-inspector.js";
 import { labelFor, toolGeneratingLabel, toolStatus, type TimelineItem } from "../conversation/timeline-state.js";
+import { SubagentInspector } from "./subagent.js";
 
 export function Inspector({ item }: { item: TimelineItem }): JSX.Element {
   if (item.kind === "activity-group") {
@@ -26,6 +27,9 @@ export function Inspector({ item }: { item: TimelineItem }): JSX.Element {
   }
 
   const status = toolStatus(item);
+  if (item.call.name === "delegate_task" && item.details) {
+    return <SubagentInspector activity={item.details} />;
+  }
   return (
     <div className="inspector-card">
       <p className="eyebrow">Tool call</p>
@@ -49,5 +53,4 @@ export function Inspector({ item }: { item: TimelineItem }): JSX.Element {
     </div>
   );
 }
-
 

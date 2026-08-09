@@ -1,4 +1,5 @@
 import type { JsonSchema, SourceReference, ToolSpec } from "../protocol.js";
+import type { SubagentActivityUpdate } from "../agent/subagents/activity.js";
 import type { Workspace } from "../execution/workspace.js";
 
 export type ToolResult = {
@@ -7,11 +8,15 @@ export type ToolResult = {
   sources?: SourceReference[];
 };
 
+export type ToolExecutionContext = {
+  report(update: SubagentActivityUpdate): Promise<void>;
+};
+
 export interface Tool extends ToolSpec {
   inputSchema: JsonSchema;
   exampleInput?: Record<string, unknown>;
   inputErrorHint?: string;
-  execute(workspace: Workspace, input: unknown): Promise<ToolResult>;
+  execute(workspace: Workspace, input: unknown, context?: ToolExecutionContext): Promise<ToolResult>;
 }
 
 export class ToolInputError extends Error {}

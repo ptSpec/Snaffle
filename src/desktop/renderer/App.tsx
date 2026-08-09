@@ -15,6 +15,7 @@ import type { CommandApprovalDecision } from "../../protocol.js";
 import type { DesktopApi, DesktopRunEvent, DesktopSearchResult, DesktopState, DesktopThread, SavedMessage } from "../api.js";
 import type { ProviderCatalog, ProviderConnectionInput, ProviderStatus } from "../../providers/provider.js";
 import type { CompactionMode } from "../../context/budget.js";
+import type { SubagentProfile } from "../../agent/subagents/profile.js";
 import type { ContextReport } from "../../context/report.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../../tools/web/types.js";
 import { DEFAULT_MODEL_CONTEXT_LENGTH } from "../../providers/provider.js";
@@ -90,6 +91,12 @@ const initialState: DesktopState = {
   maxSteps: 50,
   providerTimeoutMinutes: 3,
   providerRetries: 2,
+  subagent: {
+    enabled: false,
+    providerConnectionId: "",
+    model: "",
+    maxSteps: 30,
+  },
   compactionMode: "automatic",
   compactionThreshold: 65,
 };
@@ -1098,6 +1105,16 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setSubagent(subagent: SubagentProfile): Promise<void> {
+    try {
+      await window.desktop.setSubagent(subagent);
+      setDesktopState((state) => ({ ...state, subagent }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   async function setCompaction(compactionMode: CompactionMode, compactionThreshold: number): Promise<void> {
     try {
       await window.desktop.setCompaction(compactionMode, compactionThreshold);
@@ -1219,6 +1236,7 @@ export function App(): JSX.Element {
             maxSteps={desktopState.maxSteps}
             providerTimeoutMinutes={desktopState.providerTimeoutMinutes}
             providerRetries={desktopState.providerRetries}
+            subagent={desktopState.subagent}
             compactionMode={desktopState.compactionMode}
             compactionThreshold={desktopState.compactionThreshold}
             ketchAvailable={desktopState.ketchAvailable}
@@ -1240,6 +1258,7 @@ export function App(): JSX.Element {
             onMaxSteps={(maxSteps) => void setMaxSteps(maxSteps)}
             onProviderTimeoutMinutes={(minutes) => void setProviderTimeoutMinutes(minutes)}
             onProviderRetries={(retries) => void setProviderRetries(retries)}
+            onSubagent={(profile) => void setSubagent(profile)}
             onCompaction={(mode, threshold) => void setCompaction(mode, threshold)}
             onWebSearchEnabled={(enabled) => void setWebSearchEnabled(enabled)}
             onWebSearchBackend={(backend) => void setWebSearchBackend(backend)}

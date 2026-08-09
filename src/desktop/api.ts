@@ -11,6 +11,7 @@ import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js
 import type { CompactionMode } from "../context/budget.js";
 import type { ContextCheckpoint } from "../context/projection.js";
 import type { ContextReport } from "../context/report.js";
+import type { SubagentProfile } from "../agent/subagents/profile.js";
 import type { GitChanges, GitDiffPreview, GitFileContents } from "../git/types.js";
 
 export type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents } from "../git/types.js";
@@ -116,6 +117,7 @@ export type DesktopState = {
   maxSteps: number;
   providerTimeoutMinutes: number;
   providerRetries: number;
+  subagent: SubagentProfile;
   compactionMode: CompactionMode;
   compactionThreshold: number;
 };
@@ -175,6 +177,7 @@ export interface DesktopApi {
   setMaxSteps(maxSteps: number): Promise<void>;
   setProviderTimeoutMinutes(minutes: number): Promise<void>;
   setProviderRetries(retries: number): Promise<void>;
+  setSubagent(profile: SubagentProfile): Promise<void>;
   setCompaction(mode: CompactionMode, threshold: number): Promise<void>;
   getContextReport(threadId: string, contextLength: number): Promise<ContextReport>;
   compactContext(threadId: string, connectionId: string, model: string, contextLength: number): Promise<void>;
