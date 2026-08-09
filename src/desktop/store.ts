@@ -440,6 +440,18 @@ export class DesktopStore {
     return result.rows.map(entryFromRow);
   }
 
+  async systemInstructions(threadId: string | null): Promise<string[]> {
+    if (!threadId) return [];
+    const result = await this.database.execute({
+      sql: "SELECT data FROM entries WHERE thread_id = ? AND role = 'system' ORDER BY sequence",
+      args: [threadId],
+    });
+    return result.rows.flatMap((row) => {
+      const message = JSON.parse(rowText(row, "data")) as Message;
+      return message.role === "system" ? [message.content] : [];
+    });
+  }
+
   async saveMessages(threadId: string, messages: Message[]): Promise<void> {
     const now = Date.now();
     const serialized = messages.map((message) => JSON.stringify(message));

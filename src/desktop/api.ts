@@ -5,7 +5,7 @@ import type {
   ProviderConnectionInput,
   ProviderStatus,
 } from "../providers/provider.js";
-import type { CommandApprovalDecision, Message, RunEvent } from "../protocol.js";
+import type { CommandApprovalDecision, Message, RunEvent, ToolSpec } from "../protocol.js";
 import type { FontId } from "./typography.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js";
 import type { CompactionMode } from "../context/budget.js";
@@ -90,6 +90,8 @@ export type DesktopState = {
   activeThreadId: string | null;
   conversation: DesktopEntry[];
   contextCheckpoints: ContextCheckpoint[];
+  modelInstructions: string[];
+  toolSpecs: ToolSpec[];
   savedMessages: SavedMessageSummary[];
   providerConnections: ProviderConnection[];
   openRouterAvailable: boolean;

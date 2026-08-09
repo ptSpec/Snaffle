@@ -7,7 +7,7 @@ import { applySubagentUpdate, type SubagentActivity } from "../../../../agent/su
 export type TimelineItem =
   | { id: string; kind: "user"; text: string; attachments?: AttachmentRef[]; sequence: number; entryId?: string }
   | { id: string; kind: "error"; text: string; restoreSequence?: number }
-  | { id: string; kind: "assistant"; text: string; streaming: boolean; intermediate?: boolean; model?: string; usage?: Usage; durationMs?: number; sources?: SourceReference[]; sequence?: number; entryId?: string }
+  | { id: string; kind: "assistant"; text: string; streaming: boolean; intermediate?: boolean; reasoning?: string; toolCalls?: ToolCall[]; toolNames?: string[]; finishReason?: string; model?: string; providerId?: string; providerConnectionId?: string; usage?: Usage; durationMs?: number; sources?: SourceReference[]; sequence?: number; entryId?: string }
   | { id: string; kind: "activity-group"; items: TimelineItem[] }
   | { id: string; kind: "reasoning"; step: number; text: string; streaming: boolean; status?: string | undefined }
   | { id: string; kind: "tool-preparing"; step: number; index: number; name: string; argumentChars: number; startedAt: number }
@@ -215,9 +215,14 @@ export function addRunEvent(
       const intermediate = event.response.toolCalls.length > 0;
       const metadata = {
         model: event.model,
+        providerId: event.providerId,
+        providerConnectionId: event.providerConnectionId,
         ...(event.response.usage ? { usage: event.response.usage } : {}),
         durationMs: event.durationMs,
         ...(event.response.sources?.length ? { sources: event.response.sources } : {}),
+        ...(event.response.reasoning ? { reasoning: event.response.reasoning } : {}),
+        ...(event.response.toolCalls.length ? { toolCalls: event.response.toolCalls } : {}),
+        ...(event.response.finishReason ? { finishReason: event.response.finishReason } : {}),
       };
       let completed = completedReasoning;
       if (existing !== -1) {
@@ -226,7 +231,7 @@ export function addRunEvent(
             ? { ...item, text: event.response.text, streaming: false, intermediate, sequence: event.sequence, ...metadata }
             : item,
         );
-      } else if (event.response.text.trim()) {
+      } else if (event.response.text.trim() || intermediate) {
         completed = [
           ...completedReasoning,
           { id: newTimelineId(), kind: "assistant", text: event.response.text, streaming: false, intermediate, sequence: event.sequence, ...metadata },
@@ -345,9 +350,15 @@ export function timelineFromEntries(entries: DesktopEntry[], checkpoints: Contex
           sequence,
           entryId,
           ...(message.model ? { model: message.model } : {}),
+          ...(message.providerId ? { providerId: message.providerId } : {}),
+          ...(message.providerConnectionId ? { providerConnectionId: message.providerConnectionId } : {}),
           ...(message.usage ? { usage: message.usage } : {}),
           ...(message.durationMs === undefined ? {} : { durationMs: message.durationMs }),
           ...(message.sources?.length ? { sources: message.sources } : {}),
+          ...(message.reasoning ? { reasoning: message.reasoning } : {}),
+          ...(message.toolCalls?.length ? { toolCalls: message.toolCalls } : {}),
+          ...(message.toolNames?.length ? { toolNames: message.toolNames } : {}),
+          ...(message.finishReason ? { finishReason: message.finishReason } : {}),
         });
       }
       for (const call of message.toolCalls ?? []) calls.set(call.id, call);
