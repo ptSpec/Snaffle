@@ -9,6 +9,7 @@ import { ToolInputError, toolErrorContent } from "../tools/tool.js";
 import { truncateMiddle } from "../tools/output.js";
 import type { Trace } from "./trace.js";
 import type { Workspace } from "../execution/workspace.js";
+import { applySubagentUpdate, type SubagentActivity } from "./subagents/activity.js";
 
 export type RunAgentOptions = {
   task: string;
@@ -136,10 +137,16 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         let resultSources: SourceReference[] | undefined;
         let isError = false;
         let inputError = false;
+        let details: SubagentActivity | undefined;
 
         try {
           if (!tool) throw new Error(`Unknown tool: ${call.name}`);
-          const result = await tool.execute(options.workspace, call.input);
+          const result = await tool.execute(options.workspace, call.input, {
+            report: async (update) => {
+              details = applySubagentUpdate(details, update);
+              await emit(options, { type: "tool.updated", callId: call.id, update });
+            },
+          });
           content = result.content;
           exitCode = result.exitCode;
           resultSources = result.sources;
@@ -160,6 +167,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           ...(inputError ? { inputError: true } : {}),
           ...(exitCode === undefined ? {} : { exitCode }),
           ...(call.inputRepair ? { inputRepair: call.inputRepair } : {}),
+          ...(details ? { details } : {}),
         };
         messages.push(toolMessage);
         await options.onMessage?.(toolMessage, nextSequence);
@@ -171,6 +179,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           call,
           content,
           isError,
+          ...(details ? { details } : {}),
           ...(exitCode === undefined ? {} : { exitCode }),
         });
         nextSequence += 1;

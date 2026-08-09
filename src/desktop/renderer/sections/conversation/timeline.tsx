@@ -381,6 +381,16 @@ function ToolIcon({ name }: { name: string }): JSX.Element {
     );
   }
 
+  if (name === "delegate_task") {
+    return (
+      <svg className="tool-row-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <circle cx="5" cy="4" r="2" />
+        <circle cx="11" cy="12" r="2" />
+        <path d="M5 6v2a4 4 0 0 0 4 4M7 4h2a2 2 0 0 1 2 2v4" />
+      </svg>
+    );
+  }
+
   return (
     <svg className="tool-row-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M3 1.5h6l4 4v9H3zM9 1.5v4h4" />

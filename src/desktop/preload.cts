@@ -4,6 +4,7 @@ import type { ProviderConnectionInput } from "../providers/provider.js";
 import type { DesktopApi, DesktopRunEvent, GitFileContents, SaveMessageInput, StartRunInput } from "./api.js";
 import type { FontId } from "./typography.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js";
+import type { SubagentProfile } from "../agent/subagents/profile.js";
 
 const api: DesktopApi = {
   platform: process.platform,
@@ -66,6 +67,8 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:set-provider-timeout", minutes),
   setProviderRetries: (retries: number) =>
     ipcRenderer.invoke("desktop:set-provider-retries", retries),
+  setSubagent: (profile: SubagentProfile) =>
+    ipcRenderer.invoke("desktop:set-subagent", profile),
   setCompaction: (mode, threshold) =>
     ipcRenderer.invoke("desktop:set-compaction", mode, threshold),
   getContextReport: (threadId, contextLength) =>

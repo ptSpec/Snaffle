@@ -2,6 +2,7 @@ import { safeStorage } from "electron";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { CompactionMode } from "../context/budget.js";
+import type { SubagentProfile } from "../agent/subagents/profile.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js";
 import type { FontId } from "./typography.js";
 
@@ -20,6 +21,7 @@ export type SavedSettings = {
   maxSteps?: unknown;
   providerTimeoutMinutes?: unknown;
   providerRetries?: unknown;
+  subagent?: unknown;
   compactionMode?: unknown;
   compactionThreshold?: unknown;
   selectedModel?: unknown;
@@ -46,6 +48,7 @@ export type SettingsUpdate = {
   maxSteps?: number;
   providerTimeoutMinutes?: number;
   providerRetries?: number;
+  subagent?: SubagentProfile;
   compactionMode?: CompactionMode;
   compactionThreshold?: number;
   selectedModel?: string;

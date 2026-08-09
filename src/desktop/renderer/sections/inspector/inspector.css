@@ -94,3 +94,106 @@ pre {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+
+.subagent-inspector {
+  color: var(--text-muted);
+}
+
+.subagent-heading,
+.subagent-step-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.subagent-status {
+  padding: 4px 9px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  font-size: calc(12px * var(--interface-font-scale));
+  text-transform: capitalize;
+}
+
+.subagent-status.completed {
+  color: var(--status-success-text);
+}
+
+.subagent-status.failed,
+.subagent-tool.failed summary {
+  color: var(--status-error-text);
+}
+
+.subagent-provider {
+  color: var(--text-faint);
+}
+
+.subagent-runs {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.subagent-run {
+  margin: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+}
+
+.subagent-run > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--card-background);
+  list-style: none;
+}
+
+.subagent-run > summary::-webkit-details-marker {
+  display: none;
+}
+
+.subagent-run > summary small {
+  color: var(--text-faint);
+  text-transform: capitalize;
+}
+
+.subagent-run.running > summary small,
+.subagent-run.completed > summary small {
+  color: var(--status-success-text);
+}
+
+.subagent-run.failed > summary small {
+  color: var(--status-error-text);
+}
+
+.subagent-run-body {
+  padding: 0 12px 12px;
+  border-top: 1px solid var(--border-default);
+}
+
+.subagent-step {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-default);
+}
+
+.subagent-step-heading span {
+  color: var(--text-faint);
+  font-size: calc(12px * var(--interface-font-scale));
+}
+
+.subagent-inspector details {
+  margin-top: 10px;
+}
+
+.subagent-inspector summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.subagent-return {
+  margin-top: 14px !important;
+}

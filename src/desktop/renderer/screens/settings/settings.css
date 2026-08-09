@@ -23,6 +23,20 @@
   color: var(--text-muted);
 }
 
+.settings-group {
+  margin-top: 30px;
+}
+
+.settings-group h2 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: calc(18px * var(--interface-font-scale));
+}
+
+.settings-group .settings-description {
+  margin-bottom: 14px;
+}
+
 .theme-picker {
   position: relative;
 }

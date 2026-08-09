@@ -59,6 +59,11 @@
   overflow: auto;
 }
 
+.inspector-content {
+  box-sizing: border-box;
+  padding-inline: 10px;
+}
+
 .inspector-empty,
 .git-state {
   margin: 18px 2px;

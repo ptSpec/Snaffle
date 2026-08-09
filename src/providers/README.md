@@ -13,3 +13,7 @@ Most hosted and local servers need no new provider code. llama.cpp, Ollama, and 
 Add a definition only when a provider has a useful native capability, such as OpenRouter's catalog and key status or DeepSeek's catalog and account balance. If a future provider uses another inference protocol, implement its adapter here and register its small definition in `registry.ts`.
 
 Keep provider retry, stream parsing, catalog discovery, and usage normalization here. Keep agent behavior, tools, UI, and analytics provider-neutral. Secrets remain in the Electron main process and must not cross into the renderer.
+
+## Pinned capacity scheduler
+
+Revisit a provider-level scheduler when concurrent local work becomes a measured need. A connection may declare a parallel capacity shared by main threads, subagents, compaction, and background requests. Eligible delegated or background work may use an explicitly approved remote overflow connection when local slots are full; main conversations should preserve their selected model and normally queue. Remote overflow must be opt-in because it can move workspace content outside the local privacy boundary.
