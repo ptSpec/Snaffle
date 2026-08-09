@@ -1,4 +1,5 @@
 import type { AttachmentRef } from "./attachments/types.js";
+import type { SubagentActivity, SubagentActivityUpdate } from "./agent/subagents/activity.js";
 
 export type JsonSchema = Record<string, unknown>;
 
@@ -37,6 +38,7 @@ export type Message =
       inputError?: boolean;
       exitCode?: number | null;
       inputRepair?: string;
+      details?: SubagentActivity;
     };
 
 export type ToolSpec = {
@@ -93,6 +95,7 @@ export type RunEvent =
   | { type: "permission.resolved"; id: string; decision: CommandApprovalDecision }
   | { type: "model.completed"; step: number; sequence: number; model: string; providerId: string; providerConnectionId: string; durationMs: number; response: ModelResponse }
   | { type: "tool.started"; step: number; index: number; call: ToolCall }
+  | { type: "tool.updated"; callId: string; update: SubagentActivityUpdate }
   | {
       type: "tool.completed";
       step: number;
@@ -102,6 +105,7 @@ export type RunEvent =
       content: string;
       isError: boolean;
       exitCode?: number | null;
+      details?: SubagentActivity;
     }
   | { type: "run.completed"; text: string; steps: number }
   | { type: "run.persisted" }

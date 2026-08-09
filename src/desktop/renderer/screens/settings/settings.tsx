@@ -5,6 +5,7 @@ import type { FontId } from "../../../typography.js";
 import type { SettingsPage } from "../../sections/sidebar/sidebar.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../../../../tools/web/types.js";
 import type { CompactionMode } from "../../../../context/budget.js";
+import type { SubagentProfile } from "../../../../agent/subagents/profile.js";
 import type {
   ProviderCatalog,
   ProviderConnection,
@@ -34,6 +35,7 @@ export function Settings({
   maxSteps,
   providerTimeoutMinutes,
   providerRetries,
+  subagent,
   compactionMode,
   compactionThreshold,
   ketchAvailable,
@@ -55,6 +57,7 @@ export function Settings({
   onMaxSteps,
   onProviderTimeoutMinutes,
   onProviderRetries,
+  onSubagent,
   onCompaction,
   onWebSearchEnabled,
   onWebSearchBackend,
@@ -78,6 +81,7 @@ export function Settings({
   maxSteps: number;
   providerTimeoutMinutes: number;
   providerRetries: number;
+  subagent: SubagentProfile;
   compactionMode: CompactionMode;
   compactionThreshold: number;
   ketchAvailable: boolean;
@@ -99,6 +103,7 @@ export function Settings({
   onMaxSteps: (maxSteps: number) => void;
   onProviderTimeoutMinutes: (minutes: number) => void;
   onProviderRetries: (retries: number) => void;
+  onSubagent: (profile: SubagentProfile) => void;
   onCompaction: (mode: CompactionMode, threshold: number) => void;
   onWebSearchEnabled: (enabled: boolean) => void;
   onWebSearchBackend: (backend: WebSearchBackend) => void;
@@ -167,10 +172,14 @@ export function Settings({
         maxSteps={maxSteps}
         providerTimeoutMinutes={providerTimeoutMinutes}
         providerRetries={providerRetries}
+        subagent={subagent}
+        providerConnections={providerConnections}
+        providerCatalogs={providerCatalogs}
         error={error}
         onMaxSteps={onMaxSteps}
         onProviderTimeoutMinutes={onProviderTimeoutMinutes}
         onProviderRetries={onProviderRetries}
+        onSubagent={onSubagent}
       />
     );
   }
