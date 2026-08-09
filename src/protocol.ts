@@ -23,6 +23,8 @@ export type Message =
       reasoning?: string;
       toolCalls?: ToolCall[];
       model?: string;
+      providerId?: string;
+      providerConnectionId?: string;
       usage?: Usage;
       durationMs?: number;
       sources?: SourceReference[];
@@ -47,6 +49,9 @@ export type Usage = {
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
+  cachedInputTokens?: number;
+  reasoningTokens?: number;
+  costUsd?: number;
 };
 
 export type CommandApprovalDecision = "deny" | "once" | "thread";
@@ -61,7 +66,7 @@ export type ModelResponse = {
 };
 
 export type RunEvent =
-  | { type: "run.started"; task: string; model: string }
+  | { type: "run.started"; task: string; model: string; providerId: string; providerConnectionId: string }
   | { type: "context.compaction.started"; afterSequence: number }
   | {
       type: "context.compaction.completed";
@@ -86,7 +91,7 @@ export type RunEvent =
   | { type: "model.retry"; step: number; attempt: number; maxRetries: number; message: string }
   | { type: "permission.requested"; id: string; command: string; cwd: string; reason: string }
   | { type: "permission.resolved"; id: string; decision: CommandApprovalDecision }
-  | { type: "model.completed"; step: number; sequence: number; model: string; durationMs: number; response: ModelResponse }
+  | { type: "model.completed"; step: number; sequence: number; model: string; providerId: string; providerConnectionId: string; durationMs: number; response: ModelResponse }
   | { type: "tool.started"; step: number; index: number; call: ToolCall }
   | {
       type: "tool.completed";

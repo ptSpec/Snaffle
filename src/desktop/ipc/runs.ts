@@ -13,7 +13,7 @@ import { projectContext } from "../../context/projection.js";
 import { estimateContextCharacters, estimateContextTokens } from "../../context/budget.js";
 import { probeNativeSandbox } from "../../execution/native/sandbox.js";
 import { LocalWorkspace, type CommandApprovalRequest } from "../../execution/workspace.js";
-import { OpenRouterProvider } from "../../providers/openrouter.js";
+import type { ModelProvider } from "../../providers/provider.js";
 import type { CommandApprovalDecision, Message, RunEvent } from "../../protocol.js";
 import type { DesktopState, StartRunInput } from "../api.js";
 import type { DesktopStore } from "../store.js";
@@ -32,8 +32,12 @@ export function registerRunIpc(options: {
   attachments: AttachmentStore;
   compactor: ContextCompactor;
   state: (includeConversation?: boolean) => Promise<DesktopState>;
-  capabilities: (apiKey: string) => ActiveCapabilities;
-  apiKey: () => string;
+  capabilities: () => ActiveCapabilities;
+  provider: (
+    connectionId: string,
+    model: string,
+    resolveAttachment: (attachment: AttachmentRef) => ReturnType<AttachmentStore["resolve"]>,
+  ) => ModelProvider;
   settings: () => {
     maxSteps: number;
     providerTimeoutMinutes: number;
@@ -103,9 +107,8 @@ export function registerRunIpc(options: {
       if (!sandbox.available) throw new Error(sandbox.detail);
     }
 
-    const apiKey = options.apiKey();
     const settings = options.settings();
-    await options.store.setThreadModel(input.threadId, input.model);
+    await options.store.setThreadModel(input.threadId, input.providerConnectionId, input.model);
     const controller = new AbortController();
     const threadId = input.threadId;
     const workspace = new LocalWorkspace(
@@ -121,13 +124,19 @@ export function registerRunIpc(options: {
       acceptingSteering: true,
     };
     active.set(threadId, run);
-    const capabilities = options.capabilities(apiKey);
+    const capabilities = options.capabilities();
     const toolSpecs = capabilities.tools.map(({ tool }) => ({
       name: tool.name,
       description: tool.description,
       inputSchema: tool.inputSchema,
     }));
-    const compactionInput = { threadId, model: input.model, contextLength: input.contextLength, tools: toolSpecs };
+    const compactionInput = {
+      threadId,
+      providerConnectionId: input.providerConnectionId,
+      model: input.model,
+      contextLength: input.contextLength,
+      tools: toolSpecs,
+    };
     let conversation: Message[];
     let nextSequence: number;
 
@@ -182,13 +191,11 @@ export function registerRunIpc(options: {
 
     void runAgent({
       task: input.task,
-      provider: new OpenRouterProvider({
-        model: input.model,
-        apiKey,
-        streamIdleTimeoutMs: settings.providerTimeoutMinutes * 60_000,
-        maxRetries: settings.providerRetries,
-        resolveAttachment: (attachment) => options.attachments.resolve(attachment),
-      }),
+      provider: options.provider(
+        input.providerConnectionId,
+        input.model,
+        (attachment) => options.attachments.resolve(attachment),
+      ),
       capabilities,
       workspace,
       trace: memoryTrace,
@@ -291,6 +298,9 @@ function parseStartRunInput(input: unknown): StartRunInput {
   const value = input as Record<string, unknown>;
   const task = typeof value.task === "string" ? value.task.trim() : "";
   const model = typeof value.model === "string" ? value.model.trim() : "";
+  const providerConnectionId = typeof value.providerConnectionId === "string"
+    ? value.providerConnectionId.trim()
+    : "";
   const contextLength = Number.isInteger(value.contextLength) && Number(value.contextLength) > 0
     ? Number(value.contextLength)
     : 128_000;
@@ -298,10 +308,18 @@ function parseStartRunInput(input: unknown): StartRunInput {
   if (attachments.length > MAX_ATTACHMENTS) throw new Error(`Attach at most ${MAX_ATTACHMENTS} files`);
   if (!task && attachments.length === 0) throw new Error("Enter a task or attach a file before starting a run");
   if (task.length > 30000) throw new Error("Task is too long");
-  if (!model) throw new Error("Choose an OpenRouter model before starting a run");
+  if (!providerConnectionId) throw new Error("Choose a provider before starting a run");
+  if (!model) throw new Error("Choose a model before starting a run");
   const threadId = typeof value.threadId === "string" ? value.threadId : "";
   if (!threadId) throw new Error("Choose a thread before starting a run");
-  return { threadId, task, model, contextLength, ...(attachments.length ? { attachments } : {}) };
+  return {
+    threadId,
+    task,
+    providerConnectionId,
+    model,
+    contextLength,
+    ...(attachments.length ? { attachments } : {}),
+  };
 }
 
 function parseAttachment(input: unknown): AttachmentRef {

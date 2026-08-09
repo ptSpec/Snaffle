@@ -4,9 +4,8 @@ import path from "node:path";
 import { runAgent } from "./agent/loop.js";
 import { builtInCapabilities } from "./capabilities/active.js";
 import { ENV_PREFIX, LOCAL_STATE_DIRECTORY, PROJECT, projectEnvironment } from "./identity.js";
-import { OpenAICompatibleProvider } from "./providers/openai-compatible.js";
-import { listOpenRouterModels, OpenRouterProvider } from "./providers/openrouter.js";
-import type { ModelProvider } from "./providers/provider.js";
+import { createProvider, providerDefinition } from "./providers/registry.js";
+import type { ResolvedProviderConnection } from "./providers/provider.js";
 import type { RunEvent } from "./protocol.js";
 import { probeNativeSandbox } from "./execution/native/sandbox.js";
 import { defaultTools } from "./tools/built-ins.js";
@@ -16,7 +15,7 @@ import { LocalWorkspace } from "./execution/workspace.js";
 
 type CliOptions = {
   task: string;
-  provider: "openai-compatible" | "openrouter";
+  provider: string;
   workspace: string;
   baseUrl: string;
   model: string;
@@ -31,12 +30,9 @@ async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
 
   if (options.listModels) {
-    if (options.provider !== "openrouter") {
-      throw new Error("--list-models currently requires --provider openrouter");
-    }
-    if (!options.apiKey) throw new Error("Set --api-key or OPENROUTER_API_KEY");
-
-    const models = await listOpenRouterModels(options.apiKey);
+    const definition = providerDefinition(options.provider);
+    if (!definition.listModels) throw new Error(`${definition.name} does not support model discovery`);
+    const models = await definition.listModels(cliConnection(options));
     for (const model of models) {
       console.log(`${model.id}\t${model.contextLength ?? "-"}\t${model.name}`);
     }
@@ -56,7 +52,7 @@ async function main(): Promise<void> {
 
   const result = await runAgent({
     task: options.task,
-    provider: createProvider(options),
+    provider: createCliProvider(options),
     capabilities: builtInCapabilities(defaultTools(webSearchOptions(options))),
     workspace: new LocalWorkspace(options.workspace, options.unsafeHost ? "unsafe" : "restricted"),
     trace: new JsonlTrace(options.tracePath),
@@ -101,9 +97,7 @@ function parseArgs(args: string[]): CliOptions {
 
   const task = taskParts.join(" ").trim();
   const provider = values.get("--provider") ?? "openai-compatible";
-  if (provider !== "openai-compatible" && provider !== "openrouter") {
-    throw new Error("--provider must be openai-compatible or openrouter");
-  }
+  providerDefinition(provider);
   const modelEnvironmentVariable = `${ENV_PREFIX}_MODEL`;
   const model = values.get("--model") ?? projectEnvironment("MODEL", process.env);
   if (!listModels && !task) throw new Error("A task is required");
@@ -142,20 +136,25 @@ function parseArgs(args: string[]): CliOptions {
   };
 }
 
-function createProvider(options: CliOptions): ModelProvider {
-  if (options.provider === "openrouter") {
-    if (!options.apiKey) throw new Error("Set --api-key or OPENROUTER_API_KEY");
-    return new OpenRouterProvider({
-      model: options.model,
-      apiKey: options.apiKey,
-    });
-  }
+function createCliProvider(options: CliOptions) {
+  return createProvider(cliConnection(options), options.model, {});
+}
 
-  return new OpenAICompatibleProvider({
-    baseUrl: options.baseUrl,
-    model: options.model,
-    ...(options.apiKey === undefined ? {} : { apiKey: options.apiKey }),
-  });
+function cliConnection(options: CliOptions): ResolvedProviderConnection {
+  const definition = providerDefinition(options.provider);
+  if (definition.apiKey === "required" && !options.apiKey) {
+    throw new Error(`Set --api-key for ${definition.name}`);
+  }
+  return {
+    id: "cli",
+    providerId: definition.id,
+    name: definition.name,
+    baseUrl: options.provider === "openai-compatible" ? options.baseUrl : definition.defaultBaseUrl,
+    enabled: true,
+    hasApiKey: Boolean(options.apiKey),
+    manualModels: [],
+    ...(options.apiKey ? { apiKey: options.apiKey } : {}),
+  };
 }
 
 function webSearchOptions(options: CliOptions) {
@@ -202,7 +201,7 @@ Options:
   --base-url <url>    OpenAI-compatible base URL (default: http://localhost:11434/v1)
   --model <name>      Model name; may also use ${ENV_PREFIX}_MODEL
   --api-key <key>     API key; prefer OPENROUTER_API_KEY or ${ENV_PREFIX}_API_KEY
-  --list-models       List tool-capable OpenRouter models, then exit
+  --list-models       List models exposed by the selected provider, then exit
   --max-steps <n>     Maximum model turns (default: 20)
   --trace <path>      JSONL trace path (default: ${LOCAL_STATE_DIRECTORY}/traces/...)
   --unsafe-host       Run commands without native sandbox restrictions

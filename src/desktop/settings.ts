@@ -23,6 +23,8 @@ export type SavedSettings = {
   compactionMode?: unknown;
   compactionThreshold?: unknown;
   selectedModel?: unknown;
+  selectedProviderConnectionId?: unknown;
+  providerConnections?: unknown;
   tavilyApiKey?: unknown;
   webSearchEnabled?: unknown;
   webSearchBackend?: unknown;
@@ -47,6 +49,8 @@ export type SettingsUpdate = {
   compactionMode?: CompactionMode;
   compactionThreshold?: number;
   selectedModel?: string;
+  selectedProviderConnectionId?: string;
+  providerConnections?: unknown[];
   tavilyApiKey?: string | undefined;
   webSearchEnabled?: boolean;
   webSearchBackend?: WebSearchBackend;

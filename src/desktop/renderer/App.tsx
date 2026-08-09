@@ -13,11 +13,12 @@ import {
 import type { AttachmentPreview, AttachmentRef } from "../../attachments/types.js";
 import type { CommandApprovalDecision } from "../../protocol.js";
 import type { DesktopApi, DesktopRunEvent, DesktopSearchResult, DesktopState, DesktopThread, SavedMessage } from "../api.js";
-import type { OpenRouterModel } from "../../providers/openrouter.js";
+import type { ProviderCatalog, ProviderConnectionInput, ProviderStatus } from "../../providers/provider.js";
 import type { CompactionMode } from "../../context/budget.js";
 import type { ContextReport } from "../../context/report.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../../tools/web/types.js";
 import { DEFAULT_MODEL_CONTEXT_LENGTH } from "../../providers/provider.js";
+import { providerProfile, splitModelVariant } from "../../providers/profiles.js";
 import { DEFAULT_THEME, themeById, type Theme } from "../themes/index.js";
 import {
   CONVERSATION_FONT_BASE,
@@ -63,6 +64,7 @@ const initialState: DesktopState = {
   conversation: [],
   contextCheckpoints: [],
   savedMessages: [],
+  providerConnections: [],
   openRouterAvailable: false,
   ketchAvailable: false,
   webSearchEnabled: true,
@@ -71,6 +73,7 @@ const initialState: DesktopState = {
   runningThreadIds: [],
   unsafeThreadIds: [],
   defaultModel: null,
+  defaultProviderConnectionId: "openrouter",
   restrictedHostAvailable: false,
   restrictedHostDetail: "Checking restricted execution…",
   themeId: document.documentElement.dataset.theme ?? DEFAULT_THEME.id,
@@ -94,8 +97,9 @@ const initialState: DesktopState = {
 export function App(): JSX.Element {
   const [desktopState, setDesktopState] = useState(initialState);
   const [savedMessages, setSavedMessages] = useState<SavedMessage[] | null>(null);
-  const [models, setModels] = useState<OpenRouterModel[]>([]);
+  const [models, setModels] = useState<ProviderCatalog[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
+  const [selectedProviderConnectionId, setSelectedProviderConnectionId] = useState("openrouter");
   const [task, setTask] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentPreview[]>([]);
   const [draggingAttachments, setDraggingAttachments] = useState(false);
@@ -360,8 +364,10 @@ export function App(): JSX.Element {
         if (state.activeThreadId) threadTimelines.current.set(state.activeThreadId, initialTimeline);
         setTimeline(initialTimeline);
         setTask(activeDraft(state));
-        setSelectedModel(activeModel(state));
-        if (state.openRouterAvailable) void loadModels();
+        const selection = activeModel(state);
+        setSelectedModel(selection.model);
+        setSelectedProviderConnectionId(selection.providerConnectionId);
+        void loadModels();
       })
       .catch((cause: unknown) => setError(errorMessage(cause)));
 
@@ -399,13 +405,18 @@ export function App(): JSX.Element {
     (total, attachment) => total + attachment.estimatedTokens,
     0,
   );
-  const selectedContextLength = models.find((model) => model.id === selectedModel)?.contextLength ??
+  const selectedCatalog = models.find((catalog) => catalog.connection.id === selectedProviderConnectionId);
+  const selectedProfile = selectedCatalog ? providerProfile(selectedCatalog.connection.providerId) : undefined;
+  const selectedModelBase = splitModelVariant(selectedModel, selectedProfile?.modelVariants).baseModelId;
+  const selectedProviderModel = selectedCatalog?.models.find((model) => model.id === selectedModel) ??
+    selectedCatalog?.models.find((model) => model.id === selectedModelBase);
+  const selectedContextLength = selectedProviderModel?.contextLength ??
     DEFAULT_MODEL_CONTEXT_LENGTH;
   const pendingContextTokens = Math.ceil(task.length / 4) + pendingAttachments.reduce(
     (total, attachment) => total + attachment.estimatedTokens,
     0,
   );
-  const selectedModalities = models.find((model) => model.id === selectedModel)?.inputModalities;
+  const selectedModalities = selectedProviderModel?.inputModalities;
   const imageUnsupported = contextAttachments.some((attachment) => attachment.kind === "image") &&
     selectedModalities !== undefined && !selectedModalities.includes("image");
   const attachmentsTooLarge = attachmentTokens > selectedContextLength * 0.7;
@@ -413,8 +424,10 @@ export function App(): JSX.Element {
     ? "Open a workspace before sending."
     : !task.trim() && pendingAttachments.length === 0
       ? "Describe a task or attach a file before sending."
-      : !selectedModel
+      : !selectedModel || !selectedCatalog
         ? "Select a model before sending."
+        : selectedCatalog.error && selectedCatalog.models.length === 0
+          ? "The selected provider connection is unavailable."
         : attachmentsTooLarge
           ? "Attachments are too large for the selected model context."
           : imageUnsupported
@@ -443,7 +456,12 @@ export function App(): JSX.Element {
     setCompactingContext(true);
     setError(null);
     try {
-      await window.desktop.compactContext(threadId, selectedModel, selectedContextLength);
+      await window.desktop.compactContext(
+        threadId,
+        selectedProviderConnectionId,
+        selectedModel,
+        selectedContextLength,
+      );
       setContextReport(await window.desktop.getContextReport(threadId, selectedContextLength));
     } catch (cause) {
       setError(errorMessage(cause));
@@ -457,7 +475,7 @@ export function App(): JSX.Element {
     setLoadingModels(true);
 
     try {
-      setModels(await window.desktop.listOpenRouterModels());
+      setModels(await window.desktop.listProviderModels());
     } catch (cause) {
       setError(errorMessage(cause));
     } finally {
@@ -496,6 +514,7 @@ export function App(): JSX.Element {
     const request = {
       threadId,
       task: task.trim(),
+      providerConnectionId: selectedProviderConnectionId,
       model: selectedModel,
       contextLength: selectedContextLength,
       ...(pendingAttachments.length
@@ -783,7 +802,9 @@ export function App(): JSX.Element {
       threadTimelines.current.set(state.activeThreadId, nextTimeline);
     }
     setTimeline(nextTimeline);
-    setSelectedModel(activeModel(state));
+    const selection = activeModel(state);
+    setSelectedModel(selection.model);
+    setSelectedProviderConnectionId(selection.providerConnectionId);
     setSelectedItemId(null);
     setTask(activeDraft(state));
     setPendingAttachments(
@@ -977,11 +998,40 @@ export function App(): JSX.Element {
     }
   }
 
-  function selectModel(model: string): void {
+  function selectModel(providerConnectionId: string, model: string): void {
     setSelectedModel(model);
+    setSelectedProviderConnectionId(providerConnectionId);
     const threadId = desktopState.activeThreadId;
-    setDesktopState((state) => setStateModel(state, threadId, model));
-    void window.desktop.setSelectedModel(threadId, model).catch((cause) => setError(errorMessage(cause)));
+    setDesktopState((state) => setStateModel(state, threadId, providerConnectionId, model));
+    void window.desktop.setSelectedModel(threadId, providerConnectionId, model)
+      .catch((cause) => setError(errorMessage(cause)));
+  }
+
+  async function saveProviderConnection(input: ProviderConnectionInput): Promise<void> {
+    setError(null);
+    try {
+      const state = await window.desktop.saveProviderConnection(input);
+      setDesktopState(withoutConversation(state));
+      await loadModels();
+    } catch (cause) {
+      setError(errorMessage(cause));
+      throw cause;
+    }
+  }
+
+  async function removeProviderConnection(id: string): Promise<void> {
+    setError(null);
+    try {
+      const state = await window.desktop.removeProviderConnection(id);
+      setDesktopState(withoutConversation(state));
+      const selection = activeModel(state);
+      setSelectedModel(selection.model);
+      setSelectedProviderConnectionId(selection.providerConnectionId);
+      await loadModels();
+    } catch (cause) {
+      setError(errorMessage(cause));
+      throw cause;
+    }
   }
 
   async function setTypography(interfaceFont: FontId, primaryFont: FontId, secondaryFont: FontId, codeFont: FontId): Promise<void> {
@@ -1176,6 +1226,9 @@ export function App(): JSX.Element {
             webSearchEnabled={desktopState.webSearchEnabled}
             webSearchBackend={desktopState.webSearchBackend}
             webSearchKeyBackends={desktopState.webSearchKeyBackends}
+            providerConnections={desktopState.providerConnections}
+            providerCatalogs={models}
+            loadingProviderModels={loadingModels}
             error={error}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
             onTypography={(interfaceFont, primary, secondary, code) => void setTypography(interfaceFont, primary, secondary, code)}
@@ -1191,6 +1244,9 @@ export function App(): JSX.Element {
             onWebSearchEnabled={(enabled) => void setWebSearchEnabled(enabled)}
             onWebSearchBackend={(backend) => void setWebSearchBackend(backend)}
             onWebSearchApiKey={(backend, apiKey) => void setWebSearchApiKey(backend, apiKey)}
+            onSaveProvider={saveProviderConnection}
+            onRemoveProvider={removeProviderConnection}
+            onTestProvider={(id) => window.desktop.getProviderStatus(id)}
           />
         ) : view === "saved" ? (
           <Bookmarks
@@ -1271,9 +1327,10 @@ export function App(): JSX.Element {
             running={running}
             pendingAttachmentCount={pendingAttachments.length}
             models={models}
+            selectedProviderConnectionId={selectedProviderConnectionId}
             selectedModel={selectedModel}
             loadingModels={loadingModels}
-            providerAvailable={desktopState.openRouterAvailable}
+            providerAvailable={desktopState.providerConnections.some((connection) => connection.enabled)}
             contextReport={contextReport}
             pendingContextTokens={pendingContextTokens}
             compactingContext={compactingContext}
@@ -1437,22 +1494,34 @@ function activeDraft(state: DesktopState): string {
   return state.workspace?.threads.find((thread) => thread.id === state.activeThreadId)?.draft ?? "";
 }
 
-function activeModel(state: DesktopState): string {
-  return state.workspace?.threads.find((thread) => thread.id === state.activeThreadId)?.model
-    ?? state.defaultModel
-    ?? "";
+function activeModel(state: DesktopState): { providerConnectionId: string; model: string } {
+  const thread = state.workspace?.threads.find((thread) => thread.id === state.activeThreadId);
+  return {
+    providerConnectionId: thread?.model
+      ? thread.providerConnectionId
+      : state.defaultProviderConnectionId,
+    model: thread?.model ?? state.defaultModel ?? "",
+  };
 }
 
-function setStateModel(state: DesktopState, threadId: string | null, model: string): DesktopState {
+function setStateModel(
+  state: DesktopState,
+  threadId: string | null,
+  providerConnectionId: string,
+  model: string,
+): DesktopState {
   const updateWorkspace = (workspace: DesktopState["workspace"]): DesktopState["workspace"] => workspace
     ? {
         ...workspace,
-        threads: workspace.threads.map((thread) => thread.id === threadId ? { ...thread, model } : thread),
+        threads: workspace.threads.map((thread) => thread.id === threadId
+          ? { ...thread, providerConnectionId, model }
+          : thread),
       }
     : null;
   return {
     ...state,
     defaultModel: model,
+    defaultProviderConnectionId: providerConnectionId,
     workspace: updateWorkspace(state.workspace),
     workspaces: state.workspaces.map((workspace) => updateWorkspace(workspace)!),
   };

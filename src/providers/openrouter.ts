@@ -1,17 +1,14 @@
 import type { AttachmentRef, ResolvedAttachment } from "../attachments/types.js";
 import { OpenAICompatibleProvider } from "./openai-compatible.js";
-import { DEFAULT_MODEL_CONTEXT_LENGTH } from "./provider.js";
+import {
+  DEFAULT_MODEL_CONTEXT_LENGTH,
+  type ProviderModel,
+  type ProviderStatus,
+} from "./provider.js";
 
 export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
-export type OpenRouterModel = {
-  id: string;
-  name: string;
-  contextLength: number;
-  promptPrice: string | null;
-  completionPrice: string | null;
-  inputModalities: string[];
-};
+export type OpenRouterModel = ProviderModel;
 
 export class OpenRouterProvider extends OpenAICompatibleProvider {
   constructor(options: {
@@ -26,6 +23,8 @@ export class OpenRouterProvider extends OpenAICompatibleProvider {
     super({
       baseUrl: OPENROUTER_BASE_URL,
       model: options.model,
+      providerId: "openrouter",
+      connectionId: "openrouter",
       apiKey: options.apiKey,
       ...(options.streamIdleTimeoutMs === undefined
         ? {}
@@ -38,6 +37,27 @@ export class OpenRouterProvider extends OpenAICompatibleProvider {
         : { resolveAttachment: options.resolveAttachment }),
     });
   }
+}
+
+export async function getOpenRouterStatus(apiKey: string, signal?: AbortSignal): Promise<ProviderStatus> {
+  const response = await fetch(`${OPENROUTER_BASE_URL}/key`, {
+    headers: { authorization: `Bearer ${apiKey}` },
+    ...(signal ? { signal } : {}),
+  });
+  if (!response.ok) throw new Error(`OpenRouter key request failed (${response.status})`);
+  const body = await response.json() as { data?: Record<string, unknown> };
+  const data = body.data ?? {};
+  const remaining = numberValue(data.limit_remaining);
+  const usage = numberValue(data.usage);
+  const details = [
+    ...(remaining === undefined ? [] : [{ label: "Remaining", value: `$${remaining.toFixed(2)}` }]),
+    ...(usage === undefined ? [] : [{ label: "Usage", value: `$${usage.toFixed(2)}` }]),
+  ];
+  return { message: "Connected", ...(details.length ? { details } : {}) };
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 export async function listOpenRouterModels(

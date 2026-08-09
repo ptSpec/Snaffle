@@ -22,6 +22,7 @@ type ContextRepository = {
     summary: string;
     sourceCharacters: number;
     model: string;
+    providerConnectionId: string;
   }): Promise<ContextCheckpoint>;
 };
 
@@ -33,6 +34,7 @@ export type ContextCompactionSettings = {
 export type ContextCompactionInput = {
   threadId: string;
   model: string;
+  providerConnectionId: string;
   contextLength: number;
   tools: ToolSpec[];
   throughSequence?: number;
@@ -44,7 +46,7 @@ export class ContextCompactor {
   constructor(private readonly options: {
     repository: ContextRepository;
     settings(): ContextCompactionSettings;
-    provider(model: string): ModelProvider;
+    provider(connectionId: string, model: string): ModelProvider;
     onEvent(threadId: string, event: RunEvent): void;
   }) {}
 
@@ -100,7 +102,7 @@ export class ContextCompactor {
         afterSequence: projection.lastSequence,
       });
 
-      const response = await this.options.provider(input.model).complete(
+      const response = await this.options.provider(input.providerConnectionId, input.model).complete(
         summaryMessages(messages, previous?.summary, input.contextLength < 50_000),
         [],
         new AbortController().signal,
@@ -113,6 +115,7 @@ export class ContextCompactor {
         summary: response.text.trim(),
         sourceCharacters: serialized.length + (previous?.summary.length ?? 0),
         model: input.model,
+        providerConnectionId: input.providerConnectionId,
       });
       this.options.onEvent(input.threadId, {
         type: "context.compaction.completed",
