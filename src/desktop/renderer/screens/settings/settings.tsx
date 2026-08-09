@@ -1,13 +1,21 @@
+import { useEffect, useRef } from "react";
 import { PROJECT } from "../../../../identity.js";
 import { THEMES } from "../../../themes/index.js";
 import type { FontId } from "../../../typography.js";
 import type { SettingsPage } from "../../sections/sidebar/sidebar.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../../../../tools/web/types.js";
 import type { CompactionMode } from "../../../../context/budget.js";
+import type {
+  ProviderCatalog,
+  ProviderConnection,
+  ProviderConnectionInput,
+  ProviderStatus,
+} from "../../../../providers/provider.js";
 import { AgentSettings } from "./agent.js";
 import { FontSetting, NumberSetting, ScaleSetting } from "./controls.js";
 import { ContextSettings } from "./context.js";
 import { EditorSettings } from "./editor.js";
+import { ProviderSettings } from "./providers.js";
 import { WebSettings } from "./web.js";
 
 export function Settings({
@@ -33,6 +41,9 @@ export function Settings({
   webSearchEnabled,
   webSearchBackend,
   webSearchKeyBackends,
+  providerConnections,
+  providerCatalogs,
+  loadingProviderModels,
   error,
   onSelectTheme,
   onTypography,
@@ -48,6 +59,9 @@ export function Settings({
   onWebSearchEnabled,
   onWebSearchBackend,
   onWebSearchApiKey,
+  onSaveProvider,
+  onRemoveProvider,
+  onTestProvider,
 }: {
   page: SettingsPage;
   themeId: string;
@@ -71,6 +85,9 @@ export function Settings({
   webSearchEnabled: boolean;
   webSearchBackend: WebSearchBackend;
   webSearchKeyBackends: KetchSearchBackend[];
+  providerConnections: ProviderConnection[];
+  providerCatalogs: ProviderCatalog[];
+  loadingProviderModels: boolean;
   error: string | null;
   onSelectTheme: (themeId: string) => void;
   onTypography: (interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId) => void;
@@ -86,7 +103,37 @@ export function Settings({
   onWebSearchEnabled: (enabled: boolean) => void;
   onWebSearchBackend: (backend: WebSearchBackend) => void;
   onWebSearchApiKey: (backend: KetchSearchBackend, apiKey: string) => void;
+  onSaveProvider(input: ProviderConnectionInput): Promise<void>;
+  onRemoveProvider(id: string): Promise<void>;
+  onTestProvider(id: string): Promise<ProviderStatus>;
 }): JSX.Element {
+  const themePicker = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    function closeThemePicker(event: PointerEvent): void {
+      if (event.target instanceof Node && !themePicker.current?.contains(event.target)) {
+        themePicker.current?.removeAttribute("open");
+      }
+    }
+
+    document.addEventListener("pointerdown", closeThemePicker);
+    return () => document.removeEventListener("pointerdown", closeThemePicker);
+  }, []);
+
+  if (page === "providers") {
+    return (
+      <ProviderSettings
+        connections={providerConnections}
+        catalogs={providerCatalogs}
+        loadingCatalogs={loadingProviderModels}
+        error={error}
+        onSave={onSaveProvider}
+        onRemove={onRemoveProvider}
+        onTest={onTestProvider}
+      />
+    );
+  }
+
   if (page === "context") {
     return (
       <ContextSettings
@@ -149,7 +196,7 @@ export function Settings({
         <h1>Appearance</h1>
         <p className="settings-description">Choose how {PROJECT.name} looks.</p>
 
-        <details className="theme-picker">
+        <details className="theme-picker" ref={themePicker}>
           <summary className="theme-option selected">
             <ThemePreview theme={selectedTheme} />
             <span>{selectedTheme.name}</span>

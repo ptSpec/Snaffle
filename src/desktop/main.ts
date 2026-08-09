@@ -14,7 +14,10 @@ import {
 import { ContextCompactor } from "../context/compaction.js";
 import { buildContextReport, type ContextReport } from "../context/report.js";
 import { PROJECT } from "../identity.js";
-import { OpenRouterProvider, listOpenRouterModels } from "../providers/openrouter.js";
+import {
+  OPENROUTER_CONNECTION_ID,
+  createProvider,
+} from "../providers/registry.js";
 import {
   DEFAULT_PROVIDER_RETRIES,
   DEFAULT_PROVIDER_TIMEOUT_MS,
@@ -36,6 +39,7 @@ import { registerSavedMessageIpc } from "./ipc/saved-messages.js";
 import { registerSearchIpc } from "./ipc/search.js";
 import { registerWorkspaceIpc } from "./ipc/workspaces.js";
 import { registerRunIpc, type RunIpc } from "./ipc/runs.js";
+import { registerProviderIpc } from "./ipc/providers.js";
 import {
   decodeSecret,
   encodeSecret,
@@ -55,6 +59,7 @@ import {
 } from "./typography.js";
 import { applicationIcon, createDesktopWindow } from "./window.js";
 import { configureDesktopIdentity, migrateLegacyUserData } from "./identity-migration.js";
+import { ProviderConnections } from "./provider-connections.js";
 
 const userDataMigration = configureDesktopIdentity();
 const desktopDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -66,6 +71,7 @@ let store: DesktopStore;
 let attachments: AttachmentStore;
 let runs: RunIpc;
 let contextCompactor: ContextCompactor;
+let providerConnections: ProviderConnections;
 let activeTheme: Theme = DEFAULT_THEME;
 let interfaceFont: FontId = DEFAULT_FONTS.interface;
 let primaryFont: FontId = DEFAULT_FONTS.primary;
@@ -87,6 +93,7 @@ let webSearchBackend: WebSearchBackend = "ddg";
 const storedWebSearchApiKeys: Partial<Record<KetchSearchBackend, string>> = {};
 const DEVELOPMENT_MODEL = "openai/gpt-5.6-luna";
 let selectedModel = DEVELOPMENT_MODEL;
+let selectedProviderConnectionId = OPENROUTER_CONNECTION_ID;
 
 
 async function start(): Promise<void> {
@@ -113,6 +120,22 @@ async function start(): Promise<void> {
   compactionMode = settings.compactionMode === "custom" ? "custom" : "automatic";
   customCompactionThreshold = validCompactionThreshold(settings.compactionThreshold) ?? DEFAULT_COMPACTION_THRESHOLD;
   selectedModel = typeof settings.selectedModel === "string" ? settings.selectedModel : DEVELOPMENT_MODEL;
+  selectedProviderConnectionId = typeof settings.selectedProviderConnectionId === "string"
+    ? settings.selectedProviderConnectionId
+    : OPENROUTER_CONNECTION_ID;
+  providerConnections = new ProviderConnections(
+    settings.providerConnections,
+    {
+      openrouter: process.env.OPENROUTER_API_KEY ?? "",
+      deepseek: process.env.DEEPSEEK_API_KEY ?? "",
+    },
+  );
+  try {
+    providerConnections.resolve(selectedProviderConnectionId);
+  } catch {
+    selectedProviderConnectionId = providerConnections.list().find((connection) => connection.enabled)?.id
+      ?? OPENROUTER_CONNECTION_ID;
+  }
   webSearchEnabled = settings.webSearchEnabled !== false;
   webSearchBackend = validWebSearchBackend(settings.webSearchBackend) ?? "ddg";
   loadWebSearchApiKeys(settings.webSearchApiKeys);
@@ -125,9 +148,7 @@ async function start(): Promise<void> {
   contextCompactor = new ContextCompactor({
     repository: store.context,
     settings: () => ({ mode: compactionMode, threshold: customCompactionThreshold }),
-    provider: (model) => new OpenRouterProvider({
-      model,
-      apiKey: openRouterApiKey(),
+    provider: (connectionId, model) => createProvider(providerConnections.resolve(connectionId), model, {
       streamIdleTimeoutMs: providerTimeoutMinutes * 60_000,
       maxRetries: providerRetries,
     }),
@@ -174,7 +195,15 @@ function registerIpc(): void {
     compactor: contextCompactor,
     state: desktopState,
     capabilities: currentCapabilities,
-    apiKey: openRouterApiKey,
+    provider: (connectionId, model, resolveAttachment) => createProvider(
+      providerConnections.resolve(connectionId),
+      model,
+      {
+        streamIdleTimeoutMs: providerTimeoutMinutes * 60_000,
+        maxRetries: providerRetries,
+        resolveAttachment,
+      },
+    ),
     settings: () => ({
       maxSteps,
       providerTimeoutMinutes,
@@ -183,6 +212,18 @@ function registerIpc(): void {
       compactionThreshold: customCompactionThreshold,
     }),
     sendEvent: sendRunEvent,
+  });
+  registerProviderIpc({
+    connections: providerConnections,
+    state: desktopState,
+    selected: () => selectedProviderConnectionId,
+    select: (id) => {
+      selectedProviderConnectionId = id;
+    },
+    persist: () => saveSettings({
+      providerConnections: providerConnections.serialize(),
+      selectedProviderConnectionId,
+    }),
   });
   registerWorkspaceIpc({
     store,
@@ -219,22 +260,21 @@ function registerIpc(): void {
   ipcMain.handle("desktop:compact-context", async (
     _event,
     rawThreadId: unknown,
+    rawConnectionId: unknown,
     rawModel: unknown,
     rawContextLength: unknown,
   ): Promise<void> => {
     const threadId = parseId(rawThreadId, "Thread");
+    const providerConnectionId = parseId(rawConnectionId, "Provider connection");
     const model = typeof rawModel === "string" ? rawModel.trim() : "";
     if (!model) throw new Error("Choose a model before compacting context");
     await contextCompactor.force({
       threadId,
+      providerConnectionId,
       model,
       contextLength: parseContextLength(rawContextLength),
       tools: currentToolSpecs(),
     });
-  });
-
-  ipcMain.handle("desktop:list-openrouter-models", async () => {
-    return listOpenRouterModels(openRouterApiKey());
   });
 
   ipcMain.handle("desktop:set-theme", (_event, themeId: unknown): void => {
@@ -291,14 +331,22 @@ function registerIpc(): void {
     saveSettings({ codeBlockFontSize });
   });
 
-  ipcMain.handle("desktop:set-selected-model", async (_event, threadId: unknown, value: unknown): Promise<void> => {
+  ipcMain.handle("desktop:set-selected-model", async (
+    _event,
+    threadId: unknown,
+    connectionValue: unknown,
+    value: unknown,
+  ): Promise<void> => {
     if (threadId !== null && (typeof threadId !== "string" || !threadId)) {
       throw new Error("Thread ID must be text");
     }
+    const connectionId = parseId(connectionValue, "Provider connection");
+    providerConnections.resolve(connectionId);
     if (typeof value !== "string") throw new Error("Model must be text");
-    if (threadId) await store.setThreadModel(threadId, value);
+    if (threadId) await store.setThreadModel(threadId, connectionId, value);
+    selectedProviderConnectionId = connectionId;
     selectedModel = value;
-    saveSettings({ selectedModel });
+    saveSettings({ selectedModel, selectedProviderConnectionId });
   });
 
   ipcMain.handle("desktop:set-editor-launcher", (_event, command: unknown, argumentsTemplate: unknown): void => {
@@ -397,7 +445,10 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     conversation: includeConversation ? await store.entries(state.activeThreadId) : [],
     contextCheckpoints: includeConversation ? await store.context.checkpoints(state.activeThreadId) : [],
     savedMessages: await store.savedMessages.summaries(),
-    openRouterAvailable: Boolean(process.env.OPENROUTER_API_KEY),
+    providerConnections: providerConnections.list(),
+    openRouterAvailable: providerConnections.list().find(
+      (connection) => connection.id === OPENROUTER_CONNECTION_ID,
+    )?.hasApiKey ?? false,
     ketchAvailable: Boolean(findKetch()),
     webSearchEnabled,
     webSearchBackend,
@@ -407,6 +458,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     runningThreadIds: runs.runningThreadIds(),
     unsafeThreadIds: runs.unsafeThreadIds(),
     defaultModel: selectedModel || null,
+    defaultProviderConnectionId: selectedProviderConnectionId,
     restrictedHostAvailable: sandbox.available,
     restrictedHostDetail: sandbox.detail,
     themeId: activeTheme.id,
@@ -456,14 +508,14 @@ function parseContextLength(value: unknown): number {
   return Number.isInteger(value) && Number(value) > 0 ? Number(value) : 128_000;
 }
 
-function currentCapabilities(apiKey = process.env.OPENROUTER_API_KEY ?? "") {
+function currentCapabilities() {
   return builtInCapabilities(
     defaultTools(webSearchEnabled
       ? {
           webSearchEnabled: true,
           backend: webSearchBackend,
           apiKey: webSearchApiKey(webSearchBackend),
-          openRouterApiKey: apiKey,
+          openRouterApiKey: openRouterApiKey(),
         }
       : {}),
   );
@@ -530,9 +582,11 @@ function parseId(value: unknown, label: string): string {
 }
 
 function openRouterApiKey(): string {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error("Set OPENROUTER_API_KEY in the development environment");
-  return apiKey;
+  try {
+    return providerConnections.resolve(OPENROUTER_CONNECTION_ID).apiKey ?? "";
+  } catch {
+    return "";
+  }
 }
 
 function webSearchApiKey(backend: WebSearchBackend): string | undefined {

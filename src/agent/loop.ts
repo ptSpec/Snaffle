@@ -60,6 +60,8 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
     type: "run.started",
     task: options.task,
     model: options.provider.model,
+    providerId: options.provider.providerId,
+    providerConnectionId: options.provider.connectionId,
   });
 
   try {
@@ -93,6 +95,8 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         step,
         sequence: nextSequence,
         model: options.provider.model,
+        providerId: options.provider.providerId,
+        providerConnectionId: options.provider.connectionId,
         durationMs,
         response,
       });
@@ -102,6 +106,8 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         ...(response.reasoning ? { reasoning: response.reasoning } : {}),
         ...(response.toolCalls.length ? { toolCalls: response.toolCalls } : {}),
         model: options.provider.model,
+        providerId: options.provider.providerId,
+        providerConnectionId: options.provider.connectionId,
         ...(response.usage ? { usage: response.usage } : {}),
         durationMs,
         ...(response.sources?.length ? { sources: response.sources } : {}),

@@ -11,7 +11,7 @@ import type { BookmarksPage } from "../../screens/bookmarks/bookmarks.js";
 import { ThinkingOrb } from "../../components/thinking-orb.js";
 
 export type AppView = "conversation" | "saved" | "search" | "settings";
-export type SettingsPage = "appearance" | "editor" | "agent" | "context" | "web";
+export type SettingsPage = "appearance" | "providers" | "editor" | "agent" | "context" | "web";
 
 export function Sidebar({
   state,
@@ -315,6 +315,13 @@ export function Sidebar({
               onClick={() => onSettingsPage("appearance")}
             >
               <span>Appearance</span>
+            </button>
+            <button
+              className={settingsPage === "providers" ? "sidebar-action active" : "sidebar-action"}
+              type="button"
+              onClick={() => onSettingsPage("providers")}
+            >
+              <span>Providers</span>
             </button>
             <button
               className={settingsPage === "editor" ? "sidebar-action active" : "sidebar-action"}

@@ -47,6 +47,7 @@ export class DesktopStore {
           title TEXT NOT NULL,
           draft TEXT NOT NULL DEFAULT '',
           model TEXT,
+          provider_connection_id TEXT NOT NULL DEFAULT 'openrouter',
           bookmarked INTEGER NOT NULL DEFAULT 0,
           source_thread_id TEXT,
           source_entry_id TEXT,
@@ -101,6 +102,11 @@ export class DesktopStore {
     }
     if (!threadColumns.has("model")) {
       await this.database.execute("ALTER TABLE threads ADD COLUMN model TEXT");
+    }
+    if (!threadColumns.has("provider_connection_id")) {
+      await this.database.execute(
+        "ALTER TABLE threads ADD COLUMN provider_connection_id TEXT NOT NULL DEFAULT 'openrouter'",
+      );
     }
     if (!threadColumns.has("source_thread_id")) {
       await this.database.execute("ALTER TABLE threads ADD COLUMN source_thread_id TEXT");
@@ -196,7 +202,7 @@ export class DesktopStore {
 
   async forkThread(sourceThreadId: string, throughSequence: number, branchLabel?: string, fallbackModel?: string): Promise<void> {
     const source = await this.database.execute({
-      sql: `SELECT t.workspace_id, t.title, t.model, e.id AS source_entry_id
+      sql: `SELECT t.workspace_id, t.title, t.model, t.provider_connection_id, e.id AS source_entry_id
         FROM threads t
         JOIN entries e ON e.thread_id = t.id
         WHERE t.id = ? AND e.sequence = ? AND e.role IN ('user', 'assistant')`,
@@ -219,14 +225,15 @@ export class DesktopStore {
       [
         {
           sql: `INSERT INTO threads(
-              id, workspace_id, title, model, source_thread_id, source_entry_id, branch_label,
+              id, workspace_id, title, model, provider_connection_id, source_thread_id, source_entry_id, branch_label,
               created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           args: [
             threadId,
             workspaceId,
             title,
             rowOptionalText(sourceRow, "model") ?? fallbackModel ?? null,
+            rowText(sourceRow, "provider_connection_id"),
             sourceThreadId,
             rowText(sourceRow, "source_entry_id"),
             label,
@@ -279,10 +286,10 @@ export class DesktopStore {
     if (result.rowsAffected === 0) throw new Error("Thread no longer exists");
   }
 
-  async setThreadModel(threadId: string, model: string): Promise<void> {
+  async setThreadModel(threadId: string, providerConnectionId: string, model: string): Promise<void> {
     const result = await this.database.execute({
-      sql: "UPDATE threads SET model = ? WHERE id = ?",
-      args: [model, threadId],
+      sql: "UPDATE threads SET provider_connection_id = ?, model = ? WHERE id = ?",
+      args: [providerConnectionId, model, threadId],
     });
     if (result.rowsAffected === 0) throw new Error("Thread no longer exists");
   }
@@ -574,6 +581,7 @@ function threadFromRow(row: Row): DesktopThread {
     title: rowText(row, "title"),
     draft: rowText(row, "draft"),
     model: rowOptionalText(row, "model"),
+    providerConnectionId: rowText(row, "provider_connection_id"),
     bookmarked: rowNumber(row, "bookmarked") === 1,
     sourceThreadId: rowOptionalText(row, "source_thread_id"),
     sourceEntryId: rowOptionalText(row, "source_entry_id"),
