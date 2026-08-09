@@ -60,7 +60,7 @@ export function AgentSettings({
         />
         <NumberSetting
           label="Provider retries"
-          description="Additional attempts after a provider request or stream fails."
+          description="Additional attempts after a provider failure. Later retries wait up to 45 seconds."
           value={providerRetries}
           min={0}
           max={10}

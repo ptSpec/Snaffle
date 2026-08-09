@@ -1,6 +1,7 @@
 import type { AttachmentRef, ResolvedAttachment } from "../attachments/types.js";
 import { PROJECT } from "../identity.js";
 import type { Message, ModelResponse, ToolCall, ToolSpec } from "../protocol.js";
+import { retryAfterMilliseconds, retryBackoffMs, waitForRetry } from "../retry.js";
 import { healToolInput } from "../tools/input.js";
 import {
   DEFAULT_MODEL_CONTEXT_LENGTH,
@@ -12,7 +13,7 @@ import {
 const MAX_STREAM_BUFFER_CHARS = 8 * 1024 * 1024;
 const MAX_STREAM_FIELD_CHARS = 4 * 1024 * 1024;
 export const DEFAULT_PROVIDER_TIMEOUT_MS = 3 * 60 * 1000;
-export const DEFAULT_PROVIDER_RETRIES = 2;
+export const DEFAULT_PROVIDER_RETRIES = 4;
 
 export type OpenAICompatibleOptions = {
   baseUrl: string;
@@ -67,6 +68,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
       let status: number | undefined;
       let emptyResponse = false;
+      let retryAfterMs = 0;
 
       try {
         const response = await fetch(`${this.baseUrl}/chat/completions`, {
@@ -96,6 +98,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
           signal,
         });
         status = response.status;
+        retryAfterMs = retryAfterMilliseconds(response.headers.get("retry-after"));
 
         if (!response.ok) {
           const body = (await response.text()).slice(0, 1000);
@@ -123,7 +126,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
         const message = error instanceof Error ? error.message : String(error);
         await onEvent?.({ type: "retry", attempt: nextAttempt, maxRetries, message });
         requestMessages = addRetryReminder(messages, message);
-        await retryDelay(250 * nextAttempt, signal);
+        await waitForRetry(retryBackoffMs(nextAttempt, retryAfterMs), signal);
       }
     }
 
@@ -203,25 +206,6 @@ function addRetryReminder(messages: Message[], failure: string): Message[] {
       ? { ...message, content: `${message.content}\n\n${notice}` }
       : message,
   );
-}
-
-function retryDelay(milliseconds: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(done, milliseconds);
-
-    function done(): void {
-      signal.removeEventListener("abort", aborted);
-      resolve();
-    }
-
-    function aborted(): void {
-      clearTimeout(timeout);
-      reject(signal.reason ?? new Error("Aborted"));
-    }
-
-    signal.addEventListener("abort", aborted, { once: true });
-    if (signal.aborted) aborted();
-  });
 }
 
 async function parseStream(
