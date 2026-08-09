@@ -2,6 +2,7 @@ import { constants, accessSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
+import { retryBackoffMs, waitForRetry } from "../../retry.js";
 import type { KetchSearchBackend } from "./types.js";
 
 type KetchSearchResult = { title?: unknown; url?: unknown; description?: unknown; content?: unknown };
@@ -35,9 +36,23 @@ export async function searchWithKetch(
   query: string,
   maxResults: number,
 ): Promise<{ title: string; url: string; content: string }[]> {
-  const output = await runKetch(executable, [
-    "search", query, "--backend", backend, "--limit", String(maxResults), "--json",
-  ], undefined, 15_000, apiKey ? { [keyEnvironment[backend]]: apiKey } : {});
+  const args = ["search", query, "--backend", backend, "--limit", String(maxResults), "--json"];
+  const environment = apiKey ? { [keyEnvironment[backend]]: apiKey } : {};
+  let output: string;
+  try {
+    output = await runKetch(executable, args, undefined, 15_000, environment);
+  } catch (error) {
+    if (backend !== "ddg" || !isDdgRateLimit(error)) throw error;
+    // Ketch already made two quick DDG retries; continue the shared schedule at retry three.
+    await waitForRetry(retryBackoffMs(3));
+    try {
+      output = await runKetch(executable, args, undefined, 15_000, environment);
+    } catch (retryError) {
+      if (!isDdgRateLimit(retryError)) throw retryError;
+      await waitForRetry(retryBackoffMs(4));
+      output = await runKetch(executable, args, undefined, 15_000, environment);
+    }
+  }
   const results = JSON.parse(output) as KetchSearchResult[];
   if (!Array.isArray(results)) throw new Error("Ketch returned invalid search results");
   return results.flatMap((result) =>
@@ -51,6 +66,10 @@ export async function searchWithKetch(
         }]
       : [],
   );
+}
+
+function isDdgRateLimit(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("ddg rate limited after retries");
 }
 
 export async function extractWithKetch(
