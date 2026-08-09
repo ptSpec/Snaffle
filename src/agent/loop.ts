@@ -63,6 +63,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
     model: options.provider.model,
     providerId: options.provider.providerId,
     providerConnectionId: options.provider.connectionId,
+    instructions: messages.flatMap((message) => message.role === "system" ? [message.content] : []),
   });
 
   try {
@@ -112,6 +113,8 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         ...(response.usage ? { usage: response.usage } : {}),
         durationMs,
         ...(response.sources?.length ? { sources: response.sources } : {}),
+        ...(response.finishReason ? { finishReason: response.finishReason } : {}),
+        toolNames: toolSpecs.map((tool) => tool.name),
       };
       messages.push(assistantMessage);
       await options.onMessage?.(assistantMessage, nextSequence);
