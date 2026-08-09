@@ -5,7 +5,12 @@ import {
   OpenAICompatibleProvider,
   listOpenAICompatibleModels,
 } from "../src/providers/openai-compatible.js";
-import { createProvider, providerCatalog, providerStatus } from "../src/providers/registry.js";
+import {
+  createProvider,
+  providerCatalog,
+  providerDefinitions,
+  providerStatus,
+} from "../src/providers/registry.js";
 import { applyModelVariant, providerProfile, splitModelVariant } from "../src/providers/profiles.js";
 import type { ModelStreamEvent } from "../src/providers/provider.js";
 
@@ -19,6 +24,33 @@ test("provider-declared model variants preserve the base model identity", () => 
   });
   assert.equal(applyModelVariant("qwen/qwen3:nitro", "floor", variants), "qwen/qwen3:floor");
   assert.equal(applyModelVariant("qwen/qwen3:free", "exacto", variants), "qwen/qwen3:free");
+});
+
+test("local provider presets reuse the OpenAI-compatible runtime", () => {
+  const expected = [
+    ["llama-cpp", "http://localhost:8080/v1"],
+    ["ollama", "http://localhost:11434/v1"],
+    ["lm-studio", "http://localhost:1234/v1"],
+  ];
+
+  for (const [id, baseUrl] of expected) {
+    const profile = providerProfile(id!);
+    assert.equal(profile.defaultBaseUrl, baseUrl);
+    assert.equal(profile.apiKey, "none");
+    assert.ok(providerDefinitions().some((definition) => definition.id === id));
+
+    const provider = createProvider({
+      id: `${id}-connection`,
+      providerId: id!,
+      name: profile.name,
+      baseUrl: baseUrl!,
+      enabled: true,
+      hasApiKey: false,
+      manualModels: [],
+    }, "local-model", {});
+    assert.equal(provider.providerId, id);
+    assert.equal(provider.model, "local-model");
+  }
 });
 
 test("OpenAI-compatible provider sends attachment content without storing payloads in messages", async (t) => {
@@ -109,6 +141,53 @@ test("OpenAI-compatible model discovery works for local or hosted connections", 
   );
 });
 
+test("a manual model can test successfully when discovery is unavailable", async (t) => {
+  const server = createServer((request, response) => {
+    if (request.url === "/v1/models") {
+      response.writeHead(404).end();
+      return;
+    }
+
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk: string) => (body += chunk));
+    request.on("end", () => {
+      const input = JSON.parse(body) as { model: string; max_tokens: number };
+      assert.equal(request.url, "/v1/chat/completions");
+      assert.equal(input.model, "manual-model");
+      assert.equal(input.max_tokens, 1);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ choices: [{ message: { content: "OK" } }] }));
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Test server did not start");
+
+  assert.deepEqual(await providerStatus({
+    id: "manual-provider",
+    providerId: "openai-compatible",
+    name: "Manual provider",
+    baseUrl: `http://127.0.0.1:${address.port}/v1`,
+    enabled: true,
+    hasApiKey: false,
+    manualModels: [{
+      id: "manual-model",
+      name: "Manual model",
+      contextLength: 128_000,
+      inputModalities: ["text"],
+    }],
+  }), {
+    message: "Connected",
+    details: [
+      { label: "Model", value: "Manual model" },
+      { label: "Discovery", value: "Unavailable" },
+    ],
+  });
+});
+
 test("DeepSeek uses the shared model catalog and adds account balance", async (t) => {
   let chatRequest: Record<string, unknown> | undefined;
   const server = createServer((request, response) => {
@@ -153,6 +232,7 @@ test("DeepSeek uses the shared model catalog and adds account balance", async (t
 
   const catalog = await providerCatalog(connection);
   assert.equal(catalog.models[0]?.id, "deepseek-v4-flash");
+  assert.equal(catalog.discoveredModelCount, 1);
   assert.equal(catalog.models[0]?.contextLength, 1_000_000);
   assert.deepEqual(await providerStatus(connection), {
     message: "Connected",

@@ -44,6 +44,7 @@ export type ProviderModelVariant = {
 export type ProviderCatalog = {
   connection: ProviderConnection;
   models: ProviderModel[];
+  discoveredModelCount: number;
   error?: string;
 };
 
@@ -74,6 +75,7 @@ export type ProviderDefinition = ProviderProfile & {
   ): ModelProvider;
   listModels?(connection: ResolvedProviderConnection, signal?: AbortSignal): Promise<ProviderModel[]>;
   getStatus?(connection: ResolvedProviderConnection, signal?: AbortSignal): Promise<ProviderStatus>;
+  testModel?(connection: ResolvedProviderConnection, modelId: string, signal?: AbortSignal): Promise<void>;
 };
 
 export type ModelStreamEvent =

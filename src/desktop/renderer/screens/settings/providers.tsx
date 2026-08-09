@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type {
   ProviderConnection,
   ProviderConnectionInput,
+  ProviderCatalog,
   ProviderModel,
   ProviderStatus,
 } from "../../../../providers/provider.js";
@@ -11,12 +12,16 @@ const NEW_CONNECTION = "new";
 
 export function ProviderSettings({
   connections,
+  catalogs,
+  loadingCatalogs,
   error,
   onSave,
   onRemove,
   onTest,
 }: {
   connections: ProviderConnection[];
+  catalogs: ProviderCatalog[];
+  loadingCatalogs: boolean;
   error: string | null;
   onSave(input: ProviderConnectionInput): Promise<void>;
   onRemove(id: string): Promise<void>;
@@ -31,6 +36,7 @@ export function ProviderSettings({
   const connectionsBeforeSave = useRef<Set<string> | null>(null);
   const providerPicker = useRef<HTMLDetailsElement>(null);
   const profile = providerProfile(draft.providerId);
+  const catalog = catalogs.find((item) => item.connection.id === selectedId);
 
   const visibleConnections = connections.filter((connection) => {
     const search = query.trim().toLowerCase();
@@ -88,6 +94,7 @@ export function ProviderSettings({
           inputModalities: model.inputModalities.length ? model.inputModalities : ["text"],
         }];
       }),
+      ...(profile.apiKey !== "none" && apiKey ? { apiKey } : {}),
     };
   }
 
@@ -98,7 +105,7 @@ export function ProviderSettings({
       if (selectedId === NEW_CONNECTION) {
         connectionsBeforeSave.current = new Set(connections.map((connection) => connection.id));
       }
-      await onSave({ ...connectionInput(), ...(apiKey ? { apiKey } : {}) });
+      await onSave(connectionInput());
       setApiKey("");
       setStatus({ message: "Saved" });
     } catch (cause) {
@@ -152,17 +159,26 @@ export function ProviderSettings({
         <h1>Providers</h1>
         <p className="settings-description">Connect hosted or local model endpoints.</p>
 
-        <button className="provider-add" type="button" onClick={() => select(NEW_CONNECTION)}>
-          <span aria-hidden="true">+</span>
-          Add new provider
-        </button>
+        {selectedId === NEW_CONNECTION ? (
+          <div className="provider-new-heading">
+            <strong>New provider</strong>
+            {connections.length ? (
+              <button type="button" onClick={() => select(connections[0]?.id ?? NEW_CONNECTION)}>Cancel</button>
+            ) : null}
+          </div>
+        ) : (
+          <button className="provider-add" type="button" onClick={() => select(NEW_CONNECTION)}>
+            <span aria-hidden="true">+</span>
+            Add new provider
+          </button>
+        )}
 
-        <details className="provider-picker" ref={providerPicker}>
+        {selectedId !== NEW_CONNECTION ? <details className="provider-picker" ref={providerPicker}>
           <summary className="provider-picker-summary">
             <span className={draft.enabled ? "provider-dot" : "provider-dot disabled"} />
             <span className="provider-row-copy">
               <strong>{selectedId === NEW_CONNECTION ? "New provider" : draft.name}</strong>
-              <small>{providerName(draft.providerId)}{selectedId === NEW_CONNECTION ? "" : ` · ${draft.enabled ? draft.hasApiKey ? "Key configured" : "No key" : "Disabled"}`}</small>
+              <small>{providerName(draft.providerId)}{selectedId === NEW_CONNECTION ? "" : ` · ${connectionStatus(draft.providerId, draft.hasApiKey, draft.enabled)}`}</small>
             </span>
             <svg className="provider-picker-caret" viewBox="0 0 16 16" aria-hidden="true">
               <path d="m4 6 4 4 4-4" />
@@ -198,14 +214,14 @@ export function ProviderSettings({
                   <span className={connection.enabled ? "provider-dot" : "provider-dot disabled"} />
                   <span className="provider-row-copy">
                     <strong>{connection.name}</strong>
-                    <small>{providerName(connection.providerId)} · {connection.enabled ? connection.hasApiKey ? "Key configured" : "No key" : "Disabled"}</small>
+                    <small>{providerName(connection.providerId)} · {connectionStatus(connection.providerId, connection.hasApiKey, connection.enabled)}</small>
                   </span>
                 </button>
               ))}
               {!visibleConnections.length ? <p className="provider-empty">No matching connections</p> : null}
             </div>
           </div>
-        </details>
+        </details> : null}
 
         <div className="provider-detail">
           <label className="setting-field">
@@ -247,26 +263,34 @@ export function ProviderSettings({
               />
             </label>
 
-            <label className="setting-field text-setting">
-              <span>
-                <strong>API key</strong>
-                <small>{draft.hasApiKey
-                  ? "A key is configured. Enter a new value to replace it."
-                  : profile.apiKey === "required" ? "Required for this provider." : "Optional for local endpoints."}</small>
-              </span>
-              <input
-                type="password"
-                value={apiKey}
-                autoComplete="off"
-                placeholder={draft.hasApiKey ? "••••••••••••" : "Optional"}
-                onChange={(event) => setApiKey(event.target.value)}
-              />
-            </label>
+            {profile.apiKey !== "none" ? (
+              <label className="setting-field text-setting">
+                <span>
+                  <strong>API key</strong>
+                  <small>{draft.hasApiKey
+                    ? "A key is configured. Enter a new value to replace it."
+                    : profile.apiKey === "required" ? "Required for this provider." : "Optional for local endpoints."}</small>
+                </span>
+                <input
+                  type="password"
+                  value={apiKey}
+                  autoComplete="off"
+                  placeholder={draft.hasApiKey ? "••••••••••••" : "Optional"}
+                  onChange={(event) => setApiKey(event.target.value)}
+                />
+              </label>
+            ) : null}
 
-            <div className="setting-field provider-models-setting">
+            <DiscoveryStatus
+              isNew={selectedId === NEW_CONNECTION}
+              loading={loadingCatalogs}
+              catalog={catalog}
+            />
+
+            {selectedId !== NEW_CONNECTION ? <div className="setting-field provider-models-setting">
               <span className="provider-models-copy">
                 <strong>Manual models</strong>
-                <small>Useful when this connection cannot discover its own models.</small>
+                <small>Optional fallback when this connection cannot discover its own models.</small>
               </span>
               <div className="provider-model-editor">
                 {draft.models.map((model, index) => (
@@ -324,9 +348,9 @@ export function ProviderSettings({
                   className="provider-model-add"
                   type="button"
                   onClick={() => setDraft({ ...draft, models: [...draft.models, emptyModel()] })}
-                >+ Add model</button>
+                >+ Add manually</button>
               </div>
-            </div>
+            </div> : null}
 
             <label className="setting-field text-setting">
               <span><strong>Enabled</strong><small>Disabled connections are hidden from model selection.</small></span>
@@ -346,8 +370,14 @@ export function ProviderSettings({
             ) : null}
 
             <div className="editor-actions provider-actions">
-              <button className="primary" type="button" disabled={busy} onClick={() => void save()}>Save</button>
-              <button type="button" disabled={busy || selectedId === NEW_CONNECTION} onClick={() => void test()}>Test connection</button>
+              <button className="primary" type="button" disabled={busy} onClick={() => void save()}>
+                {selectedId === NEW_CONNECTION ? "Save and discover" : "Save"}
+              </button>
+              {selectedId !== NEW_CONNECTION ? (
+                <button type="button" disabled={busy} onClick={() => void test()}>
+                  {catalog?.error && draft.models.length ? "Test manual model" : "Test connection"}
+                </button>
+              ) : null}
               {selectedId !== NEW_CONNECTION && draft.hasApiKey ? (
                 <button type="button" disabled={busy} onClick={() => void removeKey()}>Remove stored key</button>
               ) : null}
@@ -366,6 +396,43 @@ export function ProviderSettings({
         {error ? <p className="settings-error">{error}</p> : null}
       </div>
     </section>
+  );
+}
+
+function DiscoveryStatus({
+  isNew,
+  loading,
+  catalog,
+}: {
+  isNew: boolean;
+  loading: boolean;
+  catalog: ProviderCatalog | undefined;
+}): JSX.Element {
+  let title = "Model discovery has not run";
+  let detail = "Save this provider to check its model catalog.";
+  let tone = "pending";
+
+  if (!isNew && loading && !catalog) {
+    title = "Checking model discovery…";
+    detail = "Snaffle is asking this connection for its available models.";
+  } else if (catalog?.error) {
+    title = "Model discovery unavailable";
+    detail = catalog.error;
+    tone = "error";
+  } else if (catalog) {
+    const count = catalog.discoveredModelCount;
+    title = count ? `${count} model${count === 1 ? "" : "s"} discovered automatically` : "No models discovered";
+    detail = count
+      ? "Manual model entries are optional."
+      : "Load a model in the server or add one manually below.";
+    tone = count ? "success" : "pending";
+  }
+
+  return (
+    <div className={`provider-discovery ${tone}`} role="status">
+      <span className="provider-discovery-dot" aria-hidden="true" />
+      <span><strong>{title}</strong><small>{detail}</small></span>
+    </div>
   );
 }
 
@@ -410,6 +477,12 @@ function emptyModel(): ProviderModel {
 
 function providerName(providerId: string): string {
   return providerProfile(providerId).name;
+}
+
+function connectionStatus(providerId: string, hasApiKey: boolean, enabled: boolean): string {
+  if (!enabled) return "Disabled";
+  if (providerProfile(providerId).apiKey === "none") return "No key needed";
+  return hasApiKey ? "Key configured" : "No key";
 }
 
 function errorMessage(error: unknown): string {

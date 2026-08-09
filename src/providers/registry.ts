@@ -1,4 +1,8 @@
-import { OpenAICompatibleProvider, listOpenAICompatibleModels } from "./openai-compatible.js";
+import {
+  OpenAICompatibleProvider,
+  listOpenAICompatibleModels,
+  testOpenAICompatibleModel,
+} from "./openai-compatible.js";
 import { getDeepSeekStatus } from "./deepseek.js";
 import {
   getOpenRouterStatus,
@@ -43,15 +47,10 @@ const definitions: ProviderDefinition[] = [
       signal,
     ),
   },
-  {
-    ...providerProfile("openai-compatible"),
-    create: createOpenAICompatible,
-    listModels: (connection, signal) => listOpenAICompatibleModels(
-      connection.baseUrl,
-      connection.apiKey,
-      signal,
-    ),
-  },
+  openAICompatibleDefinition("llama-cpp"),
+  openAICompatibleDefinition("ollama"),
+  openAICompatibleDefinition("lm-studio"),
+  openAICompatibleDefinition("openai-compatible"),
 ];
 
 export function providerDefinitions(): ProviderDefinition[] {
@@ -76,12 +75,17 @@ export async function providerCatalog(connection: ResolvedProviderConnection): P
   const publicConnection = withoutSecret(connection);
   try {
     const discovered = await providerDefinition(connection.providerId).listModels?.(connection) ?? [];
-    return { connection: publicConnection, models: mergeModels(discovered, connection.manualModels) };
+    return {
+      connection: publicConnection,
+      models: mergeModels(discovered, connection.manualModels),
+      discoveredModelCount: discovered.length,
+    };
   } catch (error) {
     if (connection.manualModels.length) {
       return {
         connection: publicConnection,
         models: connection.manualModels,
+        discoveredModelCount: 0,
         error: errorMessage(error),
       };
     }
@@ -93,8 +97,21 @@ export async function providerStatus(connection: ResolvedProviderConnection): Pr
   const definition = providerDefinition(connection.providerId);
   const status = definition.getStatus;
   if (status) return status(connection);
-  await definition.listModels?.(connection);
-  return { message: "Connected" };
+  try {
+    await definition.listModels?.(connection);
+    return { message: "Connected" };
+  } catch (discoveryError) {
+    const model = connection.manualModels[0];
+    if (!model || !definition.testModel) throw discoveryError;
+    await definition.testModel(connection, model.id);
+    return {
+      message: "Connected",
+      details: [
+        { label: "Model", value: model.name },
+        { label: "Discovery", value: "Unavailable" },
+      ],
+    };
+  }
 }
 
 export function withoutSecret(connection: ResolvedProviderConnection): ProviderConnection {
@@ -117,6 +134,26 @@ function createOpenAICompatible(
     ...(connection.apiKey ? { apiKey: connection.apiKey } : {}),
     ...options,
   });
+}
+
+function openAICompatibleDefinition(id: string): ProviderDefinition {
+  const profile = providerProfile(id);
+  return {
+    ...profile,
+    create: createOpenAICompatible,
+    listModels: (connection, signal) => listOpenAICompatibleModels(
+      connection.baseUrl,
+      connection.apiKey,
+      signal,
+      profile.defaultContextLength,
+    ),
+    testModel: (connection, modelId, signal) => testOpenAICompatibleModel(
+      connection.baseUrl,
+      modelId,
+      connection.apiKey,
+      signal,
+    ),
+  };
 }
 
 function mergeModels(discovered: ProviderConnection["manualModels"], manual: ProviderConnection["manualModels"]) {

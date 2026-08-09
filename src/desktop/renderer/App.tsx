@@ -1227,6 +1227,8 @@ export function App(): JSX.Element {
             webSearchBackend={desktopState.webSearchBackend}
             webSearchKeyBackends={desktopState.webSearchKeyBackends}
             providerConnections={desktopState.providerConnections}
+            providerCatalogs={models}
+            loadingProviderModels={loadingModels}
             error={error}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
             onTypography={(interfaceFont, primary, secondary, code) => void setTypography(interfaceFont, primary, secondary, code)}

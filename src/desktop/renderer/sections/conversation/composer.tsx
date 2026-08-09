@@ -104,7 +104,7 @@ export function Composer({
             value={selectedModel}
             providerId={selectedProviderConnectionId}
             providers={models.map(({ connection, models }) => {
-              const visual = providerVisual(connection.baseUrl);
+              const visual = providerVisual(connection.baseUrl, connection.providerId);
               return {
                 id: connection.id,
                 name: connection.name,

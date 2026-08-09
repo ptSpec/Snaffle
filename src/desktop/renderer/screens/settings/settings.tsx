@@ -5,7 +5,12 @@ import type { FontId } from "../../../typography.js";
 import type { SettingsPage } from "../../sections/sidebar/sidebar.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../../../../tools/web/types.js";
 import type { CompactionMode } from "../../../../context/budget.js";
-import type { ProviderConnection, ProviderConnectionInput, ProviderStatus } from "../../../../providers/provider.js";
+import type {
+  ProviderCatalog,
+  ProviderConnection,
+  ProviderConnectionInput,
+  ProviderStatus,
+} from "../../../../providers/provider.js";
 import { AgentSettings } from "./agent.js";
 import { FontSetting, NumberSetting, ScaleSetting } from "./controls.js";
 import { ContextSettings } from "./context.js";
@@ -37,6 +42,8 @@ export function Settings({
   webSearchBackend,
   webSearchKeyBackends,
   providerConnections,
+  providerCatalogs,
+  loadingProviderModels,
   error,
   onSelectTheme,
   onTypography,
@@ -79,6 +86,8 @@ export function Settings({
   webSearchBackend: WebSearchBackend;
   webSearchKeyBackends: KetchSearchBackend[];
   providerConnections: ProviderConnection[];
+  providerCatalogs: ProviderCatalog[];
+  loadingProviderModels: boolean;
   error: string | null;
   onSelectTheme: (themeId: string) => void;
   onTypography: (interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId) => void;
@@ -115,6 +124,8 @@ export function Settings({
     return (
       <ProviderSettings
         connections={providerConnections}
+        catalogs={providerCatalogs}
+        loadingCatalogs={loadingProviderModels}
         error={error}
         onSave={onSaveProvider}
         onRemove={onRemoveProvider}

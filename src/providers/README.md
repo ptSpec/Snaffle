@@ -8,7 +8,7 @@ The design has three small pieces:
 - A **profile** is renderer-safe metadata for Settings and defaults. Profiles live in `profiles.ts`.
 - A **definition** attaches inference, catalog, and status behavior. Definitions live in `registry.ts`.
 
-Most hosted and local servers need no new provider code. Add an OpenAI-compatible connection in Settings, then use model discovery or enter manual models if `/models` is unavailable. `openai-compatible.ts` owns that shared wire protocol.
+Most hosted and local servers need no new provider code. llama.cpp, Ollama, and LM Studio are named presets over the same OpenAI-compatible runtime. Other servers can use an OpenAI-compatible connection in Settings, then use model discovery or enter manual models if `/models` is unavailable. `openai-compatible.ts` owns that shared wire protocol.
 
 Add a definition only when a provider has a useful native capability, such as OpenRouter's catalog and key status or DeepSeek's catalog and account balance. If a future provider uses another inference protocol, implement its adapter here and register its small definition in `registry.ts`.
 
