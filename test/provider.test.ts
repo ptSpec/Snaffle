@@ -13,6 +13,15 @@ import {
 } from "../src/providers/registry.js";
 import { applyModelVariant, providerProfile, splitModelVariant } from "../src/providers/profiles.js";
 import type { ModelStreamEvent } from "../src/providers/provider.js";
+import { retryAfterMilliseconds, retryBackoffMs } from "../src/retry.js";
+
+test("retry backoff stays short twice, then grows to 45 seconds", () => {
+  assert.deepEqual([1, 2, 3, 4].map((retry) => retryBackoffMs(retry)), [500, 1_000, 15_000, 45_000]);
+  assert.equal(retryBackoffMs(1, 30_000), 30_000);
+  assert.equal(retryBackoffMs(1, 60_000), 45_000);
+  assert.equal(retryAfterMilliseconds("12"), 12_000);
+  assert.equal(retryAfterMilliseconds("invalid"), 0);
+});
 
 test("provider-declared model variants preserve the base model identity", () => {
   const variants = providerProfile("openrouter").modelVariants;
@@ -386,6 +395,7 @@ test("OpenAI-compatible provider streams text and assembles tool calls", async (
   const provider = new OpenAICompatibleProvider({
     baseUrl: `http://127.0.0.1:${address.port}/v1`,
     model: "test-model",
+    maxRetries: 2,
   });
   const events: ModelStreamEvent[] = [];
   const result = await provider.complete(
