@@ -92,7 +92,7 @@ const initialState: DesktopState = {
   editorArguments: "",
   maxSteps: 50,
   providerTimeoutMinutes: 3,
-  providerRetries: 2,
+  providerRetries: 4,
   subagent: {
     enabled: false,
     providerConnectionId: "",
