@@ -11,3 +11,8 @@ The child returns one compact, predictable handoff: status, findings, changes, v
 Read agents receive only read and search. The single writer receives the five core coding tools and shares the parent workspace, sandbox, and approval flow.
 
 Provider credentials and runtime details stay outside the model-facing tool schema.
+
+## Pinned follow-up
+
+- Add explicit Explore, Review, Test, and Implement profiles without exposing more tools to the parent model.
+- Let read-only profiles run narrowly classified non-mutating commands, such as tests and `git diff`, without granting general write-capable shell access.
