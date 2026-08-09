@@ -2,6 +2,7 @@ import type { AttachmentRef } from "../../../../attachments/types.js";
 import type { CommandApprovalDecision, RunEvent, SourceReference, ToolCall, Usage } from "../../../../protocol.js";
 import type { ContextCheckpoint } from "../../../../context/projection.js";
 import type { DesktopEntry } from "../../../api.js";
+import { applySubagentUpdate, type SubagentActivity } from "../../../../agent/subagents/activity.js";
 
 export type TimelineItem =
   | { id: string; kind: "user"; text: string; attachments?: AttachmentRef[]; sequence: number; entryId?: string }
@@ -33,6 +34,7 @@ export type TimelineItem =
       isError?: boolean;
       exitCode?: number | null;
       sequence?: number;
+      details?: SubagentActivity;
     };
 
 let itemNumber = 0;
@@ -253,6 +255,15 @@ export function addRunEvent(
     return;
   }
 
+  if (event.type === "tool.updated") {
+    setTimeline((items) => items.map((item) => {
+      if (item.kind !== "tool" || item.id !== event.callId) return item;
+      const details = applySubagentUpdate(item.details, event.update);
+      return details ? { ...item, details } : item;
+    }));
+    return;
+  }
+
   if (event.type === "tool.completed") {
     setTimeline((items) => {
       const existing = items.findIndex((item) => item.id === event.call.id);
@@ -266,6 +277,11 @@ export function addRunEvent(
         isError: event.isError,
         sequence: event.sequence,
         ...(event.exitCode === undefined ? {} : { exitCode: event.exitCode }),
+        ...(event.details
+          ? { details: event.details }
+          : runningCall?.kind === "tool" && runningCall.details
+            ? { details: runningCall.details }
+            : {}),
       };
       if (existing === -1) return [...items, completed];
       return items.map((item, index) => (index === existing ? completed : item));
@@ -350,6 +366,7 @@ export function timelineFromEntries(entries: DesktopEntry[], checkpoints: Contex
       sequence,
       ...(message.isError === undefined ? {} : { isError: message.isError }),
       ...(message.exitCode === undefined ? {} : { exitCode: message.exitCode }),
+      ...(message.details ? { details: message.details } : {}),
     });
   });
 
@@ -464,6 +481,7 @@ export type SaveableTimelineItem = Extract<TimelineItem, { kind: "assistant" }>;
 
 export function toolGeneratingLabel(name: string): string {
   if (name === "run_command") return "Generating command…";
+  if (name === "delegate_task") return "Preparing delegation…";
   return name ? `Generating ${name} call…` : "Generating tool call…";
 }
 

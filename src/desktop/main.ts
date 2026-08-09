@@ -5,6 +5,12 @@ import path from "node:path";
 import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_MAX_STEPS } from "../agent/loop.js";
+import {
+  activeSubagent,
+  subagentProfile,
+  type SubagentProfile,
+} from "../agent/subagents/profile.js";
+import { delegateTaskTool } from "../agent/subagents/tool.js";
 import { AttachmentStore } from "../attachments/store.js";
 import { builtInCapabilities } from "../capabilities/active.js";
 import {
@@ -86,6 +92,7 @@ let editorArguments = "";
 let maxSteps = DEFAULT_MAX_STEPS;
 let providerTimeoutMinutes = DEFAULT_PROVIDER_TIMEOUT_MS / 60_000;
 let providerRetries = DEFAULT_PROVIDER_RETRIES;
+let subagent: SubagentProfile = subagentProfile(undefined);
 let compactionMode: CompactionMode = "automatic";
 let customCompactionThreshold = DEFAULT_COMPACTION_THRESHOLD;
 let webSearchEnabled = true;
@@ -117,6 +124,7 @@ async function start(): Promise<void> {
   maxSteps = validMaxSteps(settings.maxSteps) ?? DEFAULT_MAX_STEPS;
   providerTimeoutMinutes = validProviderTimeout(settings.providerTimeoutMinutes) ?? providerTimeoutMinutes;
   providerRetries = validProviderRetries(settings.providerRetries) ?? DEFAULT_PROVIDER_RETRIES;
+  subagent = subagentProfile(settings.subagent);
   compactionMode = settings.compactionMode === "custom" ? "custom" : "automatic";
   customCompactionThreshold = validCompactionThreshold(settings.compactionThreshold) ?? DEFAULT_COMPACTION_THRESHOLD;
   selectedModel = typeof settings.selectedModel === "string" ? settings.selectedModel : DEVELOPMENT_MODEL;
@@ -210,6 +218,7 @@ function registerIpc(): void {
       providerRetries,
       compactionMode,
       compactionThreshold: customCompactionThreshold,
+      subagent,
     }),
     sendEvent: sendRunEvent,
   });
@@ -387,6 +396,13 @@ function registerIpc(): void {
     saveSettings({ providerRetries });
   });
 
+  ipcMain.handle("desktop:set-subagent", (_event, value: unknown): void => {
+    const next = subagentProfile(value);
+    if (next.providerConnectionId) providerConnections.resolve(next.providerConnectionId);
+    subagent = next;
+    saveSettings({ subagent });
+  });
+
   ipcMain.handle("desktop:set-compaction", (_event, modeValue: unknown, thresholdValue: unknown): void => {
     if (modeValue !== "automatic" && modeValue !== "custom") throw new Error("Unknown compaction mode");
     const threshold = validCompactionThreshold(thresholdValue);
@@ -475,6 +491,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     maxSteps,
     providerTimeoutMinutes,
     providerRetries,
+    subagent,
     compactionMode,
     compactionThreshold: customCompactionThreshold,
   };
@@ -522,7 +539,9 @@ function currentCapabilities() {
 }
 
 function currentToolSpecs() {
-  return currentCapabilities().tools.map(({ tool }) => ({
+  const tools = currentCapabilities().tools.map(({ tool }) => tool);
+  if (activeSubagent(subagent)) tools.push(delegateTaskTool(async () => ""));
+  return tools.map((tool) => ({
     name: tool.name,
     description: tool.description,
     inputSchema: tool.inputSchema,
