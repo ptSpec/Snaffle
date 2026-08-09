@@ -452,14 +452,17 @@ function registerIpc(): void {
 async function desktopState(includeConversation = true): Promise<DesktopState> {
   const state = await store.state();
   const sandbox = await probeNativeSandbox();
+  const conversation = includeConversation ? await store.entries(state.activeThreadId) : [];
   const workspace =
     state.workspaces.find((item) => item.id === state.activeWorkspaceId) ?? null;
   return {
     workspace,
     workspaces: state.workspaces,
     activeThreadId: state.activeThreadId,
-    conversation: includeConversation ? await store.entries(state.activeThreadId) : [],
+    conversation,
     contextCheckpoints: includeConversation ? await store.context.checkpoints(state.activeThreadId) : [],
+    modelInstructions: await store.systemInstructions(state.activeThreadId),
+    toolSpecs: currentToolSpecs(),
     savedMessages: await store.savedMessages.summaries(),
     providerConnections: providerConnections.list(),
     openRouterAvailable: providerConnections.list().find(
