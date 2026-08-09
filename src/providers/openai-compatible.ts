@@ -154,6 +154,32 @@ export async function listOpenAICompatibleModels(
   }] : []);
 }
 
+export async function testOpenAICompatibleModel(
+  baseUrl: string,
+  model: string,
+  apiKey?: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: "user", content: "Reply with OK." }],
+      max_tokens: 1,
+      stream: false,
+    }),
+    ...(signal ? { signal } : {}),
+  });
+  if (!response.ok) {
+    const body = (await response.text()).slice(0, 1000);
+    throw new Error(`Model test failed (${response.status}): ${body}`);
+  }
+}
+
 function requiredBody(response: Response): ReadableStream<Uint8Array> {
   if (!response.body) throw new Error("Provider returned an empty stream");
   return response.body;

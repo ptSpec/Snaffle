@@ -30,9 +30,10 @@ const knownProviders: Array<{
   { id: "llama-cpp", name: "llama.cpp", hosts: ["llama.app"], localPort: "8080" },
 ];
 
-export function providerVisual(baseUrl: string): ProviderVisual {
+export function providerVisual(baseUrl: string, providerId?: string): ProviderVisual {
   const url = safeUrl(baseUrl);
-  const provider = knownProviders.find((candidate) =>
+  const provider = knownProviders.find((candidate) => candidate.id === providerId)
+    ?? knownProviders.find((candidate) =>
     candidate.hosts?.some((host) => url?.hostname === host || url?.hostname.endsWith(`.${host}`))
     || (isLocal(url?.hostname) && candidate.localPort === url?.port));
 

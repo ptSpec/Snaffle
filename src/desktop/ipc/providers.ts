@@ -25,7 +25,12 @@ export function registerProviderIpc(options: {
         try {
           return await providerCatalog(options.connections.resolve(connection.id));
         } catch (error) {
-          return { connection, models: connection.manualModels, error: errorMessage(error) };
+          return {
+            connection,
+            models: connection.manualModels,
+            discoveredModelCount: 0,
+            error: errorMessage(error),
+          };
         }
       }));
   });

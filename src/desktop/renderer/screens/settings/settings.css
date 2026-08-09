@@ -233,6 +233,29 @@
   line-height: 1;
 }
 
+.provider-new-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 58px;
+  margin-bottom: 18px;
+  padding: 11px 15px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.provider-new-heading button {
+  padding: 7px 11px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+}
+
+.provider-new-heading button:hover {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
 .provider-picker {
   position: relative;
   margin-bottom: 18px;
@@ -409,6 +432,40 @@
 .provider-detail {
   min-width: 0;
   padding: 0;
+}
+
+.provider-discovery {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.provider-discovery > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+.provider-discovery small {
+  color: var(--text-muted);
+}
+
+.provider-discovery-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  margin-top: 6px;
+  background: var(--text-muted);
+  border-radius: 50%;
+}
+
+.provider-discovery.success .provider-discovery-dot {
+  background: var(--status-success-text);
+}
+
+.provider-discovery.error .provider-discovery-dot {
+  background: var(--status-danger-text);
 }
 
 .sr-only {
