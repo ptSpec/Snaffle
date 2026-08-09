@@ -94,6 +94,7 @@ export function TimelineEntry({
   }
 
   if (item.kind === "assistant") {
+    if (!item.text && item.intermediate) return <></>;
     return (
       <>
         {previousModel && item.model && previousModel !== item.model ? (
@@ -235,7 +236,11 @@ function UserMessage({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <article className="message user" {...(item.entryId ? { "data-entry-id": item.entryId } : {})}>
+    <article
+      className="message user"
+      data-timeline-id={item.id}
+      {...(item.entryId ? { "data-entry-id": item.entryId } : {})}
+    >
       <div className={collapsible && !expanded ? "message-body collapsed" : "message-body"}>
         {item.text ? <p>{item.text}</p> : null}
         {item.attachments?.length ? (

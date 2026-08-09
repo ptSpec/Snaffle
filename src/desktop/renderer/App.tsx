@@ -64,6 +64,8 @@ const initialState: DesktopState = {
   activeThreadId: null,
   conversation: [],
   contextCheckpoints: [],
+  modelInstructions: [],
+  toolSpecs: [],
   savedMessages: [],
   providerConnections: [],
   openRouterAvailable: false,
@@ -342,6 +344,9 @@ export function App(): JSX.Element {
         setDesktopState((state) => ({
           ...state,
           runningThreadIds: [...new Set([...state.runningThreadIds, threadId])],
+          ...(activeThreadId.current === threadId && event.instructions?.length
+            ? { modelInstructions: event.instructions }
+            : {}),
         }));
       }
       if (event.type === "run.completed" || event.type === "run.failed") {
@@ -953,6 +958,16 @@ export function App(): JSX.Element {
     });
   }
 
+  function scrollToTimelineItem(id: string): void {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        timelineView.current
+          ?.querySelector<HTMLElement>(`[data-timeline-id="${CSS.escape(id)}"]`)
+          ?.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
+    });
+  }
+
   async function removeThreadBookmark(thread: DesktopThread): Promise<void> {
     try {
       setDesktopState(withoutConversation(await window.desktop.setThreadBookmarked(thread.id, false)));
@@ -1380,13 +1395,21 @@ export function App(): JSX.Element {
           aria-label="Context panel"
           aria-hidden={view !== "conversation" || rightCollapsed}
         >
-          {view === "conversation" ? (
+          {view === "conversation" && !rightCollapsed ? (
             <InspectorPanel
               workspace={desktopState.workspace}
               selectedItem={selectedItem}
+              timeline={timeline}
               running={running}
+              selectedModel={selectedModel}
+              selectedProviderConnectionId={selectedProviderConnectionId}
+              providerNames={Object.fromEntries(desktopState.providerConnections.map((connection) => [connection.id, connection.name]))}
+              modelInstructions={desktopState.modelInstructions}
+              toolSpecs={desktopState.toolSpecs}
               tab={inspectorTab}
               onTab={setInspectorTab}
+              onSelect={setSelectedItemId}
+              onNavigateTurn={scrollToTimelineItem}
               onEditorOpen={expandFileEditor}
               onCollapse={() => {
                 expandFileEditor(false);

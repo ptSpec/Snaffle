@@ -29,6 +29,8 @@ export type Message =
       usage?: Usage;
       durationMs?: number;
       sources?: SourceReference[];
+      finishReason?: string;
+      toolNames?: string[];
     }
   | {
       role: "tool";
@@ -68,7 +70,14 @@ export type ModelResponse = {
 };
 
 export type RunEvent =
-  | { type: "run.started"; task: string; model: string; providerId: string; providerConnectionId: string }
+  | {
+      type: "run.started";
+      task: string;
+      model: string;
+      providerId: string;
+      providerConnectionId: string;
+      instructions?: string[];
+    }
   | { type: "context.compaction.started"; afterSequence: number }
   | {
       type: "context.compaction.completed";

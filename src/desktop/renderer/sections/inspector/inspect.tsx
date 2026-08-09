@@ -1,8 +1,23 @@
 import { JsonInspector } from "./json-inspector.js";
 import { labelFor, toolGeneratingLabel, toolStatus, type TimelineItem } from "../conversation/timeline-state.js";
 import { SubagentInspector } from "./subagent.js";
+import { ModelCallInspector } from "./model.js";
+import type { ToolSpec } from "../../../../protocol.js";
 
-export function Inspector({ item }: { item: TimelineItem }): JSX.Element {
+export function Inspector({
+  item,
+  timeline,
+  instructions,
+  tools,
+}: {
+  item: TimelineItem;
+  timeline: TimelineItem[];
+  instructions: string[];
+  tools: ToolSpec[];
+}): JSX.Element {
+  if (item.kind === "assistant") {
+    return <ModelCallInspector item={item} timeline={timeline} instructions={instructions} tools={tools} />;
+  }
   if (item.kind === "activity-group") {
     return <div className="inspector-card">Work details</div>;
   }
@@ -53,4 +68,3 @@ export function Inspector({ item }: { item: TimelineItem }): JSX.Element {
     </div>
   );
 }
-
