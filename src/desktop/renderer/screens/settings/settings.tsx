@@ -6,6 +6,7 @@ import type { SettingsPage } from "../../sections/sidebar/sidebar.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../../../../tools/web/types.js";
 import type { CompactionMode } from "../../../../context/budget.js";
 import type { SubagentProfile } from "../../../../agent/subagents/profile.js";
+import type { McpServerConfig, McpServerStatus } from "../../../../mcp/types.js";
 import type {
   ProviderCatalog,
   ProviderConnection,
@@ -18,6 +19,7 @@ import { ContextSettings } from "./context.js";
 import { EditorSettings } from "./editor.js";
 import { ProviderSettings } from "./providers.js";
 import { WebSettings } from "./web.js";
+import { McpSettings } from "./mcp.js";
 
 export function Settings({
   page,
@@ -44,6 +46,7 @@ export function Settings({
   webSearchBackend,
   webSearchKeyBackends,
   providerConnections,
+  mcpServers,
   providerCatalogs,
   loadingProviderModels,
   error,
@@ -65,6 +68,9 @@ export function Settings({
   onSaveProvider,
   onRemoveProvider,
   onTestProvider,
+  onSaveMcpServer,
+  onRemoveMcpServer,
+  onTestMcpServer,
 }: {
   page: SettingsPage;
   themeId: string;
@@ -90,6 +96,7 @@ export function Settings({
   webSearchBackend: WebSearchBackend;
   webSearchKeyBackends: KetchSearchBackend[];
   providerConnections: ProviderConnection[];
+  mcpServers: McpServerConfig[];
   providerCatalogs: ProviderCatalog[];
   loadingProviderModels: boolean;
   error: string | null;
@@ -111,6 +118,9 @@ export function Settings({
   onSaveProvider(input: ProviderConnectionInput): Promise<void>;
   onRemoveProvider(id: string): Promise<void>;
   onTestProvider(id: string): Promise<ProviderStatus>;
+  onSaveMcpServer(server: McpServerConfig): Promise<void>;
+  onRemoveMcpServer(id: string): Promise<void>;
+  onTestMcpServer(server: McpServerConfig): Promise<McpServerStatus>;
 }): JSX.Element {
   const themePicker = useRef<HTMLDetailsElement>(null);
 
@@ -162,6 +172,18 @@ export function Settings({
         onEnabled={onWebSearchEnabled}
         onBackend={onWebSearchBackend}
         onSave={onWebSearchApiKey}
+      />
+    );
+  }
+
+  if (page === "mcp") {
+    return (
+      <McpSettings
+        servers={mcpServers}
+        error={error}
+        onSave={onSaveMcpServer}
+        onRemove={onRemoveMcpServer}
+        onTest={onTestMcpServer}
       />
     );
   }

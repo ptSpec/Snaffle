@@ -5,14 +5,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
-const version = "0.13.0";
+const version = "0.14.0";
 const targets = {
-  "darwin-arm64": ["darwin_arm64.tar.gz", "19c056055e0a2109d89e86fba1fdc949b6272392c8a8cc7690bbc971a11b71fb"],
-  "darwin-x64": ["darwin_x86_64.tar.gz", "35bb93dcceb5ebac433cce3c5e61a569342b0788b14a8be9b56cb999903ed428"],
-  "linux-arm64": ["linux_arm64.tar.gz", "6a18b1fa94aec1471dc438ff278f807925a254529478b1c4271753ab0098b99e"],
-  "linux-x64": ["linux_x86_64.tar.gz", "8077f9f6a1347cc2980d4012923c0b41d6eb5b52f023cd14602f78c0abd618ae"],
-  "win32-arm64": ["windows_arm64.zip", "6764922bf43135aa11db1514b31dfaaa5ce31785cd6ed1ad8ccfa2df36f72151"],
-  "win32-x64": ["windows_x86_64.zip", "8f69aa7ae96f77518c4397a0a6765abc7458aeb860ae1eb277267d0b5e6e4890"],
+  "darwin-arm64": ["darwin_arm64.tar.gz", "7da541c2953ec9899345532a839eae81dca85ba613bf2139befd156aa4debc36"],
+  "darwin-x64": ["darwin_x86_64.tar.gz", "c1a0d2539274bc30b0f04a56c9d81e62a535260197cd4e3f2c428fb71d0e0ed6"],
+  "linux-arm64": ["linux_arm64.tar.gz", "501bdfb630cabfe714121397af02f77efb73c8053b165380c96b36647e0ea44e"],
+  "linux-x64": ["linux_x86_64.tar.gz", "5d8d3ee8149b417b34631fc9987880d45823cf5622af8d7b43910d0a86c4a815"],
+  "win32-arm64": ["windows_arm64.zip", "0e4be9b98eafdc6b3289c97688ffac6e2e787de2161d0e3f2e7da73e0c017024"],
+  "win32-x64": ["windows_x86_64.zip", "7b93f5313bb6fbe9a945a57fa014333f3427dc5c04d7f4f7503bcc80b04bf9d7"],
 };
 
 const target = targets[`${process.platform}-${process.arch}`];
