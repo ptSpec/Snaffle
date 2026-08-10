@@ -12,6 +12,7 @@ import { findKetch } from "./web/ketch.js";
 export function defaultTools(options: WebSearchOptions = {}): Tool[] {
   const ketchPath = options.ketchPath ?? findKetch();
   const webSearch = webSearchTool({ ...options, ketchPath });
+  const webToolsEnabled = options.webSearchEnabled === true;
   const richSearch = Boolean(webSearch) &&
     (options.backend === "exa" || options.backend === "tavily" || options.backend === "openrouter");
   return [
@@ -21,7 +22,7 @@ export function defaultTools(options: WebSearchOptions = {}): Tool[] {
     editTool,
     writeTool,
     ...(webSearch ? [webSearch] : []),
-    ...(richSearch ? [] : [webFetchTool(Boolean(webSearch), ketchPath)]),
-    youtubeTranscriptTool,
+    ...(webToolsEnabled && !richSearch ? [webFetchTool(Boolean(webSearch), ketchPath)] : []),
+    ...(webToolsEnabled ? [youtubeTranscriptTool] : []),
   ];
 }

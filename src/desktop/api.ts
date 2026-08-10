@@ -95,6 +95,10 @@ export type DesktopState = {
   contextCheckpoints: ContextCheckpoint[];
   modelInstructions: string[];
   toolSpecs: ToolSpec[];
+  modelTools: ModelToolSetting[];
+  systemPrompt: string;
+  runtimeMetadata: string;
+  disabledTools: string[];
   skills: SkillSummary[];
   savedMessages: SavedMessageSummary[];
   providerConnections: ProviderConnection[];
@@ -127,6 +131,11 @@ export type DesktopState = {
   subagent: SubagentProfile;
   compactionMode: CompactionMode;
   compactionThreshold: number;
+};
+
+export type ModelToolSetting = ToolSpec & {
+  available: boolean;
+  enabled: boolean;
 };
 
 export type StartRunInput = {
@@ -190,6 +199,8 @@ export interface DesktopApi {
   setProviderRetries(retries: number): Promise<void>;
   setSubagent(profile: SubagentProfile): Promise<void>;
   setCompaction(mode: CompactionMode, threshold: number): Promise<void>;
+  setSystemPrompt(prompt: string): Promise<DesktopState>;
+  setToolEnabled(name: string, enabled: boolean): Promise<DesktopState>;
   getContextReport(threadId: string, contextLength: number): Promise<ContextReport>;
   compactContext(threadId: string, connectionId: string, model: string, contextLength: number): Promise<void>;
   setWebSearchEnabled(enabled: boolean): Promise<void>;

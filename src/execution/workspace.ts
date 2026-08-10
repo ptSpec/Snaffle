@@ -34,6 +34,7 @@ export type CommandApproval = (
 ) => Promise<CommandApprovalDecision>;
 
 export interface Workspace {
+  readonly root?: string;
   readonly environment: string;
   read(path: string): Promise<string>;
   write(path: string, content: string): Promise<void>;

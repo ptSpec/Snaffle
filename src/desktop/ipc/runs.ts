@@ -50,6 +50,8 @@ export function registerRunIpc(options: {
     compactionMode: CompactionMode;
     compactionThreshold: number;
     subagent: SubagentProfile;
+    systemPrompt: string;
+    disabledTools: string[];
   };
   sendEvent: (threadId: string, event: RunEvent) => void;
 }): RunIpc {
@@ -136,7 +138,7 @@ export function registerRunIpc(options: {
     active.set(threadId, run);
     const baseCapabilities = options.capabilities(selectedWorkspace.path);
     const subagent = threadSubagent(settings.subagent, selectedThread.subagentMode);
-    const capabilities = subagent
+    const capabilities = subagent && !settings.disabledTools.includes("delegate_task")
       ? activeCapabilities([
           ...baseCapabilities.tools,
           {
@@ -190,7 +192,7 @@ export function registerRunIpc(options: {
     try {
       const lastSequence = await options.store.lastSequence(threadId);
       if (lastSequence < 0) {
-        const initial = initialMessages(input.task, workspace.environment, input.attachments);
+        const initial = initialMessages(input.task, input.attachments, settings.systemPrompt);
         await options.store.appendMessage(threadId, 0, initial[0]!);
         await options.store.appendMessage(threadId, 1, initial[1]!);
         conversation = [initial[0]!];
@@ -277,6 +279,7 @@ export function registerRunIpc(options: {
       sequenceStart: nextSequence,
       onMessage: (message, sequence) => options.store.appendMessage(threadId, sequence, message),
       takeSteering: () => run.steering.splice(0),
+      systemPrompt: settings.systemPrompt,
       onEvent: (event) => {
         if (event.type === "run.completed" || event.type === "run.failed") run.acceptingSteering = false;
         options.sendEvent(threadId, event);

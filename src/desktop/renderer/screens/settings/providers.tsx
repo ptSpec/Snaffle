@@ -27,14 +27,12 @@ export function ProviderSettings({
   onRemove(id: string): Promise<void>;
   onTest(id: string): Promise<ProviderStatus>;
 }): JSX.Element {
-  const [selectedId, setSelectedId] = useState(connections[0]?.id ?? NEW_CONNECTION);
-  const [draft, setDraft] = useState(() => connectionDraft(connections[0]));
+  const [selectedId, setSelectedId] = useState("");
+  const [draft, setDraft] = useState(() => connectionDraft());
   const [apiKey, setApiKey] = useState("");
   const [status, setStatus] = useState<ProviderStatus | null>(null);
   const [busy, setBusy] = useState(false);
-  const [query, setQuery] = useState("");
   const connectionsBeforeSave = useRef<Set<string> | null>(null);
-  const providerPicker = useRef<HTMLDetailsElement>(null);
   const profile = providerProfile(draft.providerId);
   const catalog = catalogs.find((item) => item.connection.id === selectedId);
   const fallbackCatalogs = catalogs.filter((item) =>
@@ -45,12 +43,6 @@ export function ProviderSettings({
   );
   const usesFallback = Boolean(draft.fallbackProviderConnectionId && draft.fallbackModel);
 
-  const visibleConnections = connections.filter((connection) => {
-    const search = query.trim().toLowerCase();
-    return !search || connection.name.toLowerCase().includes(search)
-      || providerName(connection.providerId).toLowerCase().includes(search);
-  });
-
   useEffect(() => {
     if (selectedId === NEW_CONNECTION && connectionsBeforeSave.current) {
       const added = connections.find((item) => !connectionsBeforeSave.current?.has(item.id));
@@ -60,25 +52,22 @@ export function ProviderSettings({
         return;
       }
     }
+    if (!selectedId) return;
     const connection = connections.find((item) => item.id === selectedId);
     if (connection) setDraft(connectionDraft(connection));
-    else if (selectedId !== NEW_CONNECTION) select(connections[0]?.id ?? NEW_CONNECTION);
+    else if (selectedId !== NEW_CONNECTION) collapse();
   }, [connections]);
-
-  useEffect(() => {
-    function closeProviderPicker(event: PointerEvent): void {
-      if (event.target instanceof Node && !providerPicker.current?.contains(event.target)) {
-        providerPicker.current?.removeAttribute("open");
-      }
-    }
-
-    document.addEventListener("pointerdown", closeProviderPicker);
-    return () => document.removeEventListener("pointerdown", closeProviderPicker);
-  }, []);
 
   function select(id: string): void {
     setSelectedId(id);
     setDraft(connectionDraft(connections.find((item) => item.id === id)));
+    setApiKey("");
+    setStatus(null);
+  }
+
+  function collapse(): void {
+    setSelectedId("");
+    setDraft(connectionDraft());
     setApiKey("");
     setStatus(null);
   }
@@ -162,78 +151,8 @@ export function ProviderSettings({
     });
   }
 
-  return (
-    <section className="settings view-enter" aria-label="Provider settings">
-      <div className="settings-content provider-settings-content">
-        <p className="eyebrow">Settings</p>
-        <h1>Providers</h1>
-        <p className="settings-description">Connect hosted or local model endpoints.</p>
-
-        {selectedId === NEW_CONNECTION ? (
-          <div className="provider-new-heading">
-            <strong>New provider</strong>
-            {connections.length ? (
-              <button type="button" onClick={() => select(connections[0]?.id ?? NEW_CONNECTION)}>Cancel</button>
-            ) : null}
-          </div>
-        ) : (
-          <button className="provider-add" type="button" onClick={() => select(NEW_CONNECTION)}>
-            <span aria-hidden="true">+</span>
-            Add new provider
-          </button>
-        )}
-
-        {selectedId !== NEW_CONNECTION ? <details className="provider-picker" ref={providerPicker}>
-          <summary className="provider-picker-summary">
-            <span className={draft.enabled ? "provider-dot" : "provider-dot disabled"} />
-            <span className="provider-row-copy">
-              <strong>{selectedId === NEW_CONNECTION ? "New provider" : draft.name}</strong>
-              <small>{providerName(draft.providerId)}{selectedId === NEW_CONNECTION ? "" : ` · ${connectionStatus(draft.providerId, draft.hasApiKey, draft.enabled)}`}</small>
-            </span>
-            <svg className="provider-picker-caret" viewBox="0 0 16 16" aria-hidden="true">
-              <path d="m4 6 4 4 4-4" />
-            </svg>
-          </summary>
-          <div className="provider-picker-menu">
-            {connections.length > 5 ? (
-              <label className="provider-search">
-                <span className="sr-only">Search connections</span>
-                <svg viewBox="0 0 20 20" aria-hidden="true">
-                  <circle cx="8.5" cy="8.5" r="5.5" />
-                  <path d="m13 13 4 4" />
-                </svg>
-                <input
-                  value={query}
-                  placeholder="Search connections"
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-              </label>
-            ) : null}
-            <div className="provider-connections" role="list">
-              {visibleConnections.map((connection) => (
-                <button
-                  className={selectedId === connection.id ? "active" : ""}
-                  type="button"
-                  role="listitem"
-                  key={connection.id}
-                  onClick={(event) => {
-                    select(connection.id);
-                    event.currentTarget.closest("details")?.removeAttribute("open");
-                  }}
-                >
-                  <span className={connection.enabled ? "provider-dot" : "provider-dot disabled"} />
-                  <span className="provider-row-copy">
-                    <strong>{connection.name}</strong>
-                    <small>{providerName(connection.providerId)} · {connectionStatus(connection.providerId, connection.hasApiKey, connection.enabled)}</small>
-                  </span>
-                </button>
-              ))}
-              {!visibleConnections.length ? <p className="provider-empty">No matching connections</p> : null}
-            </div>
-          </div>
-        </details> : null}
-
-        <div className="provider-detail">
+  const providerEditor = (
+    <div className="provider-detail">
           <label className="setting-field">
               <span><strong>Type</strong><small>{profile.description}</small></span>
               <select
@@ -482,16 +401,80 @@ export function ProviderSettings({
                   type="button"
                   disabled={busy}
                   onClick={() => void onRemove(selectedId)
-                    .then(() => select(connections[0]?.id ?? NEW_CONNECTION))
+                    .then(collapse)
                     .catch((cause) => setStatus({ message: errorMessage(cause) }))}
                 >Remove</button>
               ) : null}
             </div>
+    </div>
+  );
+
+  return (
+    <section className="settings view-enter" aria-label="Provider settings">
+      <div className="settings-content provider-settings-content">
+        <p className="eyebrow">Settings</p>
+        <h1>Providers</h1>
+        <p className="settings-description">Connect hosted or local model endpoints.</p>
+
+        <button className="provider-add" type="button" onClick={() => select(NEW_CONNECTION)}>
+          <span aria-hidden="true">+</span>
+          Add provider
+        </button>
+
+        <div className="provider-accordion-list">
+          {selectedId === NEW_CONNECTION ? (
+            <section className="provider-accordion open">
+              <button
+                className="provider-accordion-summary"
+                type="button"
+                aria-expanded="true"
+                onClick={collapse}
+              >
+                <span className="provider-dot pending" />
+                <span className="provider-row-copy">
+                  <strong>New provider</strong>
+                  <small>Configure a hosted or local connection</small>
+                </span>
+                <ProviderCaret />
+              </button>
+              <div className="provider-accordion-reveal">{providerEditor}</div>
+            </section>
+          ) : null}
+
+          {connections.map((connection) => {
+            const open = selectedId === connection.id;
+            return (
+              <section className={open ? "provider-accordion open" : "provider-accordion"} key={connection.id}>
+                <button
+                  className="provider-accordion-summary"
+                  type="button"
+                  aria-expanded={open}
+                  onClick={() => open ? collapse() : select(connection.id)}
+                >
+                  <span className={connection.enabled ? "provider-dot" : "provider-dot disabled"} />
+                  <span className="provider-row-copy">
+                    <strong>{connection.name}</strong>
+                    <small>{providerName(connection.providerId)} · {connectionStatus(connection.providerId, connection.hasApiKey, connection.enabled)}</small>
+                  </span>
+                  <ProviderCaret />
+                </button>
+                {open ? <div className="provider-accordion-reveal">{providerEditor}</div> : null}
+              </section>
+            );
+          })}
         </div>
 
         {error ? <p className="settings-error">{error}</p> : null}
       </div>
     </section>
+  );
+}
+
+function ProviderCaret(): JSX.Element {
+  return (
+    <svg className="provider-accordion-caret" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="m4 6 4 4 4-4" />
+    </svg>
   );
 }
 
