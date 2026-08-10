@@ -80,6 +80,13 @@ const markdownComponents: Components = {
       </a>
     );
   },
+  table({ children }) {
+    return (
+      <div className="markdown-table-scroll">
+        <table>{children}</table>
+      </div>
+    );
+  },
   pre: CodeBlock,
 };
 
@@ -146,5 +153,4 @@ export function CopyIcon(): JSX.Element {
     </svg>
   );
 }
-
 

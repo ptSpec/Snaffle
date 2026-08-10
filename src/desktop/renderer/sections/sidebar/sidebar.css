@@ -22,10 +22,10 @@
   padding-right: 0;
 }
 
-.settings-navigation .sidebar-action.active {
+.settings-page-navigation .sidebar-action.active {
   position: relative;
   z-index: 3;
-  color: var(--text-strong);
+  color: var(--accent);
   background: var(--app-background);
   border-radius: 6px 0 0 6px;
   filter: drop-shadow(0 0 5px var(--pane-depth-shadow));

@@ -30,6 +30,11 @@ export const FONT_OPTIONS = [
     family: '"Cormorant Garamond", serif',
   },
   {
+    id: "junicode",
+    name: "Junicode",
+    family: '"TypoPRO Junicode", serif',
+  },
+  {
     id: "inter",
     name: "Inter",
     family: '"Inter", sans-serif',

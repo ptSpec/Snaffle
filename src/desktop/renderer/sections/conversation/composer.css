@@ -2,7 +2,8 @@
   position: relative;
   z-index: 1;
   display: grid;
-  margin: 0 28px 24px;
+  width: min(calc(100% - 56px), var(--conversation-content-width));
+  margin: 0 auto 24px;
   overflow: visible;
   background: var(--input-background);
   border: 0;
@@ -822,6 +823,16 @@ html[data-accented-theme="true"] .send-button:not(.stop) {
 html[data-accented-theme="true"] .send-button:not(.stop) .send-button-orb {
   filter: none;
   opacity: 0.34;
+}
+
+html[data-theme="snaffle-sage"] .send-button:not(.stop) {
+  color: var(--primary);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--primary) 32%, transparent);
+}
+
+html[data-theme="snaffle-sage"] .send-button:not(.stop) .send-button-orb {
+  opacity: 0.72;
 }
 
 .send-button.stop {
