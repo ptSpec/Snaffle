@@ -13,7 +13,7 @@ import {
 } from "../agent/subagents/profile.js";
 import { delegateTaskTool } from "../agent/subagents/tool.js";
 import { AttachmentStore } from "../attachments/store.js";
-import { builtInCapabilities } from "../capabilities/active.js";
+import { activeCapabilities, type ActiveTool } from "../capabilities/active.js";
 import {
   DEFAULT_COMPACTION_THRESHOLD,
   type CompactionMode,
@@ -32,6 +32,9 @@ import {
 import type { RunEvent } from "../protocol.js";
 import { probeNativeSandbox } from "../execution/native/sandbox.js";
 import { defaultTools } from "../tools/built-ins.js";
+import { McpManager } from "../mcp/manager.js";
+import { mcpTool } from "../mcp/tool.js";
+import { mcpServers, type McpServerConfig } from "../mcp/types.js";
 import { findKetch } from "../tools/web/ketch.js";
 import {
   WEB_SEARCH_BACKENDS,
@@ -47,6 +50,8 @@ import { registerSearchIpc } from "./ipc/search.js";
 import { registerWorkspaceIpc } from "./ipc/workspaces.js";
 import { registerRunIpc, type RunIpc } from "./ipc/runs.js";
 import { registerProviderIpc } from "./ipc/providers.js";
+import { registerMcpIpc } from "./ipc/mcp.js";
+import { loadMcpSecrets, publicMcpServers, storeMcpSecrets } from "./mcp-secrets.js";
 import {
   decodeSecret,
   encodeSecret,
@@ -79,6 +84,8 @@ let attachments: AttachmentStore;
 let runs: RunIpc;
 let contextCompactor: ContextCompactor;
 let providerConnections: ProviderConnections;
+const mcpManager = new McpManager();
+let configuredMcpServers: McpServerConfig[] = [];
 let activeTheme: Theme = DEFAULT_THEME;
 let interfaceFont: FontId = DEFAULT_FONTS.interface;
 let primaryFont: FontId = DEFAULT_FONTS.primary;
@@ -141,6 +148,8 @@ async function start(): Promise<void> {
     legacyRequestLimits(settings.subagent, subagent.providerConnectionId),
     legacyFallbacks(settings.subagent, subagent.providerConnectionId),
   );
+  configuredMcpServers = loadMcpSecrets(mcpServers(settings.mcpServers));
+  mcpManager.configure(configuredMcpServers);
   if (hasLegacySubagentRouting(settings.subagent)) {
     saveSettings({ providerConnections: providerConnections.serialize(), subagent });
   }
@@ -240,6 +249,15 @@ function registerIpc(): void {
       providerConnections: providerConnections.serialize(),
       selectedProviderConnectionId,
     }),
+  });
+  registerMcpIpc({
+    manager: mcpManager,
+    servers: () => configuredMcpServers,
+    update: (servers) => {
+      configuredMcpServers = servers;
+      saveSettings({ mcpServers: storeMcpSecrets(servers) });
+    },
+    state: desktopState,
   });
   registerWorkspaceIpc({
     store,
@@ -473,6 +491,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     toolSpecs: currentToolSpecs(activeThread?.subagentMode),
     savedMessages: await store.savedMessages.summaries(),
     providerConnections: providerConnections.list(),
+    mcpServers: publicMcpServers(configuredMcpServers),
     openRouterAvailable: providerConnections.list().find(
       (connection) => connection.id === OPENROUTER_CONNECTION_ID,
     )?.hasApiKey ?? false,
@@ -537,16 +556,18 @@ function parseContextLength(value: unknown): number {
 }
 
 function currentCapabilities() {
-  return builtInCapabilities(
-    defaultTools(webSearchEnabled
+  const tools: ActiveTool[] = defaultTools(webSearchEnabled
       ? {
           webSearchEnabled: true,
           backend: webSearchBackend,
           apiKey: webSearchApiKey(webSearchBackend),
           openRouterApiKey: openRouterApiKey(),
         }
-      : {}),
-  );
+      : {}).map((tool) => ({ source: { type: "built-in" }, tool }));
+  if (mcpManager.enabled().length) {
+    tools.push({ source: { type: "mcp", serverId: "broker" }, tool: mcpTool(mcpManager) });
+  }
+  return activeCapabilities(tools);
 }
 
 function currentToolSpecs(mode: ThreadSubagentMode = "inherit") {
@@ -724,6 +745,7 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   runs?.stopAll();
+  void mcpManager.close();
   store?.close();
 });
 
