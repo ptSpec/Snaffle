@@ -5,6 +5,7 @@ import {
   OpenAICompatibleProvider,
   listOpenAICompatibleModels,
 } from "../src/providers/openai-compatible.js";
+import { AnthropicMessagesProvider } from "../src/providers/anthropic-messages.js";
 import {
   createProvider,
   providerCatalog,
@@ -125,6 +126,101 @@ test("OpenAI-compatible provider sends attachment content without storing payloa
     { type: "text", text: '<attachment name="old-notes.md" available="false" />' },
   ]);
   assert.equal(resolutions, 1);
+});
+
+test("Anthropic Messages preserves signed thinking through an active tool loop", async (t) => {
+  const requests: Array<Record<string, unknown>> = [];
+  const server = createServer((request, response) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk: string) => (body += chunk));
+    request.on("end", () => {
+      requests.push(JSON.parse(body) as Record<string, unknown>);
+      if (requests.length === 1) {
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        response.write('data: {"type":"message_start","message":{"usage":{"input_tokens":5,"cache_read_input_tokens":3,"cache_creation_input_tokens":2}}}\n\n');
+        response.write('data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}}\n\n');
+        response.write('data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Inspect first. "}}\n\n');
+        response.write('data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig-123"}}\n\n');
+        response.write('data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"tool-1","name":"read_file","input":{}}}\n\n');
+        response.write('data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"path\\":\\"package.json\\"}"}}\n\n');
+        response.write('data: {"type":"content_block_stop","index":1}\n\n');
+        response.write('data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":4}}\n\n');
+        response.end('data: {"type":"message_stop"}\n\n');
+        return;
+      }
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        content: [{ type: "text", text: "Done" }],
+        stop_reason: "end_turn",
+        usage: { input_tokens: 12, output_tokens: 1 },
+      }));
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Test server did not start");
+
+  const provider = new AnthropicMessagesProvider({
+    baseUrl: `http://127.0.0.1:${address.port}/v1`,
+    model: "test-model",
+    apiKey: "secret",
+  });
+  const first = await provider.complete(
+    [{ role: "system", content: "Be concise." }, { role: "user", content: "Inspect the project" }],
+    [{
+      name: "read_file",
+      description: "Read a workspace file",
+      inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
+    }],
+    new AbortController().signal,
+  );
+
+  assert.equal(first.reasoning, "Inspect first. ");
+  assert.deepEqual(first.toolCalls, [
+    { id: "tool-1", name: "read_file", input: { path: "package.json" } },
+  ]);
+  assert.deepEqual(first.usage, {
+    inputTokens: 10,
+    outputTokens: 4,
+    totalTokens: 14,
+    cachedInputTokens: 3,
+  });
+  assert.deepEqual(first.providerState, {
+    anthropic: { thinking: [{ type: "thinking", thinking: "Inspect first. ", signature: "sig-123" }] },
+  });
+
+  await provider.complete(
+    [
+      { role: "system", content: "Be concise." },
+      { role: "user", content: "Inspect the project" },
+      {
+        role: "assistant",
+        content: first.text,
+        reasoning: first.reasoning,
+        toolCalls: first.toolCalls,
+        providerState: first.providerState,
+      },
+      { role: "tool", toolCallId: "tool-1", content: "{}" },
+    ],
+    [],
+    new AbortController().signal,
+  );
+
+  assert.equal(requests[0]?.system, "Be concise.");
+  assert.deepEqual(requests[1]?.messages, [
+    { role: "user", content: [{ type: "text", text: "Inspect the project" }] },
+    {
+      role: "assistant",
+      content: [
+        { type: "thinking", thinking: "Inspect first. ", signature: "sig-123" },
+        { type: "tool_use", id: "tool-1", name: "read_file", input: { path: "package.json" } },
+      ],
+    },
+    { role: "user", content: [{ type: "tool_result", tool_use_id: "tool-1", content: "{}" }] },
+  ]);
 });
 
 test("OpenAI-compatible model discovery works for local or hosted connections", async (t) => {
