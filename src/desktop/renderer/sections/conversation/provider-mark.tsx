@@ -25,6 +25,7 @@ const knownProviders: Array<{
   { id: "fireworks", name: "Fireworks AI", hosts: ["api.fireworks.ai"], short: "FW" },
   { id: "deepinfra", name: "DeepInfra", hosts: ["api.deepinfra.com"], short: "DI" },
   { id: "deepseek", name: "DeepSeek", hosts: ["api.deepseek.com"] },
+  { id: "opencode-go", name: "OpenCode Go", hosts: ["opencode.ai"], short: "GO" },
   { id: "ollama", name: "Ollama", localPort: "11434", short: "OL" },
   { id: "lm-studio", name: "LM Studio", localPort: "1234", short: "LM" },
   { id: "llama-cpp", name: "llama.cpp", hosts: ["llama.app"], localPort: "8080" },
