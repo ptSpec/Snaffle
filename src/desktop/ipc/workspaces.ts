@@ -1,6 +1,7 @@
 import { BrowserWindow, dialog, ipcMain } from "electron";
 import type { OpenDialogOptions } from "electron";
 import path from "node:path";
+import { isThreadSubagentMode } from "../../agent/subagents/profile.js";
 import type { DesktopState } from "../api.js";
 import type { DesktopStore } from "../store.js";
 
@@ -55,6 +56,15 @@ export function registerWorkspaceIpc(options: {
   ipcMain.handle("desktop:set-thread-draft", async (_event, threadId: unknown, draft: unknown): Promise<void> => {
     if (typeof draft !== "string") throw new Error("Draft must be text");
     await store.setDraft(id(threadId, "Thread"), draft);
+  });
+  ipcMain.handle("desktop:set-thread-subagent-mode", async (
+    _event,
+    threadValue: unknown,
+    mode: unknown,
+  ): Promise<DesktopState> => {
+    if (!isThreadSubagentMode(mode)) throw new Error("Unknown thread subagent mode");
+    await store.setThreadSubagentMode(id(threadValue, "Thread"), mode);
+    return state(false);
   });
   ipcMain.handle("desktop:set-thread-bookmarked", async (
     _event,

@@ -6,7 +6,8 @@ import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_MAX_STEPS } from "../agent/loop.js";
 import {
-  activeSubagent,
+  threadSubagent,
+  type ThreadSubagentMode,
   subagentProfile,
   type SubagentProfile,
 } from "../agent/subagents/profile.js";
@@ -258,7 +259,7 @@ function registerIpc(): void {
     return buildContextReport({
       entries: await store.context.entries(threadId, checkpoint),
       checkpoint,
-      tools: currentToolSpecs(),
+      tools: currentToolSpecs(await store.threadSubagentMode(threadId)),
       contextLength,
       mode: compactionMode,
       threshold: customCompactionThreshold,
@@ -282,7 +283,7 @@ function registerIpc(): void {
       providerConnectionId,
       model,
       contextLength: parseContextLength(rawContextLength),
-      tools: currentToolSpecs(),
+      tools: currentToolSpecs(await store.threadSubagentMode(threadId)),
     });
   });
 
@@ -461,6 +462,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
   const conversation = includeConversation ? await store.entries(state.activeThreadId) : [];
   const workspace =
     state.workspaces.find((item) => item.id === state.activeWorkspaceId) ?? null;
+  const activeThread = workspace?.threads.find((thread) => thread.id === state.activeThreadId);
   return {
     workspace,
     workspaces: state.workspaces,
@@ -468,7 +470,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     conversation,
     contextCheckpoints: includeConversation ? await store.context.checkpoints(state.activeThreadId) : [],
     modelInstructions: await store.systemInstructions(state.activeThreadId),
-    toolSpecs: currentToolSpecs(),
+    toolSpecs: currentToolSpecs(activeThread?.subagentMode),
     savedMessages: await store.savedMessages.summaries(),
     providerConnections: providerConnections.list(),
     openRouterAvailable: providerConnections.list().find(
@@ -547,9 +549,9 @@ function currentCapabilities() {
   );
 }
 
-function currentToolSpecs() {
+function currentToolSpecs(mode: ThreadSubagentMode = "inherit") {
   const tools = currentCapabilities().tools.map(({ tool }) => tool);
-  if (activeSubagent(subagent)) tools.push(delegateTaskTool(async () => ""));
+  if (threadSubagent(subagent, mode)) tools.push(delegateTaskTool(async () => ""));
   return tools.map((tool) => ({
     name: tool.name,
     description: tool.description,

@@ -11,7 +11,7 @@ import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js
 import type { CompactionMode } from "../context/budget.js";
 import type { ContextCheckpoint } from "../context/projection.js";
 import type { ContextReport } from "../context/report.js";
-import type { SubagentProfile } from "../agent/subagents/profile.js";
+import type { SubagentProfile, ThreadSubagentMode } from "../agent/subagents/profile.js";
 import type { GitChanges, GitDiffPreview, GitFileContents } from "../git/types.js";
 
 export type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents } from "../git/types.js";
@@ -27,6 +27,7 @@ export type DesktopThread = {
   sourceThreadId: string | null;
   sourceEntryId: string | null;
   branchLabel: string | null;
+  subagentMode: ThreadSubagentMode;
   updatedAt: number;
 };
 
@@ -147,6 +148,7 @@ export interface DesktopApi {
   forkThread(threadId: string, sequence: number): Promise<DesktopState>;
   selectThread(threadId: string): Promise<DesktopState>;
   setThreadDraft(threadId: string, draft: string): Promise<void>;
+  setThreadSubagentMode(threadId: string, mode: ThreadSubagentMode): Promise<DesktopState>;
   restoreThread(threadId: string, sequence: number): Promise<DesktopState>;
   setThreadBookmarked(threadId: string, bookmarked: boolean): Promise<DesktopState>;
   deleteThreads(threadIds: string[]): Promise<DesktopState>;

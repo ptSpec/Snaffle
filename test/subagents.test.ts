@@ -3,7 +3,24 @@ import test from "node:test";
 import { applySubagentUpdate } from "../src/agent/subagents/activity.js";
 import { ProviderCapacity } from "../src/agent/subagents/capacity.js";
 import { checkCommandTool } from "../src/agent/subagents/check-tool.js";
+import { threadSubagent, type SubagentProfile } from "../src/agent/subagents/profile.js";
 import type { Workspace } from "../src/execution/workspace.js";
+
+test("thread subagent mode can inherit or override the app default", () => {
+  const profile: SubagentProfile = {
+    enabled: false,
+    providerConnectionId: "local",
+    model: "small-model",
+    maxSteps: 30,
+    localConcurrency: 1,
+    overflowProviderConnectionId: "",
+    overflowModel: "",
+  };
+
+  assert.equal(threadSubagent(profile, "inherit"), null);
+  assert.equal(threadSubagent(profile, "disabled"), null);
+  assert.equal(threadSubagent(profile, "enabled")?.model, "small-model");
+});
 
 test("subagent activity keeps interleaved child updates separate", () => {
   let activity = applySubagentUpdate(undefined, {
