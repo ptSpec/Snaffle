@@ -2,11 +2,16 @@ import { homedir } from "node:os";
 import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { parse } from "yaml";
-import type { Skill, SkillSource, SkillSummary } from "./types.js";
+import type { Skill, SkillOrigin, SkillSource, SkillSummary } from "./types.js";
 
 const SKILL_FILE = "SKILL.md";
 const MAX_RESOURCE_CHARACTERS = 50_000;
 const VALID_SKILL_NAME = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+const SUPPORTED_TOOLS = new Set([
+  "run_command", "read_file", "search_files", "edit_file", "write_file",
+  "web_fetch", "web_search", "youtube_transcript", "delegate_task", "check_command",
+  "mcp", "use_skill",
+]);
 
 export class SkillRegistry {
   private readonly skills: Skill[];
@@ -16,7 +21,7 @@ export class SkillRegistry {
   }
 
   summaries(): SkillSummary[] {
-    return this.skills.map(({ name, description, source }) => ({ name, description, source }));
+    return this.skills.map(summary);
   }
 
   search(query: string): SkillSummary[] {
@@ -31,14 +36,20 @@ export class SkillRegistry {
       .filter(({ score }) => !words.length || score > 0)
       .sort((left, right) => right.score - left.score || left.skill.name.localeCompare(right.skill.name))
       .slice(0, 12)
-      .map(({ skill: { name, description, source } }) => ({ name, description, source }));
+      .map(({ skill }) => summary(skill));
   }
 
   read(name: string, resource?: string): string {
     const skill = this.skills.find((item) => item.name.toLowerCase() === name.toLowerCase());
     if (!skill) throw new Error(`Unknown skill: ${name}`);
+    if (skill.compatibility === "incompatible") {
+      throw new Error(`Skill "${skill.name}" is unavailable. ${skill.compatibilityNote ?? "It requires unsupported capabilities."}`);
+    }
     if (!resource) {
-      return `Loaded skill "${skill.name}" (${skill.source}).\n\n${skill.instructions}`;
+      const compatibility = skill.compatibility === "compatible"
+        ? ""
+        : `\nCompatibility: ${skill.compatibility}. ${skill.compatibilityNote ?? "Verify that required capabilities are available before proceeding."}\n`;
+      return `Loaded skill "${skill.name}" (${skill.source}, ${skill.origin}).${compatibility}\n${skill.instructions}`;
     }
 
     const target = realpathSync(path.resolve(skill.directory, resource));
@@ -53,25 +64,34 @@ export class SkillRegistry {
 }
 
 function discoverSkills(workspacePath?: string, personalRoot?: string): Skill[] {
-  const roots: Array<{ directory: string; source: SkillSource }> = [];
+  const roots: Array<{ directory: string; source: SkillSource; origin: SkillOrigin }> = [];
   if (workspacePath) {
-    for (const directory of [".snaffle/skills", ".agents/skills", ".codex/skills", ".claude/skills"]) {
-      roots.push({ directory: path.join(workspacePath, directory), source: "project" });
+    for (const [directory, origin] of skillLocations(workspacePath)) {
+      roots.push({ directory, source: "project", origin });
     }
   }
-  if (personalRoot) roots.push({ directory: personalRoot, source: "personal" });
-  for (const directory of [".agents/skills", ".codex/skills", ".claude/skills"]) {
-    roots.push({ directory: path.join(homedir(), directory), source: "personal" });
+  if (personalRoot) roots.push({ directory: personalRoot, source: "personal", origin: "snaffle" });
+  for (const [directory, origin] of skillLocations(homedir()).slice(1)) {
+    roots.push({ directory, source: "personal", origin });
   }
 
   const found = new Map<string, Skill>();
   for (const root of roots) {
     for (const directory of childDirectories(root.directory)) {
-      const skill = readSkill(directory, root.source);
+      const skill = readSkill(directory, root.source, root.origin);
       if (skill && !found.has(skill.name.toLowerCase())) found.set(skill.name.toLowerCase(), skill);
     }
   }
   return [...found.values()].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function skillLocations(root: string): Array<[string, SkillOrigin]> {
+  return [
+    [path.join(root, ".snaffle/skills"), "snaffle"],
+    [path.join(root, ".agents/skills"), "agents"],
+    [path.join(root, ".codex/skills"), "codex"],
+    [path.join(root, ".claude/skills"), "claude"],
+  ];
 }
 
 function childDirectories(root: string): string[] {
@@ -84,7 +104,7 @@ function childDirectories(root: string): string[] {
   }
 }
 
-function readSkill(directory: string, source: SkillSource): Skill | undefined {
+function readSkill(directory: string, source: SkillSource, origin: SkillOrigin): Skill | undefined {
   try {
     const actualDirectory = realpathSync(directory);
     const instructions = readFileSync(path.join(actualDirectory, SKILL_FILE), "utf8");
@@ -92,10 +112,36 @@ function readSkill(directory: string, source: SkillSource): Skill | undefined {
     const name = typeof frontmatter.name === "string" ? frontmatter.name.trim() : "";
     const description = typeof frontmatter.description === "string" ? frontmatter.description.trim() : "";
     if (!VALID_SKILL_NAME.test(name) || !description) return undefined;
-    return { name, description, source, directory: actualDirectory, instructions };
+    const compatibility = compatibilityFor(frontmatter, origin);
+    return { name, description, source, origin, ...compatibility, directory: actualDirectory, instructions };
   } catch {
     return undefined;
   }
+}
+
+function compatibilityFor(frontmatter: Record<string, unknown>, origin: SkillOrigin): Pick<SkillSummary, "compatibility" | "compatibilityNote"> {
+  const metadata = frontmatter.metadata && typeof frontmatter.metadata === "object" && !Array.isArray(frontmatter.metadata)
+    ? frontmatter.metadata as Record<string, unknown>
+    : {};
+  const required = typeof metadata["snaffle.dev/required-tools"] === "string"
+    ? metadata["snaffle.dev/required-tools"].split(/[\s,]+/).filter(Boolean)
+    : [];
+  const missing = required.filter((tool) => !SUPPORTED_TOOLS.has(tool));
+  if (missing.length) {
+    return { compatibility: "incompatible", compatibilityNote: `Missing required tools: ${missing.join(", ")}.` };
+  }
+  if (metadata["snaffle.dev/compatible"] === "true") return { compatibility: "compatible" };
+
+  const declared = typeof frontmatter.compatibility === "string" ? frontmatter.compatibility.trim() : "";
+  if (declared) return { compatibility: "unknown", compatibilityNote: declared };
+  if (origin === "codex" || origin === "claude") {
+    return { compatibility: "unknown", compatibilityNote: `Imported from ${origin === "codex" ? "Codex" : "Claude"}; verify its required tools before use.` };
+  }
+  return { compatibility: "compatible" };
+}
+
+function summary({ name, description, source, origin, compatibility, compatibilityNote }: Skill): SkillSummary {
+  return { name, description, source, origin, compatibility, ...(compatibilityNote ? { compatibilityNote } : {}) };
 }
 
 function parseFrontmatter(content: string): Record<string, unknown> {
