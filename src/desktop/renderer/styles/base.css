@@ -6,6 +6,7 @@
   --code-block-font-size: 15px;
   --interface-font-scale: 1;
   --conversation-font-scale: 0.9;
+  --conversation-content-width: 900px;
 
   /* Component roles derived from the small public theme palette. */
   --app-background: var(--background);
