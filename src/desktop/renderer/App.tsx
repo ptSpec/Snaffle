@@ -18,6 +18,7 @@ import type { CompactionMode } from "../../context/budget.js";
 import type { SubagentProfile, ThreadSubagentMode } from "../../agent/subagents/profile.js";
 import type { ContextReport } from "../../context/report.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../../tools/web/types.js";
+import type { McpServerConfig, McpServerStatus } from "../../mcp/types.js";
 import { DEFAULT_MODEL_CONTEXT_LENGTH } from "../../providers/provider.js";
 import { providerProfile, splitModelVariant } from "../../providers/profiles.js";
 import { DEFAULT_THEME, themeById, type Theme } from "../themes/index.js";
@@ -69,6 +70,7 @@ const initialState: DesktopState = {
   toolSpecs: [],
   savedMessages: [],
   providerConnections: [],
+  mcpServers: [],
   openRouterAvailable: false,
   ketchAvailable: false,
   webSearchEnabled: true,
@@ -1084,6 +1086,26 @@ export function App(): JSX.Element {
     }
   }
 
+  async function saveMcpServer(server: McpServerConfig): Promise<void> {
+    setError(null);
+    try {
+      setDesktopState(withoutConversation(await window.desktop.saveMcpServer(server)));
+    } catch (cause) {
+      setError(errorMessage(cause));
+      throw cause;
+    }
+  }
+
+  async function removeMcpServer(id: string): Promise<void> {
+    setError(null);
+    try {
+      setDesktopState(withoutConversation(await window.desktop.removeMcpServer(id)));
+    } catch (cause) {
+      setError(errorMessage(cause));
+      throw cause;
+    }
+  }
+
   async function setTypography(interfaceFont: FontId, primaryFont: FontId, secondaryFont: FontId, codeFont: FontId): Promise<void> {
     try {
       await window.desktop.setTypography(interfaceFont, primaryFont, secondaryFont, codeFont);
@@ -1387,6 +1409,7 @@ export function App(): JSX.Element {
             webSearchBackend={desktopState.webSearchBackend}
             webSearchKeyBackends={desktopState.webSearchKeyBackends}
             providerConnections={desktopState.providerConnections}
+            mcpServers={desktopState.mcpServers}
             providerCatalogs={models}
             loadingProviderModels={loadingModels}
             error={error}
@@ -1408,6 +1431,9 @@ export function App(): JSX.Element {
             onSaveProvider={saveProviderConnection}
             onRemoveProvider={removeProviderConnection}
             onTestProvider={(id) => window.desktop.getProviderStatus(id)}
+            onSaveMcpServer={saveMcpServer}
+            onRemoveMcpServer={removeMcpServer}
+            onTestMcpServer={(server): Promise<McpServerStatus> => window.desktop.testMcpServer(server)}
           />
         ) : view === "saved" ? (
           <Bookmarks

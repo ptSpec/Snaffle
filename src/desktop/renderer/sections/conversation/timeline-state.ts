@@ -1,5 +1,5 @@
 import type { AttachmentRef } from "../../../../attachments/types.js";
-import type { CommandApprovalDecision, RunEvent, SourceReference, ToolCall, Usage } from "../../../../protocol.js";
+import type { CommandApprovalDecision, RunEvent, SourceReference, ToolCall, ToolPresentation, Usage } from "../../../../protocol.js";
 import type { ContextCheckpoint } from "../../../../context/projection.js";
 import type { DesktopEntry } from "../../../api.js";
 import { applySubagentUpdate, type SubagentActivity } from "../../../../agent/subagents/activity.js";
@@ -36,6 +36,8 @@ export type TimelineItem =
       exitCode?: number | null;
       sequence?: number;
       details?: SubagentActivity;
+      durationMs?: number;
+      presentation?: ToolPresentation;
     };
 
 let itemNumber = 0;
@@ -295,6 +297,8 @@ export function addRunEvent(
         isError: event.isError,
         sequence: event.sequence,
         ...(event.exitCode === undefined ? {} : { exitCode: event.exitCode }),
+        ...(event.durationMs === undefined ? {} : { durationMs: event.durationMs }),
+        ...(event.presentation ? { presentation: event.presentation } : {}),
         ...(event.details
           ? { details: event.details }
           : runningCall?.kind === "tool" && runningCall.details
@@ -391,6 +395,8 @@ export function timelineFromEntries(entries: DesktopEntry[], checkpoints: Contex
       ...(message.isError === undefined ? {} : { isError: message.isError }),
       ...(message.exitCode === undefined ? {} : { exitCode: message.exitCode }),
       ...(message.details ? { details: message.details } : {}),
+      ...(message.durationMs === undefined ? {} : { durationMs: message.durationMs }),
+      ...(message.presentation ? { presentation: message.presentation } : {}),
     });
   });
 

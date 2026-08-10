@@ -11,12 +11,23 @@ export const MarkdownContent = memo(function MarkdownContent({
   text: string;
   sources?: SourceReference[];
 }): JSX.Element {
+  const markdown = normalizeCitationMarkers(text);
   return (
     <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm, inlineSources(sources)]} skipHtml>
-      {text}
+      {markdown}
     </ReactMarkdown>
   );
 });
+
+function normalizeCitationMarkers(text: string): string {
+  return text.replace(/\uE200cite\uE202([^\uE201]+)\uE201/g, (_marker, body: string) =>
+    body
+      .split("\uE202")
+      .filter((value) => /^https?:\/\//.test(value))
+      .map((url) => `<${url}>`)
+      .join(" "),
+  );
+}
 
 type MarkdownNode = {
   type: string;
@@ -153,4 +164,3 @@ export function CopyIcon(): JSX.Element {
     </svg>
   );
 }
-

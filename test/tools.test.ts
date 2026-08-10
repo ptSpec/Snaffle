@@ -216,6 +216,26 @@ fi
   });
 });
 
+test("an empty Ketch search is actionable rather than a tool failure", {
+  skip: process.platform === "win32",
+}, async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "snaffle-empty-ketch-"));
+  const executable = path.join(root, "ketch");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(executable, "#!/bin/sh\nprintf '[]'\n");
+  await chmod(executable, 0o755);
+
+  const tool = webSearchTool({
+    webSearchEnabled: true,
+    backend: "tavily",
+    apiKey: "secret",
+    ketchPath: executable,
+  })!;
+  const result = await tool.execute({} as never, { query: "site:example.com missing", maxResults: 3 });
+  assert.match((result as { content: string }).content, /shorter query/);
+  assert.deepEqual((result as { sources: unknown[] }).sources, []);
+});
+
 test("Fandom Cloudflare challenges fall back to its public wiki API", async (t) => {
   const originalFetch = globalThis.fetch;
   const requests: string[] = [];

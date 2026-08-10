@@ -117,5 +117,3 @@ const WEB_BACKENDS: {
   { id: "firecrawl", label: "Firecrawl", description: "Direct search results through Ketch. Provider charges may apply.", needsKey: true, placeholder: "fc-…" },
   { id: "openrouter", label: "OpenRouter Research", description: "A small research model searches and returns a concise cited answer. Additional model charges apply." },
 ];
-
-

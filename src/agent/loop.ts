@@ -5,7 +5,7 @@ import { withoutMalformedToolCalls } from "../context/projection.js";
 import type { ModelProvider, ModelStreamEvent } from "../providers/provider.js";
 import type { Message, RunEvent, SourceReference } from "../protocol.js";
 import { healToolCall } from "../tools/input.js";
-import { ToolInputError, toolErrorContent } from "../tools/tool.js";
+import { ToolInputError, toolErrorContent, type ToolResult } from "../tools/tool.js";
 import { truncateMiddle } from "../tools/output.js";
 import type { Trace } from "./trace.js";
 import type { Workspace } from "../execution/workspace.js";
@@ -141,6 +141,8 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         let isError = false;
         let inputError = false;
         let details: SubagentActivity | undefined;
+        let presentation: ToolResult["presentation"] = tool?.presentation?.(call.input);
+        const toolStartedAt = Date.now();
 
         try {
           if (!tool) throw new Error(`Unknown tool: ${call.name}`);
@@ -153,6 +155,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           content = result.content;
           exitCode = result.exitCode;
           resultSources = result.sources;
+          presentation = result.presentation ?? presentation;
           for (const source of resultSources ?? []) sources.set(source.url, source);
         } catch (error) {
           isError = true;
@@ -162,6 +165,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         }
 
         content = truncateMiddle(content);
+        const toolDurationMs = Math.max(1, Date.now() - toolStartedAt);
         const toolMessage: Message = {
           role: "tool",
           toolCallId: call.id,
@@ -171,6 +175,8 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           ...(exitCode === undefined ? {} : { exitCode }),
           ...(call.inputRepair ? { inputRepair: call.inputRepair } : {}),
           ...(details ? { details } : {}),
+          durationMs: toolDurationMs,
+          ...(presentation ? { presentation } : {}),
         };
         messages.push(toolMessage);
         await options.onMessage?.(toolMessage, nextSequence);
@@ -184,6 +190,8 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           isError,
           ...(details ? { details } : {}),
           ...(exitCode === undefined ? {} : { exitCode }),
+          durationMs: toolDurationMs,
+          ...(presentation ? { presentation } : {}),
         });
         nextSequence += 1;
       }
