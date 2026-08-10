@@ -50,6 +50,7 @@ export function Settings({
   providerCatalogs,
   loadingProviderModels,
   error,
+  onResetAppearance,
   onSelectTheme,
   onTypography,
   onTypographyScale,
@@ -100,6 +101,7 @@ export function Settings({
   providerCatalogs: ProviderCatalog[];
   loadingProviderModels: boolean;
   error: string | null;
+  onResetAppearance: () => void;
   onSelectTheme: (themeId: string) => void;
   onTypography: (interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId) => void;
   onTypographyScale: (role: "interface" | "conversation", value: number) => void;
@@ -224,7 +226,10 @@ export function Settings({
     <section className="settings view-enter" aria-label="Settings">
       <div className="settings-content">
         <p className="eyebrow">Settings</p>
-        <h1>Appearance</h1>
+        <div className="appearance-heading">
+          <h1>Appearance</h1>
+          <button type="button" onClick={onResetAppearance}>Reset to defaults</button>
+        </div>
         <p className="settings-description">Choose how {PROJECT.name} looks.</p>
 
         <details className="theme-picker" ref={themePicker}>
