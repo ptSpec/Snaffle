@@ -2,7 +2,7 @@
 
 Skills are portable instruction packages stored as a directory containing `SKILL.md`, with optional `scripts/`, `references/`, and `assets/` resources. The frontmatter requires `name` and `description`.
 
-Snaffle discovers project skills from `.snaffle/skills`, `.agents/skills`, `.codex/skills`, and `.claude/skills`. It also discovers personal skills from the equivalent home-directory locations and the application data `skills` directory. Project skills win when names collide.
+Snaffle discovers project skills from `.snaffle/skills`, `.agents/skills`, `.codex/skills`, and `.claude/skills`. It also discovers personal skills from `~/.snaffle/skills`, the equivalent imported-harness home directories, and the application data `skills` directory. Project skills win when names collide. Bundled first-party skills use a separate read-only application resource so updates do not modify user-owned skills.
 
 There is one runtime with two entrances:
 

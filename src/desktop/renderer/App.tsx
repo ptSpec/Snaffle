@@ -1381,6 +1381,7 @@ export function App(): JSX.Element {
         : `${skill.description} · ${skill.compatibility === "incompatible" ? "Unavailable" : "Compatibility unknown"}: ${skill.compatibilityNote ?? "Verify required capabilities before use."}`,
       keywords: `skill workflow ${skill.source}`,
       scope: "chat",
+      searchOnly: skill.origin === "codex" || skill.origin === "claude",
       disabled: !activeThread || running || skill.compatibility === "incompatible",
       run: () => {
         const warning = skill.compatibility === "unknown"
