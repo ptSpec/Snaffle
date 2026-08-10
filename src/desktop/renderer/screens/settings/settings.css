@@ -130,6 +130,10 @@
   border-radius: 0 0 11px 11px;
 }
 
+.agent-settings-card.open .agent-settings-body {
+  overflow: visible;
+}
+
 .agent-settings-body .setting-field:first-child {
   border-top: 0;
 }
@@ -145,6 +149,25 @@
   line-height: 1.45;
   background: var(--hover-background);
   border-radius: 10px;
+}
+
+.subagent-model-picker {
+  width: min(310px, 52%);
+}
+
+.subagent-model-picker .search-picker-trigger {
+  min-height: 36px;
+  padding: 7px 9px;
+  background: var(--input-background);
+  border-color: var(--border-default);
+}
+
+.subagent-model-picker .search-picker-menu {
+  width: min(380px, 70vw);
+}
+
+.setting-field .subagent-model-picker .search-picker-menu input {
+  width: 100%;
 }
 
 .subagent-advanced,

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SearchPicker } from "../../components/search-picker.js";
 import { NumberSetting } from "./controls.js";
 import type { SubagentProfile } from "../../../../agent/subagents/profile.js";
 import type { ProviderCatalog, ProviderConnection } from "../../../../providers/provider.js";
@@ -44,6 +45,18 @@ export function AgentSettings({
   const selectedChoice = modelChoices.find((choice) =>
     choice.connectionId === subagent.providerConnectionId && choice.modelId === subagent.model
   );
+  const subagentModelOptions = modelChoices.map((choice) => ({
+    value: modelValue(choice.connectionId, choice.modelId),
+    label: choice.modelName,
+    detail: `${choice.connectionName} · ${choice.modelId}`,
+  }));
+  if (subagent.model && !selectedChoice) {
+    subagentModelOptions.push({
+      value: modelValue(subagent.providerConnectionId, subagent.model),
+      label: subagent.model,
+      detail: selectedConnection?.name ?? "Saved model",
+    });
+  }
 
   function update(change: Partial<SubagentProfile>): void {
     onSubagent({ ...subagent, ...change });
@@ -122,33 +135,21 @@ export function AgentSettings({
               onChange={(event) => update({ enabled: event.target.checked })}
             />
           </label>
-          <label className="setting-field">
+          <div className="setting-field">
             <span>
               <strong>Model</strong>
               <small>The provider and model used for delegated tasks.</small>
             </span>
-            <select
+            <SearchPicker
               value={modelValue(subagent.providerConnectionId, subagent.model)}
               disabled={!modelChoices.length}
-              onChange={(event) => selectModel(event.target.value)}
-            >
-              <option value="">{modelChoices.length ? "Select model" : "No models available"}</option>
-              {subagent.model && !selectedChoice
-                ? <option value={modelValue(subagent.providerConnectionId, subagent.model)}>{subagent.model}</option>
-                : null}
-              {connections.map((connection) => (
-                <optgroup key={connection.id} label={connection.name}>
-                  {modelChoices
-                    .filter((choice) => choice.connectionId === connection.id)
-                    .map((choice) => (
-                      <option key={choice.modelId} value={modelValue(choice.connectionId, choice.modelId)}>
-                        {choice.modelName}
-                      </option>
-                    ))}
-                </optgroup>
-              ))}
-            </select>
-          </label>
+              className="subagent-model-picker"
+              placeholder={modelChoices.length ? "Select model" : "No models available"}
+              searchPlaceholder="Search providers and models…"
+              options={subagentModelOptions}
+              onChange={selectModel}
+            />
+          </div>
           {selectedConnection ? (
             <p className="subagent-routing-summary">
               Subagents use {selectedChoice?.modelName ?? subagent.model} through {selectedConnection.name}. Up to{" "}
