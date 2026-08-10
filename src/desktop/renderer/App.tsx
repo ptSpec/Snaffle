@@ -68,6 +68,7 @@ const initialState: DesktopState = {
   contextCheckpoints: [],
   modelInstructions: [],
   toolSpecs: [],
+  skills: [],
   savedMessages: [],
   providerConnections: [],
   mcpServers: [],
@@ -1372,6 +1373,22 @@ export function App(): JSX.Element {
       disabled: view !== "conversation",
       run: () => setRightCollapsed((value) => !value),
     },
+    ...desktopState.skills.map((skill): AppCommand => ({
+      id: `skill:${skill.name}`,
+      label: `/${skill.name}`,
+      detail: skill.description,
+      keywords: `skill workflow ${skill.source}`,
+      scope: "chat",
+      disabled: !activeThread || running,
+      run: () => {
+        const activation =
+          `Use the "${skill.name}" skill for this task. Load its instructions with use_skill before proceeding.`;
+        setTask((current) => current.trim()
+          ? `${activation}\n\n${current}`
+          : `${activation}\n\n`);
+        window.requestAnimationFrame(() => taskInput.current?.focus());
+      },
+    })),
   ];
 
   function closeCommands(): void {
