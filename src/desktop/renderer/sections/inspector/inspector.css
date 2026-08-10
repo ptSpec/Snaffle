@@ -81,6 +81,50 @@
   font-size: calc(14px * var(--interface-font-scale));
 }
 
+.inspector-duration {
+  margin-top: 4px !important;
+  color: var(--text-faint);
+  font-size: calc(13px * var(--interface-font-scale));
+}
+
+.inspector-tool-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.inspector-tool-meta span {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  padding: 6px 9px;
+  background: var(--card-background);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+}
+
+.inspector-tool-meta small {
+  color: var(--text-faint);
+  font-size: calc(10px * var(--interface-font-scale));
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.inspector-tool-meta strong {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: calc(13px * var(--interface-font-scale));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-tool-output.failed {
+  color: var(--status-danger-text);
+  background: var(--status-danger-background);
+  border-color: color-mix(in srgb, var(--status-danger-text) 45%, transparent);
+}
+
 .execution-overview {
   color: var(--text-muted);
   font-size: calc(14px * var(--interface-font-scale));

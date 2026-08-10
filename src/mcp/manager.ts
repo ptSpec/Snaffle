@@ -41,6 +41,10 @@ export class McpManager {
     return this.servers.filter((server) => server.enabled);
   }
 
+  serverName(serverId: string): string | undefined {
+    return this.servers.find((server) => server.id === serverId)?.name;
+  }
+
   async test(server: McpServerConfig): Promise<McpServerStatus> {
     const client = await connect(server);
     try {
@@ -69,7 +73,7 @@ export class McpManager {
       .slice(0, 12);
   }
 
-  async call(serverId: string, toolName: string, args: Record<string, unknown>): Promise<string> {
+  async call(serverId: string, toolName: string, args: Record<string, unknown>): Promise<{ content: string; serverName: string }> {
     const server = this.enabled().find((item) => item.id === serverId);
     if (!server) throw new Error(`MCP server is not enabled: ${serverId}`);
     let result;
@@ -88,7 +92,10 @@ export class McpManager {
     if (result.isError) throw new Error(textContent(result.content) || `MCP tool failed: ${toolName}`);
     const parts = [textContent(result.content)];
     if (result.structuredContent) parts.push(JSON.stringify(result.structuredContent, null, 2));
-    return parts.filter(Boolean).join("\n\n") || "MCP tool completed without text output.";
+    return {
+      content: parts.filter(Boolean).join("\n\n") || "MCP tool completed without text output.",
+      serverName: server.name,
+    };
   }
 
   async close(): Promise<void> {

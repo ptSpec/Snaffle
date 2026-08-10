@@ -81,6 +81,8 @@ export function TimelineEntry({
 
   if (item.kind === "tool") {
     const status = toolStatus(item);
+    const title = item.presentation?.title ?? mcpToolName(item.call) ?? item.call.name;
+    const subtitle = item.presentation?.subtitle;
     return (
       <button
         className={item.id === selectedId ? `tool-row ${status.className} selected` : `tool-row ${status.className}`}
@@ -88,11 +90,11 @@ export function TimelineEntry({
         onClick={() => onSelect(item.id)}
       >
         <ToolIcon name={item.call.name} />
-        <strong>{item.call.name}</strong>
+        <strong>{title}</strong>
         {item.call.inputRepair ? (
           <span className="tool-healed" title={item.call.inputRepair}>healed</span>
         ) : null}
-        <span>{status.label}</span>
+        <span>{subtitle ? `${subtitle} · ${status.label}` : status.label}</span>
       </button>
     );
   }
@@ -153,6 +155,12 @@ export function TimelineEntry({
       ) : null}
     </article>
   );
+}
+
+function mcpToolName(call: { name: string; input: unknown }): string | undefined {
+  if (call.name !== "mcp" || !call.input || typeof call.input !== "object" || Array.isArray(call.input)) return undefined;
+  const input = call.input as Record<string, unknown>;
+  return input.action === "call" && typeof input.tool === "string" ? input.tool : undefined;
 }
 
 function ActivityGroup({
