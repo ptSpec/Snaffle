@@ -72,6 +72,7 @@ import {
 import { applicationIcon, createDesktopWindow } from "./window.js";
 import { configureDesktopIdentity, migrateLegacyUserData } from "./identity-migration.js";
 import { ProviderConnections } from "./provider-connections.js";
+import { SkillRegistry, skillTool } from "../extensions/skills/index.js";
 
 const userDataMigration = configureDesktopIdentity();
 const desktopDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -283,7 +284,10 @@ function registerIpc(): void {
     return buildContextReport({
       entries: await store.context.entries(threadId, checkpoint),
       checkpoint,
-      tools: currentToolSpecs(await store.threadSubagentMode(threadId)),
+      tools: currentToolSpecs(
+        await store.threadSubagentMode(threadId),
+        await workspacePathForThread(threadId),
+      ),
       contextLength,
       mode: compactionMode,
       threshold: customCompactionThreshold,
@@ -307,7 +311,10 @@ function registerIpc(): void {
       providerConnectionId,
       model,
       contextLength: parseContextLength(rawContextLength),
-      tools: currentToolSpecs(await store.threadSubagentMode(threadId)),
+      tools: currentToolSpecs(
+        await store.threadSubagentMode(threadId),
+        await workspacePathForThread(threadId),
+      ),
     });
   });
 
@@ -488,7 +495,8 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     conversation,
     contextCheckpoints: includeConversation ? await store.context.checkpoints(state.activeThreadId) : [],
     modelInstructions: await store.systemInstructions(state.activeThreadId),
-    toolSpecs: currentToolSpecs(activeThread?.subagentMode),
+    toolSpecs: currentToolSpecs(activeThread?.subagentMode, workspace?.path),
+    skills: skillsFor(workspace?.path).summaries(),
     savedMessages: await store.savedMessages.summaries(),
     providerConnections: providerConnections.list(),
     mcpServers: publicMcpServers(configuredMcpServers),
@@ -555,7 +563,11 @@ function parseContextLength(value: unknown): number {
   return Number.isInteger(value) && Number(value) > 0 ? Number(value) : 128_000;
 }
 
-function currentCapabilities() {
+function skillsFor(workspacePath?: string): SkillRegistry {
+  return new SkillRegistry(workspacePath, path.join(app.getPath("userData"), "skills"));
+}
+
+function currentCapabilities(workspacePath?: string) {
   const tools: ActiveTool[] = defaultTools(webSearchEnabled
       ? {
           webSearchEnabled: true,
@@ -564,20 +576,31 @@ function currentCapabilities() {
           openRouterApiKey: openRouterApiKey(),
         }
       : {}).map((tool) => ({ source: { type: "built-in" }, tool }));
+  const skills = skillsFor(workspacePath);
+  if (skills.summaries().length) {
+    tools.push({ source: { type: "built-in" }, tool: skillTool(skills) });
+  }
   if (mcpManager.enabled().length) {
     tools.push({ source: { type: "mcp", serverId: "broker" }, tool: mcpTool(mcpManager) });
   }
   return activeCapabilities(tools);
 }
 
-function currentToolSpecs(mode: ThreadSubagentMode = "inherit") {
-  const tools = currentCapabilities().tools.map(({ tool }) => tool);
+function currentToolSpecs(mode: ThreadSubagentMode = "inherit", workspacePath?: string) {
+  const tools = currentCapabilities(workspacePath).tools.map(({ tool }) => tool);
   if (threadSubagent(subagent, mode)) tools.push(delegateTaskTool(async () => ""));
   return tools.map((tool) => ({
     name: tool.name,
     description: tool.description,
     inputSchema: tool.inputSchema,
   }));
+}
+
+async function workspacePathForThread(threadId: string): Promise<string | undefined> {
+  const state = await store.state();
+  return state.workspaces.find((workspace) =>
+    workspace.threads.some((thread) => thread.id === threadId)
+  )?.path;
 }
 
 async function launchEditor(target: string): Promise<void> {

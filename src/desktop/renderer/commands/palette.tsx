@@ -9,6 +9,7 @@ export type AppCommand = {
   scope?: "all" | "chat";
   active?: boolean;
   disabled?: boolean;
+  searchOnly?: boolean;
   run(): void;
 };
 
@@ -24,6 +25,7 @@ export function CommandPalette({ mode, commands, onClose }: {
     const words = query.toLowerCase().trim();
     return commands.filter((command) => {
       if (mode === "slash" && command.scope !== "chat") return false;
+      if (!words && command.searchOnly) return false;
       return !words || `${command.label} ${command.detail ?? ""} ${command.keywords ?? ""}`
         .toLowerCase()
         .includes(words);
