@@ -155,6 +155,18 @@ html[data-theme="snaffle-sunset"] .thinking-orb.preview {
     drop-shadow(0 2px 11px color-mix(in srgb, #9d86fc 30%, transparent));
 }
 
+html[data-theme="snaffle-sage"] .thinking-orb {
+  --thinking-orb-deep-blue: #719b87;
+  --thinking-orb-pale-blue: #cde3d2;
+  --thinking-orb-pale-red: #ead6c8;
+  --thinking-orb-light-blue: #9fc7aa;
+  --thinking-orb-light-red: #d9b7a3;
+  --thinking-orb-yellow-left: #dcebcf;
+  --thinking-orb-yellow-right: #bed8ae;
+  --thinking-orb-ambient: #e7efe0;
+  filter: drop-shadow(0 1px 3px color-mix(in srgb, var(--primary) 24%, transparent));
+}
+
 .thinking-orb.stopped:not(.preview) .thinking-orb-flow-a {
   animation: thinking-orb-idle-a 8s ease-in-out infinite;
 }

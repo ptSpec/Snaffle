@@ -1,0 +1,30 @@
+import type { Theme } from "./contract.js";
+
+export const snaffleGraphiteTheme = {
+  id: "snaffle-graphite",
+  name: "Snaffle Graphite",
+  appearance: "dark",
+  accented: true,
+  colors: {
+    background: "#1f1f1f",
+    panel: "#1f1f1f",
+    surface: "#292929",
+    border: "#3d3d3d",
+    text: "#d1cfc1",
+    "muted-text": "#a3a3a3",
+    primary: "#e8872a",
+    "primary-text": "#1c1208",
+    brand: "#e8872a",
+    "brand-detail": "#1c1208",
+    success: "#8bc9a0",
+    warning: "#e8a157",
+    danger: "#e58b84",
+    "code-background": "#181818",
+    "code-text": "#dedede",
+    "code-comment": "#898989",
+    "code-keyword": "#e8872a",
+    "code-string": "#a8c47f",
+    "code-number": "#d69abe",
+    "code-type": "#82b8d1",
+  },
+} satisfies Theme;

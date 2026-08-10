@@ -1,0 +1,30 @@
+import type { Theme } from "./contract.js";
+
+export const snaffleSageTheme = {
+  id: "snaffle-sage",
+  name: "Snaffle Sage",
+  appearance: "light",
+  accented: true,
+  colors: {
+    background: "#f1f4e8",
+    panel: "#c4dfc4",
+    surface: "#e0ead7",
+    border: "#9eb79f",
+    text: "#121210",
+    "muted-text": "#65746a",
+    primary: "#465e4f",
+    "primary-text": "#ffffff",
+    brand: "#465e4f",
+    "brand-detail": "#f5faf5",
+    success: "#32734b",
+    warning: "#85601e",
+    danger: "#a24747",
+    "code-background": "#f1f4e8",
+    "code-text": "#27342c",
+    "code-comment": "#718077",
+    "code-keyword": "#465e4f",
+    "code-string": "#336f58",
+    "code-number": "#76578f",
+    "code-type": "#3e6680",
+  },
+} satisfies Theme;
