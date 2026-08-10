@@ -330,6 +330,10 @@
   color: var(--status-danger-text);
 }
 
+.settings-status {
+  color: var(--text-secondary);
+}
+
 .setting-field {
   display: flex;
   align-items: center;
@@ -385,28 +389,105 @@
   outline: none;
 }
 
-.mcp-server-bar {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 18px;
-}
-
-.mcp-server-bar select {
-  min-width: 0;
-  flex: 1;
-  padding: 10px 12px;
-  color: var(--text-primary);
-  background: var(--input-background);
-  border: 1px solid var(--border-default);
-  border-radius: 9px;
-}
-
-.mcp-server-bar button {
+.mcp-add-server {
+  width: max-content;
+  margin-bottom: 14px;
   padding: 8px 11px;
   color: var(--text-primary);
   background: transparent;
   border: 1px solid var(--border-default);
   border-radius: 9px;
+}
+
+.mcp-add-server:hover {
+  background: var(--hover-background);
+}
+
+.mcp-server-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.mcp-server-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 58px;
+  padding: 11px 15px;
+  color: var(--text-primary);
+  text-align: left;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 11px;
+}
+
+.mcp-server-summary:hover {
+  background: var(--hover-background);
+}
+
+.mcp-server-summary > span {
+  display: grid;
+  gap: 2px;
+}
+
+.mcp-server-summary strong {
+  font-size: calc(16px * var(--interface-font-scale));
+}
+
+.mcp-server-summary small {
+  color: var(--text-muted);
+}
+
+.mcp-server-summary svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+  transition: transform 160ms ease;
+}
+
+.mcp-server-card.open .mcp-server-summary {
+  border-color: var(--border-focus);
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.mcp-server-card.open .mcp-server-summary svg {
+  transform: rotate(180deg);
+}
+
+.mcp-server-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 180ms ease, opacity 140ms ease;
+}
+
+.mcp-server-card.open .mcp-server-reveal {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.mcp-server-body {
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-focus);
+  border-top: 0;
+  border-radius: 0 0 11px 11px;
+}
+
+.mcp-server-card.open .mcp-server-body {
+  overflow: visible;
+}
+
+.mcp-editor-actions {
+  padding: 0 15px 15px;
 }
 
 .mcp-import {
@@ -477,34 +558,78 @@
   border-top: 0;
 }
 
-.mcp-values {
-  align-items: start;
+.mcp-collection {
+  display: grid;
+  align-items: initial;
+  justify-content: initial;
+  gap: 14px;
 }
 
-.mcp-value-list {
+.mcp-value-list,
+.mcp-argument-list {
   display: grid;
   gap: 8px;
-  width: min(390px, 58%);
+  width: 100%;
+}
+
+.mcp-host-warning {
+  margin: 0;
+  padding: 12px 0;
+  color: var(--text-muted);
+  font-size: 0.92em;
+}
+
+.mcp-entry-row {
+  overflow: hidden;
+  background: var(--input-background);
+  border: 1px solid var(--border-default);
+  border-radius: 9px;
 }
 
 .mcp-value-row {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) auto 28px;
-  align-items: center;
-  gap: 7px;
+  grid-template-columns: minmax(150px, 0.9fr) minmax(200px, 1.4fr) auto 42px;
+  align-items: stretch;
 }
 
-.setting-field .mcp-value-row input:not(.selection-checkbox) {
+.mcp-entry-field {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 11px;
+  border-right: 1px solid var(--border-default);
+}
+
+.mcp-entry-field > span {
+  color: var(--text-muted);
+  font-size: calc(11px * var(--interface-font-scale));
+}
+
+.setting-field .mcp-entry-row input:not(.selection-checkbox) {
   width: 100%;
   min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
 }
 
 .mcp-secret-toggle {
   display: flex;
   align-items: center;
   gap: 5px;
+  padding: 0 12px;
   color: var(--text-muted);
   font-size: calc(12px * var(--interface-font-scale));
+}
+
+.mcp-argument-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+}
+
+.setting-field .mcp-argument-row input:not(.selection-checkbox) {
+  padding: 10px 11px;
 }
 
 .mcp-value-add,
@@ -523,22 +648,25 @@
 }
 
 .mcp-value-remove {
+  width: 42px;
+  height: 100%;
+  padding: 0;
+  border-left: 1px solid var(--border-default);
+  border-radius: 0;
   font-size: calc(18px * var(--interface-font-scale));
   line-height: 1;
 }
 
 @media (max-width: 760px) {
-  .mcp-value-list {
-    width: min(310px, 52%);
-  }
-
   .mcp-value-row {
-    grid-template-columns: minmax(0, 1fr) 28px;
+    grid-template-columns: minmax(0, 1fr) 42px;
   }
 
-  .mcp-value-row input,
+  .mcp-entry-field,
   .mcp-secret-toggle {
     grid-column: 1;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-default);
   }
 
   .mcp-value-remove {
@@ -1003,7 +1131,9 @@
 @media (prefers-reduced-motion: reduce) {
   .agent-settings-reveal,
   .agent-settings-summary svg,
-  .agent-settings-summary .agent-guns {
+  .agent-settings-summary .agent-guns,
+  .mcp-server-reveal,
+  .mcp-server-summary svg {
     transition: none;
   }
 

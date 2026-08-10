@@ -19,6 +19,13 @@ The settings UI imports the common Claude/Cursor `mcpServers` and VS Code
 `servers` JSON shapes, plus a bare single-server object. Importing only creates
 an editable review draft: placeholder credentials are cleared and likely keys,
 tokens, secrets, and authorization values are marked for protected storage.
+When copied JSON omits authentication, add the environment variable or HTTP
+header documented by that server in the review form before testing it.
+
+Connections and tool discovery time out after 30 seconds. Tool execution times
+out after three minutes. A failed transport session is discarded so the next
+call reconnects instead of reusing a broken client. Local-command MCP servers
+are host processes and do not inherit the workspace shell sandbox.
 
 Interactive OAuth is deliberately a later transport feature. It needs a browser
 callback and token refresh lifecycle rather than another text field.

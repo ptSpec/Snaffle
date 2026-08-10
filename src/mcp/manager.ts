@@ -7,6 +7,9 @@ import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotoc
 import { PROJECT } from "../identity.js";
 import type { McpServerConfig, McpServerStatus } from "./types.js";
 
+const CONNECTION_TIMEOUT_MS = 30_000;
+const TOOL_TIMEOUT_MS = 180_000;
+
 type McpToolInfo = {
   name: string;
   description?: string;
@@ -41,7 +44,11 @@ export class McpManager {
   async test(server: McpServerConfig): Promise<McpServerStatus> {
     const client = await connect(server);
     try {
-      const result = await client.listTools();
+      const result = await withTimeout(
+        client.listTools(),
+        CONNECTION_TIMEOUT_MS,
+        `${server.name} tool discovery`,
+      );
       return { connected: true, toolCount: result.tools.length };
     } finally {
       await client.close();
@@ -67,10 +74,16 @@ export class McpManager {
     if (!server) throw new Error(`MCP server is not enabled: ${serverId}`);
     let result;
     try {
-      result = await (await this.session(server)).client.callTool({ name: toolName, arguments: args });
+      result = await withTimeout(
+        (await this.session(server)).client.callTool({ name: toolName, arguments: args }),
+        TOOL_TIMEOUT_MS,
+        `${server.name}.${toolName}`,
+      );
     } catch (error) {
       await this.forget(serverId);
-      throw error;
+      throw new Error(
+        `MCP call failed for ${server.name}.${toolName}. The connection was reset and will reconnect on the next call. ${errorMessage(error)}`,
+      );
     }
     if (result.isError) throw new Error(textContent(result.content) || `MCP tool failed: ${toolName}`);
     const parts = [textContent(result.content)];
@@ -88,7 +101,11 @@ export class McpManager {
     if (cached) return cached;
     const client = await connect(server);
     try {
-      const result = await client.listTools();
+      const result = await withTimeout(
+        client.listTools(),
+        CONNECTION_TIMEOUT_MS,
+        `${server.name} tool discovery`,
+      );
       const session: Session = {
         client,
         signature: JSON.stringify(server.transport),
@@ -116,27 +133,61 @@ export class McpManager {
 async function connect(server: McpServerConfig): Promise<Client> {
   const client = new Client({ name: PROJECT.slug, version: "0.0.0" });
   if (server.transport.type === "stdio") {
-    await client.connect(new StdioClientTransport({
-      ...server.transport,
-      env: { ...getDefaultEnvironment(), ...valueRecord(server.transport.env) },
-    }));
-    return client;
+    try {
+      await withTimeout(client.connect(new StdioClientTransport({
+        ...server.transport,
+        env: { ...getDefaultEnvironment(), ...valueRecord(server.transport.env) },
+      })), CONNECTION_TIMEOUT_MS, `${server.name} connection`);
+      return client;
+    } catch (error) {
+      await client.close();
+      throw new Error(`Could not connect to MCP server ${server.name}. ${errorMessage(error)}`);
+    }
   }
   const url = new URL(server.transport.url);
   const requestInit = { headers: valueRecord(server.transport.headers) };
   try {
-    await client.connect(new StreamableHTTPClientTransport(url, { requestInit }));
+    await withTimeout(
+      client.connect(new StreamableHTTPClientTransport(url, { requestInit })),
+      CONNECTION_TIMEOUT_MS,
+      `${server.name} connection`,
+    );
   } catch {
     await client.close();
     const legacy = new Client({ name: PROJECT.slug, version: "0.0.0" });
-    await legacy.connect(new SSEClientTransport(url, { requestInit }));
-    return legacy;
+    try {
+      await withTimeout(
+        legacy.connect(new SSEClientTransport(url, { requestInit })),
+        CONNECTION_TIMEOUT_MS,
+        `${server.name} legacy SSE connection`,
+      );
+      return legacy;
+    } catch (error) {
+      await legacy.close();
+      throw new Error(`Could not connect to MCP server ${server.name}. ${errorMessage(error)}`);
+    }
   }
   return client;
 }
 
 function valueRecord(values: Array<{ name: string; value: string }>): Record<string, string> {
   return Object.fromEntries(values.filter((entry) => entry.name && entry.value).map((entry) => [entry.name, entry.value]));
+}
+
+async function withTimeout<T>(promise: Promise<T>, milliseconds: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${milliseconds / 1000} seconds`)), milliseconds);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function textContent(content: unknown): string {
