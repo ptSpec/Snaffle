@@ -6,6 +6,7 @@ import type { SettingsPage } from "../../sections/sidebar/sidebar.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../../../../tools/web/types.js";
 import type { CompactionMode } from "../../../../context/budget.js";
 import type { SubagentProfile } from "../../../../agent/subagents/profile.js";
+import type { ImageUnderstandingProfile } from "../../../../attachments/vision.js";
 import type { McpServerConfig, McpServerStatus } from "../../../../mcp/types.js";
 import type { ModelToolSetting } from "../../../api.js";
 import type {
@@ -40,6 +41,7 @@ export function Settings({
   providerTimeoutMinutes,
   providerRetries,
   subagent,
+  imageUnderstanding,
   compactionMode,
   compactionThreshold,
   ketchAvailable,
@@ -67,6 +69,7 @@ export function Settings({
   onProviderTimeoutMinutes,
   onProviderRetries,
   onSubagent,
+  onImageUnderstanding,
   onCompaction,
   onWebSearchEnabled,
   onWebSearchBackend,
@@ -96,6 +99,7 @@ export function Settings({
   providerTimeoutMinutes: number;
   providerRetries: number;
   subagent: SubagentProfile;
+  imageUnderstanding: ImageUnderstandingProfile;
   compactionMode: CompactionMode;
   compactionThreshold: number;
   ketchAvailable: boolean;
@@ -123,6 +127,7 @@ export function Settings({
   onProviderTimeoutMinutes: (minutes: number) => void;
   onProviderRetries: (retries: number) => void;
   onSubagent: (profile: SubagentProfile) => void;
+  onImageUnderstanding: (profile: ImageUnderstandingProfile) => void;
   onCompaction: (mode: CompactionMode, threshold: number) => void;
   onWebSearchEnabled: (enabled: boolean) => void;
   onWebSearchBackend: (backend: WebSearchBackend) => void;
@@ -209,6 +214,7 @@ export function Settings({
         providerTimeoutMinutes={providerTimeoutMinutes}
         providerRetries={providerRetries}
         subagent={subagent}
+        imageUnderstanding={imageUnderstanding}
         providerConnections={providerConnections}
         providerCatalogs={providerCatalogs}
         error={error}
@@ -216,6 +222,7 @@ export function Settings({
         onProviderTimeoutMinutes={onProviderTimeoutMinutes}
         onProviderRetries={onProviderRetries}
         onSubagent={onSubagent}
+        onImageUnderstanding={onImageUnderstanding}
       />
     );
   }

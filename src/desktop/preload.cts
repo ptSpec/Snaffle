@@ -6,6 +6,7 @@ import type { FontId } from "./typography.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js";
 import type { SubagentProfile, ThreadSubagentMode } from "../agent/subagents/profile.js";
 import type { McpServerConfig } from "../mcp/types.js";
+import type { ImageUnderstandingProfile } from "../attachments/vision.js";
 
 const api: DesktopApi = {
   platform: process.platform,
@@ -75,6 +76,8 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:set-provider-retries", retries),
   setSubagent: (profile: SubagentProfile) =>
     ipcRenderer.invoke("desktop:set-subagent", profile),
+  setImageUnderstanding: (profile: ImageUnderstandingProfile) =>
+    ipcRenderer.invoke("desktop:set-image-understanding", profile),
   setCompaction: (mode, threshold) =>
     ipcRenderer.invoke("desktop:set-compaction", mode, threshold),
   setSystemPrompt: (prompt: string) => ipcRenderer.invoke("desktop:set-system-prompt", prompt),

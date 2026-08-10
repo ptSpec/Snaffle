@@ -11,6 +11,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import type { AttachmentPreview, AttachmentRef } from "../../attachments/types.js";
+import type { ImageUnderstandingProfile } from "../../attachments/vision.js";
 import type { CommandApprovalDecision } from "../../protocol.js";
 import type { DesktopApi, DesktopRunEvent, DesktopSearchResult, DesktopState, DesktopThread, SavedMessage } from "../api.js";
 import type { ProviderCatalog, ProviderConnectionInput, ProviderStatus } from "../../providers/provider.js";
@@ -106,6 +107,11 @@ const initialState: DesktopState = {
     providerConnectionId: "",
     model: "",
     maxSteps: 50,
+  },
+  imageUnderstanding: {
+    enabled: false,
+    providerConnectionId: "",
+    model: "",
   },
   compactionMode: "automatic",
   compactionThreshold: 65,
@@ -454,6 +460,9 @@ export function App(): JSX.Element {
   const selectedModalities = selectedProviderModel?.inputModalities;
   const imageUnsupported = contextAttachments.some((attachment) => attachment.kind === "image") &&
     selectedModalities !== undefined && !selectedModalities.includes("image");
+  const imageUnderstandingReady = desktopState.imageUnderstanding.enabled &&
+    Boolean(desktopState.imageUnderstanding.providerConnectionId) &&
+    Boolean(desktopState.imageUnderstanding.model);
   const attachmentsTooLarge = attachmentTokens > selectedContextLength * 0.7;
   const runBlocker = !desktopState.workspace
     ? "Open a workspace before sending."
@@ -465,8 +474,8 @@ export function App(): JSX.Element {
           ? "The selected provider connection is unavailable."
         : attachmentsTooLarge
           ? "Attachments are too large for the selected model context."
-          : imageUnsupported
-            ? "The selected model does not accept images."
+          : imageUnsupported && !imageUnderstandingReady
+            ? "The selected model does not accept images. Configure Image understanding in Agent settings."
             : !unsafeHostExecution && !desktopState.restrictedHostAvailable
               ? desktopState.restrictedHostDetail
               : null;
@@ -552,6 +561,7 @@ export function App(): JSX.Element {
       providerConnectionId: selectedProviderConnectionId,
       model: selectedModel,
       contextLength: selectedContextLength,
+      imageInputSupported: selectedModalities?.includes("image") !== false,
       ...(pendingAttachments.length
         ? { attachments: pendingAttachments.map(attachmentRef) }
         : {}),
@@ -1217,6 +1227,16 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setImageUnderstanding(imageUnderstanding: ImageUnderstandingProfile): Promise<void> {
+    try {
+      await window.desktop.setImageUnderstanding(imageUnderstanding);
+      setDesktopState((state) => ({ ...state, imageUnderstanding }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   async function setCompaction(compactionMode: CompactionMode, compactionThreshold: number): Promise<void> {
     try {
       await window.desktop.setCompaction(compactionMode, compactionThreshold);
@@ -1484,6 +1504,7 @@ export function App(): JSX.Element {
             providerTimeoutMinutes={desktopState.providerTimeoutMinutes}
             providerRetries={desktopState.providerRetries}
             subagent={desktopState.subagent}
+            imageUnderstanding={desktopState.imageUnderstanding}
             compactionMode={desktopState.compactionMode}
             compactionThreshold={desktopState.compactionThreshold}
             ketchAvailable={desktopState.ketchAvailable}
@@ -1511,6 +1532,7 @@ export function App(): JSX.Element {
             onProviderTimeoutMinutes={(minutes) => void setProviderTimeoutMinutes(minutes)}
             onProviderRetries={(retries) => void setProviderRetries(retries)}
             onSubagent={(profile) => void setSubagent(profile)}
+            onImageUnderstanding={(profile) => void setImageUnderstanding(profile)}
             onCompaction={(mode, threshold) => void setCompaction(mode, threshold)}
             onWebSearchEnabled={(enabled) => void setWebSearchEnabled(enabled)}
             onWebSearchBackend={(backend) => void setWebSearchBackend(backend)}
