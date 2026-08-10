@@ -46,6 +46,7 @@ export function Composer({
   onCompact,
   onUnsafe,
   onStop,
+  onSlashCommand,
 }: ComposerProps): JSX.Element {
   return (
     <form
@@ -71,6 +72,14 @@ export function Composer({
         onChange={(event) => onTask(event.target.value)}
         onPaste={onPaste}
         onKeyDown={(event) => {
+          if (
+            event.key === "/" && !task && !event.metaKey && !event.ctrlKey && !event.altKey &&
+            !event.shiftKey && !event.nativeEvent.isComposing
+          ) {
+            event.preventDefault();
+            onSlashCommand();
+            return;
+          }
           const pastePlain = event.key.toLowerCase() === "v" && event.shiftKey &&
             (platform === "darwin" ? event.metaKey : event.ctrlKey);
           if (pastePlain) {
@@ -235,4 +244,5 @@ type ComposerProps = {
   onCompact(): void;
   onUnsafe(value: boolean): void;
   onStop(): void;
+  onSlashCommand(): void;
 };

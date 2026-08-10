@@ -4,7 +4,7 @@ import type { ProviderConnectionInput } from "../providers/provider.js";
 import type { DesktopApi, DesktopRunEvent, GitFileContents, SaveMessageInput, StartRunInput } from "./api.js";
 import type { FontId } from "./typography.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js";
-import type { SubagentProfile } from "../agent/subagents/profile.js";
+import type { SubagentProfile, ThreadSubagentMode } from "../agent/subagents/profile.js";
 
 const api: DesktopApi = {
   platform: process.platform,
@@ -19,6 +19,8 @@ const api: DesktopApi = {
   selectThread: (threadId: string) => ipcRenderer.invoke("desktop:select-thread", threadId),
   setThreadDraft: (threadId: string, draft: string) =>
     ipcRenderer.invoke("desktop:set-thread-draft", threadId, draft),
+  setThreadSubagentMode: (threadId: string, mode: ThreadSubagentMode) =>
+    ipcRenderer.invoke("desktop:set-thread-subagent-mode", threadId, mode),
   restoreThread: (threadId: string, sequence: number) =>
     ipcRenderer.invoke("desktop:restore-thread", threadId, sequence),
   setThreadBookmarked: (threadId: string, bookmarked: boolean) =>

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 export type SearchPickerOption = {
   value: string;
   label?: string;
+  detail?: string;
 };
 
 export function SearchPicker({
@@ -29,9 +30,12 @@ export function SearchPicker({
   const [activeIndex, setActiveIndex] = useState(0);
   const root = useRef<HTMLDivElement>(null);
   const activeOption = useRef<HTMLButtonElement>(null);
+  const selected = options.find((option) => option.value === value);
   const matches = useMemo(() => {
     const search = query.trim().toLowerCase();
-    return options.filter((option) => !search || `${option.label ?? ""} ${option.value}`.toLowerCase().includes(search)).slice(0, 100);
+    return options
+      .filter((option) => !search || `${option.label ?? ""} ${option.detail ?? ""} ${option.value}`.toLowerCase().includes(search))
+      .slice(0, 100);
   }, [options, query]);
 
   useEffect(() => {
@@ -67,7 +71,7 @@ export function SearchPicker({
         }}
         aria-expanded={open}
       >
-        <span>{value || placeholder}</span><i aria-hidden="true">⌄</i>
+        <span>{selected?.label ?? (value || placeholder)}</span><i aria-hidden="true">⌄</i>
       </button>
       {open ? (
         <div className="search-picker-menu">
@@ -107,7 +111,9 @@ export function SearchPicker({
                 onClick={() => choose(option.value)}
               >
                 <span>{option.label ?? option.value}</span>
-                {option.label && option.label !== option.value ? <small>{option.value}</small> : null}
+                {option.detail || (option.label && option.label !== option.value)
+                  ? <small>{option.detail ?? option.value}</small>
+                  : null}
               </button>
             ))}
             {!matches.length ? <small className="search-picker-empty">No matches</small> : null}

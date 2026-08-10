@@ -90,6 +90,12 @@ export type RunEvent =
     }
   | { type: "context.compaction.failed"; message: string }
   | {
+      type: "provider.fallback";
+      fromConnectionName: string;
+      toConnectionName: string;
+      model: string;
+    }
+  | {
       type: "context.applied";
       id: string;
       injectedCharacters: number;

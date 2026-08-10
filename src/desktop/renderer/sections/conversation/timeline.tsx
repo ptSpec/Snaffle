@@ -71,6 +71,10 @@ export function TimelineEntry({
     );
   }
 
+  if (item.kind === "provider-fallback") {
+    return <div className="activity-row provider-fallback-row">↪ {item.text}</div>;
+  }
+
   if (item.kind === "tool-preparing") {
     return <ToolPreparingEntry item={item} />;
   }

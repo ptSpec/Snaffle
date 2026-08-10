@@ -11,9 +11,9 @@ export function delegateTaskTool(
   return {
     name: "delegate_task",
     description:
-      "Delegate focused work to separate agents. Use read access to investigate up to four independent tasks in parallel. Use write access for exactly one coding task that may edit and test the shared workspace. Continue using the returned structured results.",
+      "Delegate focused work to separate agents. Profiles: explore locates and understands using read and search only—no commands or edits; review critiques known code or diffs using read, search, and read-only Git inspection—no tests or edits; test reproduces and diagnoses using read, search, and approved test, lint, typecheck, and Git inspection commands—no edits; implement changes and verifies using the full coding tools. Explore, review, and test accept one to four independent tasks in parallel; implement accepts exactly one task. Continue using the returned structured results.",
     exampleInput: {
-      access: "read",
+      profile: "explore",
       tasks: [
         "Find where provider settings are stored.",
         "Review the provider UI for relevant components.",
@@ -22,27 +22,27 @@ export function delegateTaskTool(
     inputSchema: {
       type: "object",
       properties: {
-        access: {
+        profile: {
           type: "string",
-          enum: ["read", "write"],
-          description: "Required. read runs tasks concurrently without modifying files; write runs one task with coding tools.",
+          enum: ["explore", "review", "test", "implement"],
+          description: "Required. Choose by the capabilities needed; each profile's restrictions in the tool description are enforced.",
         },
         tasks: {
           type: "array",
           minItems: 1,
           maxItems: 4,
-          description: "Required. One to four complete, independent tasks. write access requires exactly one task.",
+          description: "Required. One to four complete, independent tasks. Implement requires exactly one task.",
           items: { type: "string", minLength: 1 },
         },
       },
-      required: ["access", "tasks"],
+      required: ["profile", "tasks"],
       additionalProperties: false,
     },
     async execute(_workspace, rawInput, context) {
       const input = objectInput(rawInput);
-      const access = stringField(input, "access") as string;
-      if (access !== "read" && access !== "write") {
-        throw new ToolInputError("access must be read or write");
+      const profile = stringField(input, "profile") as SubagentRequest["profile"];
+      if (!["explore", "review", "test", "implement"].includes(profile)) {
+        throw new ToolInputError("profile must be explore, review, test, or implement");
       }
       if (!Array.isArray(input.tasks) || input.tasks.length === 0 || input.tasks.length > 4) {
         throw new ToolInputError("tasks must be an array containing one to four task strings");
@@ -53,10 +53,10 @@ export function delegateTaskTool(
         }
         return task.trim();
       });
-      if (access === "write" && tasks.length !== 1) {
-        throw new ToolInputError("write access requires exactly one task");
+      if (profile === "implement" && tasks.length !== 1) {
+        throw new ToolInputError("implement requires exactly one task");
       }
-      return { content: await run({ access, tasks }, context?.report) };
+      return { content: await run({ profile, tasks }, context?.report) };
     },
   };
 }

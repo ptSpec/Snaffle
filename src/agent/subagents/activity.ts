@@ -1,6 +1,6 @@
 import type { ToolCall, Usage } from "../../protocol.js";
 
-export type SubagentAccess = "read" | "write";
+export type SubagentProfileName = "explore" | "review" | "test" | "implement";
 export type SubagentStatus = "queued" | "running" | "completed" | "failed";
 
 export type SubagentStep = {
@@ -23,6 +23,8 @@ export type SubagentRunActivity = {
   model?: string;
   providerId?: string;
   providerConnectionId?: string;
+  providerConnectionName?: string;
+  fallbackFromConnectionName?: string;
   steps: SubagentStep[];
   result?: string;
   error?: string;
@@ -30,7 +32,8 @@ export type SubagentRunActivity = {
 
 export type SubagentActivity = {
   kind: "subagent";
-  access: SubagentAccess;
+  profile: SubagentProfileName;
+  access?: "read" | "write";
   status: Exclude<SubagentStatus, "queued">;
   runs: SubagentRunActivity[];
   result?: string;
@@ -38,7 +41,14 @@ export type SubagentActivity = {
 };
 
 type ChildUpdate = { runId: string } & (
-  | { type: "run.started"; model: string; providerId: string; providerConnectionId: string }
+  | {
+      type: "run.started";
+      model: string;
+      providerId: string;
+      providerConnectionId: string;
+      providerConnectionName: string;
+      fallbackFromConnectionName?: string;
+    }
   | { type: "reasoning.delta"; step: number; text: string }
   | { type: "response.delta"; step: number; text: string }
   | { type: "model.completed"; step: number; reasoning: string; response: string; usage?: Usage; durationMs: number }
@@ -51,7 +61,7 @@ type ChildUpdate = { runId: string } & (
 export type SubagentActivityUpdate =
   | {
       type: "batch.started";
-      access: SubagentAccess;
+      profile: SubagentProfileName;
       runs: Array<{ id: string; task: string }>;
     }
   | ChildUpdate
@@ -65,7 +75,7 @@ export function applySubagentUpdate(
   if (update.type === "batch.started") {
     return {
       kind: "subagent",
-      access: update.access,
+      profile: update.profile,
       status: "running",
       runs: update.runs.map((run) => ({ ...run, status: "queued", steps: [] })),
     };
@@ -89,6 +99,8 @@ export function applySubagentUpdate(
       model: update.model,
       providerId: update.providerId,
       providerConnectionId: update.providerConnectionId,
+      providerConnectionName: update.providerConnectionName,
+      fallbackFromConnectionName: update.fallbackFromConnectionName,
     });
   } else if (update.type === "run.completed") {
     run.status = "completed";
