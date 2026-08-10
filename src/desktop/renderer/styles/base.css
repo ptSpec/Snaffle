@@ -6,6 +6,7 @@
   --code-block-font-size: 15px;
   --interface-font-scale: 1;
   --conversation-font-scale: 0.9;
+  --conversation-content-width: 900px;
 
   /* Component roles derived from the small public theme palette. */
   --app-background: var(--background);
@@ -104,6 +105,16 @@ html[data-theme="morning-brew"] {
     color-mix(in srgb, var(--background) 42%, #fffdee) 0%,
     var(--surface) 60%
   );
+}
+
+html[data-theme="snaffle-sage"] {
+  --input-surface-gradient: radial-gradient(
+    ellipse at top right,
+    color-mix(in srgb, var(--background) 35%, var(--panel)) 0%,
+    var(--panel) 60%
+  );
+  --card-background: var(--surface);
+  --hover-background: color-mix(in srgb, var(--primary) 10%, var(--panel));
 }
 
 * {

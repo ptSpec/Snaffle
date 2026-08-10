@@ -1,0 +1,30 @@
+import type { Theme } from "./contract.js";
+
+export const snaffleEmberTheme = {
+  id: "snaffle-ember",
+  name: "Snaffle Ember",
+  appearance: "dark",
+  accented: true,
+  colors: {
+    background: "#191714",
+    panel: "#141210",
+    surface: "#211e1a",
+    border: "#3b342d",
+    text: "#e8dfd6",
+    "muted-text": "#a89b8e",
+    primary: "#e8872a",
+    "primary-text": "#1b1108",
+    brand: "#e8872a",
+    "brand-detail": "#1b1108",
+    success: "#86c99b",
+    warning: "#e8a157",
+    danger: "#e58b84",
+    "code-background": "#141210",
+    "code-text": "#eadfd3",
+    "code-comment": "#91857a",
+    "code-keyword": "#e8872a",
+    "code-string": "#a7c080",
+    "code-number": "#d699b6",
+    "code-type": "#7fb4ca",
+  },
+} satisfies Theme;
