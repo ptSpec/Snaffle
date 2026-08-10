@@ -10,7 +10,7 @@ export const snaffleEmberTheme = {
     panel: "#141210",
     surface: "#211e1a",
     border: "#3b342d",
-    text: "#f0e7dc",
+    text: "#e8dfd6",
     "muted-text": "#a89b8e",
     primary: "#e8872a",
     "primary-text": "#1b1108",

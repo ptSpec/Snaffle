@@ -284,7 +284,7 @@ export function Sidebar({
       <nav
         className={
           view !== "conversation"
-            ? "sidebar-navigation settings-navigation view-enter"
+            ? `sidebar-navigation settings-navigation${view === "settings" ? " settings-page-navigation" : ""} view-enter`
             : "sidebar-navigation workspace-sidebar-navigation view-enter"
         }
       >
