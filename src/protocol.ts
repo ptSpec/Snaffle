@@ -36,6 +36,7 @@ export type Message =
       sources?: SourceReference[];
       finishReason?: string;
       toolNames?: string[];
+      providerState?: ProviderState;
     }
   | {
       role: "tool";
@@ -65,6 +66,8 @@ export type Usage = {
   costUsd?: number;
 };
 
+export type ProviderState = Record<string, unknown>;
+
 export type CommandApprovalDecision = "deny" | "once" | "thread";
 
 export type ModelResponse = {
@@ -74,6 +77,7 @@ export type ModelResponse = {
   finishReason?: string;
   usage?: Usage;
   sources?: SourceReference[];
+  providerState?: ProviderState;
 };
 
 export type RunEvent =

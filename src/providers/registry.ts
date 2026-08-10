@@ -3,6 +3,11 @@ import {
   listOpenAICompatibleModels,
   testOpenAICompatibleModel,
 } from "./openai-compatible.js";
+import {
+  AnthropicMessagesProvider,
+  listAnthropicModels,
+  testAnthropicModel,
+} from "./anthropic-messages.js";
 import { getDeepSeekStatus } from "./deepseek.js";
 import {
   getOpenRouterStatus,
@@ -51,6 +56,7 @@ const definitions: ProviderDefinition[] = [
   openAICompatibleDefinition("ollama"),
   openAICompatibleDefinition("lm-studio"),
   openAICompatibleDefinition("openai-compatible"),
+  anthropicCompatibleDefinition(),
 ];
 
 export function providerDefinitions(): ProviderDefinition[] {
@@ -148,6 +154,33 @@ function openAICompatibleDefinition(id: string): ProviderDefinition {
       profile.defaultContextLength,
     ),
     testModel: (connection, modelId, signal) => testOpenAICompatibleModel(
+      connection.baseUrl,
+      modelId,
+      connection.apiKey,
+      signal,
+    ),
+  };
+}
+
+function anthropicCompatibleDefinition(): ProviderDefinition {
+  const profile = providerProfile("anthropic-compatible");
+  return {
+    ...profile,
+    create: (connection, modelId, options) => new AnthropicMessagesProvider({
+      baseUrl: connection.baseUrl,
+      model: modelId,
+      providerId: connection.providerId,
+      connectionId: connection.id,
+      ...(connection.apiKey ? { apiKey: connection.apiKey } : {}),
+      ...options,
+    }),
+    listModels: (connection, signal) => listAnthropicModels(
+      connection.baseUrl,
+      connection.apiKey,
+      signal,
+      profile.defaultContextLength,
+    ),
+    testModel: (connection, modelId, signal) => testAnthropicModel(
       connection.baseUrl,
       modelId,
       connection.apiKey,

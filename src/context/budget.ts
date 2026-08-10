@@ -34,6 +34,7 @@ function estimateMessageCharacters(message: Message): number {
   if (message.role === "assistant") {
     characters += message.reasoning?.length ?? 0;
     characters += message.toolCalls ? JSON.stringify(message.toolCalls).length : 0;
+    characters += message.providerState ? JSON.stringify(message.providerState).length : 0;
   }
   if (message.role === "tool") characters += message.toolCallId.length;
   if (message.role === "user") {
