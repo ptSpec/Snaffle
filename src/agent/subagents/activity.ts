@@ -1,6 +1,6 @@
 import type { ToolCall, Usage } from "../../protocol.js";
 
-export type SubagentAccess = "read" | "write";
+export type SubagentProfileName = "explore" | "review" | "test" | "implement";
 export type SubagentStatus = "queued" | "running" | "completed" | "failed";
 
 export type SubagentStep = {
@@ -30,7 +30,8 @@ export type SubagentRunActivity = {
 
 export type SubagentActivity = {
   kind: "subagent";
-  access: SubagentAccess;
+  profile: SubagentProfileName;
+  access?: "read" | "write";
   status: Exclude<SubagentStatus, "queued">;
   runs: SubagentRunActivity[];
   result?: string;
@@ -51,7 +52,7 @@ type ChildUpdate = { runId: string } & (
 export type SubagentActivityUpdate =
   | {
       type: "batch.started";
-      access: SubagentAccess;
+      profile: SubagentProfileName;
       runs: Array<{ id: string; task: string }>;
     }
   | ChildUpdate
@@ -65,7 +66,7 @@ export function applySubagentUpdate(
   if (update.type === "batch.started") {
     return {
       kind: "subagent",
-      access: update.access,
+      profile: update.profile,
       status: "running",
       runs: update.runs.map((run) => ({ ...run, status: "queued", steps: [] })),
     };

@@ -2,7 +2,8 @@ import { ipcMain } from "electron";
 import { randomUUID } from "node:crypto";
 import { runAgent } from "../../agent/loop.js";
 import { activeSubagent, type SubagentProfile } from "../../agent/subagents/profile.js";
-import { runSubagents } from "../../agent/subagents/runner.js";
+import { ProviderCapacity } from "../../agent/subagents/capacity.js";
+import { runSubagents, type SubagentProviderRoute } from "../../agent/subagents/runner.js";
 import { delegateTaskTool } from "../../agent/subagents/tool.js";
 import type { Trace } from "../../agent/trace.js";
 import type { AttachmentStore } from "../../attachments/store.js";
@@ -59,6 +60,8 @@ export function registerRunIpc(options: {
     acceptingSteering: boolean;
   }>();
   const unsafe = new Set<string>();
+  const providerCapacity = new ProviderCapacity();
+  const implementCapacity = new ProviderCapacity();
   const approvals = new Map<string, {
     threadId: string;
     resolve: (decision: CommandApprovalDecision) => void;
@@ -135,18 +138,32 @@ export function registerRunIpc(options: {
           ...baseCapabilities.tools,
           {
             source: { type: "built-in" },
-            tool: delegateTaskTool((request, onUpdate) => runSubagents({
-              ...request,
-              provider: options.provider(
-                subagent.providerConnectionId,
-                subagent.model,
-                (attachment) => options.attachments.resolve(attachment),
-              ),
-              workspace,
-              signal: controller.signal,
-              maxSteps: subagent.maxSteps,
-              ...(onUpdate ? { onUpdate } : {}),
-            })),
+            tool: delegateTaskTool(async (request, onUpdate) => {
+              const releaseImplement = request.profile === "implement"
+                ? await implementCapacity.acquire(selectedWorkspace.id, 1, controller.signal)
+                : () => {};
+              try {
+                return await runSubagents({
+                  ...request,
+                  provider: (signal) => subagentRoute(
+                    subagent,
+                    providerCapacity,
+                    signal,
+                    (connectionId, model) => options.provider(
+                      connectionId,
+                      model,
+                      (attachment) => options.attachments.resolve(attachment),
+                    ),
+                  ),
+                  workspace,
+                  signal: controller.signal,
+                  maxSteps: subagent.maxSteps,
+                  ...(onUpdate ? { onUpdate } : {}),
+                });
+              } finally {
+                releaseImplement();
+              }
+            }),
           },
         ])
       : baseCapabilities;
@@ -214,13 +231,16 @@ export function registerRunIpc(options: {
       throw error;
     }
 
+    const mainProvider = options.provider(
+      input.providerConnectionId,
+      input.model,
+      (attachment) => options.attachments.resolve(attachment),
+    );
     void runAgent({
       task: input.task,
-      provider: options.provider(
-        input.providerConnectionId,
-        input.model,
-        (attachment) => options.attachments.resolve(attachment),
-      ),
+      provider: subagent && input.providerConnectionId === subagent.providerConnectionId
+        ? providerCapacity.limit(mainProvider, subagent.localConcurrency)
+        : mainProvider,
       capabilities,
       workspace,
       trace: memoryTrace,
@@ -314,6 +334,37 @@ export function registerRunIpc(options: {
       }
     },
   };
+}
+
+async function subagentRoute(
+  profile: SubagentProfile,
+  capacity: ProviderCapacity,
+  signal: AbortSignal,
+  create: (connectionId: string, model: string) => ModelProvider,
+): Promise<SubagentProviderRoute> {
+  const immediate = capacity.tryAcquire(profile.providerConnectionId, profile.localConcurrency);
+  if (immediate) return createRoute(create, profile.providerConnectionId, profile.model, immediate);
+
+  if (profile.overflowProviderConnectionId && profile.overflowModel) {
+    return createRoute(create, profile.overflowProviderConnectionId, profile.overflowModel, () => {});
+  }
+
+  const release = await capacity.acquire(profile.providerConnectionId, profile.localConcurrency, signal);
+  return createRoute(create, profile.providerConnectionId, profile.model, release);
+}
+
+function createRoute(
+  create: (connectionId: string, model: string) => ModelProvider,
+  connectionId: string,
+  model: string,
+  release: () => void,
+): SubagentProviderRoute {
+  try {
+    return { provider: create(connectionId, model), release };
+  } catch (error) {
+    release();
+    throw error;
+  }
 }
 
 const memoryTrace: Trace = { async write(): Promise<void> {} };
