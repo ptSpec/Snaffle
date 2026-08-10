@@ -71,7 +71,7 @@ function discoverSkills(workspacePath?: string, personalRoot?: string): Skill[] 
     }
   }
   if (personalRoot) roots.push({ directory: personalRoot, source: "personal", origin: "snaffle" });
-  for (const [directory, origin] of skillLocations(homedir()).slice(1)) {
+  for (const [directory, origin] of skillLocations(homedir())) {
     roots.push({ directory, source: "personal", origin });
   }
 
