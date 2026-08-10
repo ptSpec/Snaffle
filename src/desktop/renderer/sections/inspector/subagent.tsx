@@ -34,7 +34,12 @@ export function SubagentInspector({ activity }: { activity: SubagentActivity }):
               <small>{run.status}</small>
             </summary>
             <div className="subagent-run-body">
-              {run.model ? <p className="subagent-provider">{run.model} · {run.providerConnectionId}</p> : null}
+              {run.model ? (
+                <p className="subagent-provider">
+                  {run.model} · {run.providerConnectionName ?? run.providerConnectionId}
+                  {run.fallbackFromConnectionName ? ` · fallback from ${run.fallbackFromConnectionName}` : ""}
+                </p>
+              ) : null}
               <h4>Task</h4>
               <pre>{run.task}</pre>
 
@@ -103,6 +108,8 @@ function activityRuns(activity: SubagentActivity): SubagentRunActivity[] {
     model?: string;
     providerId?: string;
     providerConnectionId?: string;
+    providerConnectionName?: string;
+    fallbackFromConnectionName?: string;
     status?: SubagentRunActivity["status"];
     steps?: SubagentStep[];
     result?: string;
@@ -115,6 +122,8 @@ function activityRuns(activity: SubagentActivity): SubagentRunActivity[] {
     ...(legacy.model ? { model: legacy.model } : {}),
     ...(legacy.providerId ? { providerId: legacy.providerId } : {}),
     ...(legacy.providerConnectionId ? { providerConnectionId: legacy.providerConnectionId } : {}),
+    ...(legacy.providerConnectionName ? { providerConnectionName: legacy.providerConnectionName } : {}),
+    ...(legacy.fallbackFromConnectionName ? { fallbackFromConnectionName: legacy.fallbackFromConnectionName } : {}),
     steps: legacy.steps ?? [],
     ...(legacy.result ? { result: legacy.result } : {}),
     ...(legacy.error ? { error: legacy.error } : {}),

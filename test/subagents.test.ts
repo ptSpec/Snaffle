@@ -12,8 +12,6 @@ test("thread subagent mode can inherit or override the app default", () => {
     providerConnectionId: "local",
     model: "small-model",
     maxSteps: 30,
-    overflowProviderConnectionId: "",
-    overflowModel: "",
   };
 
   assert.equal(threadSubagent(profile, "inherit"), null);
@@ -85,4 +83,30 @@ test("provider capacity queues work after the configured limit", async () => {
   first();
   await waiting;
   assert.equal(acquired, true);
+});
+
+test("a reserved provider route releases capacity between model calls", async () => {
+  const capacity = new ProviderCapacity();
+  const initial = capacity.tryAcquire("local", 1);
+  assert.ok(initial);
+  let finish!: () => void;
+  const route = capacity.reserve({
+    model: "local-model",
+    providerId: "local",
+    connectionId: "local",
+    async complete() {
+      await new Promise<void>((resolve) => (finish = resolve));
+      return { text: "done", toolCalls: [] };
+    },
+  }, 1, initial);
+
+  const request = route.provider.complete([], [], new AbortController().signal);
+  await Promise.resolve();
+  assert.equal(capacity.tryAcquire("local", 1), null);
+  finish();
+  await request;
+
+  const next = capacity.tryAcquire("local", 1);
+  assert.ok(next);
+  next();
 });

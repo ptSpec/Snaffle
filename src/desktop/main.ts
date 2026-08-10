@@ -139,8 +139,9 @@ async function start(): Promise<void> {
       deepseek: process.env.DEEPSEEK_API_KEY ?? "",
     },
     legacyRequestLimits(settings.subagent, subagent.providerConnectionId),
+    legacyFallbacks(settings.subagent, subagent.providerConnectionId),
   );
-  if (hasLegacySubagentLimit(settings.subagent)) {
+  if (hasLegacySubagentRouting(settings.subagent)) {
     saveSettings({ providerConnections: providerConnections.serialize(), subagent });
   }
   try {
@@ -217,7 +218,7 @@ function registerIpc(): void {
         resolveAttachment,
       },
     ),
-    connectionLimit: (connectionId) => providerConnections.resolve(connectionId).requestLimit,
+    connection: (connectionId) => providerConnections.resolve(connectionId),
     settings: () => ({
       maxSteps,
       providerTimeoutMinutes,
@@ -405,12 +406,6 @@ function registerIpc(): void {
   ipcMain.handle("desktop:set-subagent", (_event, value: unknown): void => {
     const next = subagentProfile(value);
     if (next.providerConnectionId) providerConnections.resolve(next.providerConnectionId);
-    if (next.overflowProviderConnectionId) {
-      if (next.overflowProviderConnectionId === next.providerConnectionId) {
-        throw new Error("Remote overflow must use a different provider connection");
-      }
-      providerConnections.resolve(next.overflowProviderConnectionId);
-    }
     subagent = next;
     saveSettings({ subagent });
   });
@@ -616,10 +611,28 @@ function hasLegacySubagentLimit(value: unknown): boolean {
     Number.isInteger((value as Record<string, unknown>).localConcurrency));
 }
 
+function hasLegacySubagentRouting(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const profile = value as Record<string, unknown>;
+  return hasLegacySubagentLimit(value) || typeof profile.overflowProviderConnectionId === "string";
+}
+
 function legacyRequestLimits(value: unknown, connectionId: string): Record<string, number> {
   if (!connectionId || !hasLegacySubagentLimit(value)) return {};
   const limit = Number((value as Record<string, unknown>).localConcurrency);
   return limit >= 1 && limit <= 16 ? { [connectionId]: limit } : {};
+}
+
+function legacyFallbacks(
+  value: unknown,
+  connectionId: string,
+): Record<string, { connectionId: string; model: string }> {
+  if (!connectionId || !value || typeof value !== "object" || Array.isArray(value)) return {};
+  const profile = value as Record<string, unknown>;
+  if (typeof profile.overflowProviderConnectionId !== "string" ||
+      typeof profile.overflowModel !== "string" ||
+      !profile.overflowProviderConnectionId || !profile.overflowModel) return {};
+  return { [connectionId]: { connectionId: profile.overflowProviderConnectionId, model: profile.overflowModel } };
 }
 
 function parseId(value: unknown, label: string): string {

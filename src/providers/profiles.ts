@@ -32,6 +32,7 @@ export const PROVIDER_PROFILES: ProviderProfile[] = [
     description: "OpenRouter adds its model catalog and key usage status.",
     baseUrlHint: "OpenRouter uses its official API endpoint.",
     fixedBaseUrl: true,
+    defaultRequestLimit: 8,
     modelVariants: OPENROUTER_MODEL_VARIANTS,
   },
   {

@@ -147,17 +147,20 @@
   border-radius: 10px;
 }
 
-.subagent-advanced {
+.subagent-advanced,
+.provider-advanced {
   border-top: 1px solid var(--border-default);
 }
 
-.subagent-advanced > summary {
+.subagent-advanced > summary,
+.provider-advanced > summary {
   padding: 16px 0;
   color: var(--text-primary);
   cursor: pointer;
 }
 
-.subagent-advanced .setting-field {
+.subagent-advanced .setting-field,
+.provider-advanced .setting-field {
   border-top: 1px solid var(--border-default);
 }
 

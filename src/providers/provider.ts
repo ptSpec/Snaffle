@@ -20,6 +20,8 @@ export type ProviderConnection = {
   baseUrl: string;
   enabled: boolean;
   requestLimit: number;
+  fallbackProviderConnectionId: string;
+  fallbackModel: string;
   hasApiKey: boolean;
   manualModels: ProviderModel[];
 };
@@ -64,6 +66,7 @@ export type ProviderProfile = {
   description: string;
   baseUrlHint: string;
   fixedBaseUrl?: boolean;
+  defaultRequestLimit?: number;
   defaultContextLength?: number;
   sendParallelToolCalls?: boolean;
   modelVariants?: ProviderModelVariant[];

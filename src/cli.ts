@@ -152,6 +152,8 @@ function cliConnection(options: CliOptions): ResolvedProviderConnection {
     baseUrl: options.provider === "openai-compatible" ? options.baseUrl : definition.defaultBaseUrl,
     enabled: true,
     requestLimit: 1,
+    fallbackProviderConnectionId: "",
+    fallbackModel: "",
     hasApiKey: Boolean(options.apiKey),
     manualModels: [],
     ...(options.apiKey ? { apiKey: options.apiKey } : {}),

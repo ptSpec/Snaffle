@@ -41,33 +41,17 @@ export function AgentSettings({
       : [],
   );
   const selectedConnection = connections.find((connection) => connection.id === subagent.providerConnectionId);
-  const fallbackChoices = modelChoices.filter((choice) => choice.connectionId !== subagent.providerConnectionId);
   const selectedChoice = modelChoices.find((choice) =>
     choice.connectionId === subagent.providerConnectionId && choice.modelId === subagent.model
   );
-  const overflowChoice = fallbackChoices.find((choice) =>
-    choice.connectionId === subagent.overflowProviderConnectionId && choice.modelId === subagent.overflowModel
-  );
-  const overflowConnection = connections.find(
-    (connection) => connection.id === subagent.overflowProviderConnectionId,
-  );
-  const usesOverflow = Boolean(subagent.overflowProviderConnectionId && subagent.overflowModel);
 
   function update(change: Partial<SubagentProfile>): void {
     onSubagent({ ...subagent, ...change });
   }
 
-  function selectModel(value: string, overflow = false): void {
+  function selectModel(value: string): void {
     const [connectionId, model] = value.split("\n");
-    update(overflow
-      ? { overflowProviderConnectionId: connectionId ?? "", overflowModel: model ?? "" }
-      : {
-          providerConnectionId: connectionId ?? "",
-          model: model ?? "",
-          ...(connectionId === subagent.overflowProviderConnectionId
-            ? { overflowProviderConnectionId: "", overflowModel: "" }
-            : {}),
-        });
+    update({ providerConnectionId: connectionId ?? "", model: model ?? "" });
   }
 
   return (
@@ -165,60 +149,11 @@ export function AgentSettings({
               ))}
             </select>
           </label>
-          <label className="setting-field">
-            <span>
-              <strong>When busy</strong>
-              <small>Wait for the selected provider or send extra subagents to another model.</small>
-            </span>
-            <select
-              value={usesOverflow ? "fallback" : "wait"}
-              onChange={(event) => {
-                const fallback = fallbackChoices[0];
-                update(event.target.value === "fallback" && fallback
-                  ? { overflowProviderConnectionId: fallback.connectionId, overflowModel: fallback.modelId }
-                  : { overflowProviderConnectionId: "", overflowModel: "" });
-              }}
-            >
-              <option value="wait">Wait for availability</option>
-              <option value="fallback" disabled={!fallbackChoices.length}>Use another model</option>
-            </select>
-          </label>
-          {usesOverflow ? (
-            <label className="setting-field">
-              <span>
-                <strong>Fallback model</strong>
-                <small>Used for subagents only while the selected provider is full.</small>
-              </span>
-              <select
-                value={modelValue(subagent.overflowProviderConnectionId, subagent.overflowModel)}
-                onChange={(event) => selectModel(event.target.value, true)}
-              >
-                {subagent.overflowModel && !overflowChoice
-                  ? <option value={modelValue(subagent.overflowProviderConnectionId, subagent.overflowModel)}>{subagent.overflowModel}</option>
-                  : null}
-                {connections
-                  .filter((connection) => connection.id !== subagent.providerConnectionId)
-                  .map((connection) => (
-                    <optgroup key={connection.id} label={connection.name}>
-                      {fallbackChoices
-                        .filter((choice) => choice.connectionId === connection.id)
-                        .map((choice) => (
-                          <option key={choice.modelId} value={modelValue(choice.connectionId, choice.modelId)}>
-                            {choice.modelName}
-                          </option>
-                        ))}
-                    </optgroup>
-                  ))}
-              </select>
-            </label>
-          ) : null}
           {selectedConnection ? (
             <p className="subagent-routing-summary">
               Subagents use {selectedChoice?.modelName ?? subagent.model} through {selectedConnection.name}. Up to{" "}
               {selectedConnection.requestLimit} {selectedConnection.requestLimit === 1 ? "request" : "requests"} share this
-              connection across the app. Additional subagents {overflowConnection && overflowChoice
-                ? `use ${overflowChoice.modelName} through ${overflowConnection.name}`
-                : "wait for availability"}. Main conversations always wait.
+              connection across the app. Busy behavior and any fallback model are configured under Providers.
             </p>
           ) : null}
           <details className="subagent-advanced">

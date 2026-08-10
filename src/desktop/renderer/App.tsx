@@ -99,8 +99,6 @@ const initialState: DesktopState = {
     providerConnectionId: "",
     model: "",
     maxSteps: 30,
-    overflowProviderConnectionId: "",
-    overflowModel: "",
   },
   compactionMode: "automatic",
   compactionThreshold: 65,

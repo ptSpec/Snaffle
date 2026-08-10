@@ -77,6 +77,11 @@
   width: fit-content;
 }
 
+.provider-fallback-row {
+  width: fit-content;
+  color: var(--text-muted);
+}
+
 .approval-card {
   width: min(620px, 100%);
   margin: 4px 0 12px;

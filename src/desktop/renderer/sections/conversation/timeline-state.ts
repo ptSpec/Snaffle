@@ -12,6 +12,7 @@ export type TimelineItem =
   | { id: string; kind: "reasoning"; step: number; text: string; streaming: boolean; status?: string | undefined }
   | { id: string; kind: "tool-preparing"; step: number; index: number; name: string; argumentChars: number; startedAt: number }
   | { id: string; kind: "retry"; step: number; attempt: number; maxRetries: number; text: string }
+  | { id: string; kind: "provider-fallback"; text: string }
   | {
       id: string;
       kind: "context";
@@ -43,6 +44,18 @@ export function addRunEvent(
   event: RunEvent,
   setTimeline: (update: (items: TimelineItem[]) => TimelineItem[]) => void,
 ): void {
+  if (event.type === "provider.fallback") {
+    setTimeline((items) => [
+      ...items,
+      {
+        id: newTimelineId(),
+        kind: "provider-fallback",
+        text: `${event.fromConnectionName} is busy · using ${event.model} through ${event.toConnectionName}`,
+      },
+    ]);
+    return;
+  }
+
   if (event.type === "context.compaction.started") {
     setTimeline((items) => [
       ...items,
@@ -516,6 +529,7 @@ export function labelFor(kind: Exclude<TimelineItem["kind"], "tool">): string {
   if (kind === "reasoning") return "Thinking";
   if (kind === "tool-preparing") return "Tool call";
   if (kind === "retry") return "Model retry";
+  if (kind === "provider-fallback") return "Provider fallback";
   if (kind === "activity-group") return "Work details";
   if (kind === "context") return "Context";
   return "Run failed";
