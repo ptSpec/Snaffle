@@ -36,7 +36,7 @@ export function registerRunIpc(options: {
   attachments: AttachmentStore;
   compactor: ContextCompactor;
   state: (includeConversation?: boolean) => Promise<DesktopState>;
-  capabilities: () => ActiveCapabilities;
+  capabilities: (workspacePath: string) => ActiveCapabilities;
   provider: (
     connectionId: string,
     model: string,
@@ -134,7 +134,7 @@ export function registerRunIpc(options: {
       acceptingSteering: true,
     };
     active.set(threadId, run);
-    const baseCapabilities = options.capabilities();
+    const baseCapabilities = options.capabilities(selectedWorkspace.path);
     const subagent = threadSubagent(settings.subagent, selectedThread.subagentMode);
     const capabilities = subagent
       ? activeCapabilities([
