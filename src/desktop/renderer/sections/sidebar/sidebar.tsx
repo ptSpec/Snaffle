@@ -51,7 +51,11 @@ export function Sidebar({
   const [cursor, setCursor] = useState(0);
   const [anchor, setAnchor] = useState(0);
   const [promotedThreadId, setPromotedThreadId] = useState(state.activeThreadId);
-  const [promotion, setPromotion] = useState<{ id: string; distance: number } | null>(null);
+  const [promotion, setPromotion] = useState<{
+    id: string;
+    previousId: string | null;
+    distance: number;
+  } | null>(null);
   const sidebarRoot = useRef<HTMLElement>(null);
   const threadList = useRef<HTMLDivElement>(null);
   const promotedWorkspaceId = useRef(state.workspace?.id);
@@ -83,7 +87,11 @@ export function Sidebar({
 
     function promote(): void {
       const index = orderedThreads.findIndex((thread) => thread.id === pendingThreadId);
-      setPromotion({ id: pendingThreadId, distance: Math.min(Math.max(index, 1) * 36, 280) });
+      setPromotion({
+        id: pendingThreadId,
+        previousId: promotedThreadId,
+        distance: Math.min(Math.max(index, 1) * 36, 280),
+      });
       setPromotedThreadId(pendingThreadId);
     }
 
@@ -446,11 +454,13 @@ export function Sidebar({
                         key={thread.id}
                         thread={thread}
                         sourceTitle={threads.find((candidate) => candidate.id === thread.sourceThreadId)?.title}
-                        active={thread.id === state.activeThreadId}
-                        bridged={thread.id === state.activeThreadId && thread.id === promotedThreadId}
+                        active={thread.id === state.activeThreadId || thread.id === promotedThreadId}
+                        selected={thread.id === state.activeThreadId}
+                        bridged={thread.id === promotedThreadId}
                         promotionDistance={promotion?.id === thread.id ? promotion.distance : 0}
+                        demotionDistance={promotion?.previousId === thread.id ? promotion.distance : 0}
                         selecting={selecting}
-                        selected={selectedIds.includes(thread.id)}
+                        checked={selectedIds.includes(thread.id)}
                         focused={selecting && index === cursor}
                         running={isRunning(thread.id)}
                         onSelect={() => void selectThread(thread.id)}
@@ -571,10 +581,12 @@ function ThreadRow({
   thread,
   sourceTitle,
   active,
+  selected,
   bridged,
   promotionDistance,
+  demotionDistance,
   selecting,
-  selected,
+  checked,
   focused,
   running,
   onSelect,
@@ -586,10 +598,12 @@ function ThreadRow({
   thread: DesktopThread;
   sourceTitle: string | undefined;
   active: boolean;
+  selected: boolean;
   bridged: boolean;
   promotionDistance: number;
+  demotionDistance: number;
   selecting: boolean;
-  selected: boolean;
+  checked: boolean;
   focused: boolean;
   running: boolean;
   onSelect: () => void;
@@ -600,20 +614,24 @@ function ThreadRow({
 }): JSX.Element {
   let className = "sidebar-row thread-row";
   if (active) className += " active";
+  if (selected) className += " selected";
   if (bridged) className += " bridged";
   if (promotionDistance) className += " promoted";
+  if (demotionDistance) className += " demoted";
   if (focused) className += " focused";
+
+  const motionDistance = promotionDistance || demotionDistance;
 
   return (
     <div
       className={className}
-      style={promotionDistance ? { "--thread-rise-distance": `${promotionDistance}px` } as CSSProperties : undefined}
+      style={motionDistance ? { "--thread-rise-distance": `${motionDistance}px` } as CSSProperties : undefined}
     >
       {selecting ? (
         <input
           className="selection-checkbox"
           type="checkbox"
-          checked={selected}
+          checked={checked}
           onChange={onToggleSelected}
           disabled={running}
           aria-label={`Select ${thread.title}`}
