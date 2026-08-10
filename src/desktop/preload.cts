@@ -77,6 +77,9 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:set-subagent", profile),
   setCompaction: (mode, threshold) =>
     ipcRenderer.invoke("desktop:set-compaction", mode, threshold),
+  setSystemPrompt: (prompt: string) => ipcRenderer.invoke("desktop:set-system-prompt", prompt),
+  setToolEnabled: (name: string, enabled: boolean) =>
+    ipcRenderer.invoke("desktop:set-tool-enabled", name, enabled),
   getContextReport: (threadId, contextLength) =>
     ipcRenderer.invoke("desktop:get-context-report", threadId, contextLength),
   compactContext: (threadId, connectionId, model, contextLength) =>

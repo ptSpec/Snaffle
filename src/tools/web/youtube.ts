@@ -3,11 +3,11 @@ import { integerField, objectInput, stringField, ToolInputError, type Tool } fro
 
 export const youtubeTranscriptTool: Tool = {
   name: "youtube_transcript",
-  description: "Get timestamped transcript text from a YouTube video. Set query to return only relevant passages, or omit it for the transcript.",
+  description: "Get timestamped transcript text from a YouTube video URL. Set query to return only relevant passages, or omit it for the transcript.",
   inputSchema: {
     type: "object",
     properties: {
-      url: { type: "string", description: "Required. YouTube video URL or 11-character video id." },
+      url: { type: "string", description: "Required. Full YouTube video URL." },
       query: { type: "string", description: "Optional. Topic or phrase used to select relevant transcript passages." },
       language: { type: "string", description: "Optional. Preferred transcript language code, such as en or de." },
       maxChars: { type: "integer", description: "Optional. Maximum returned characters. Defaults to 12000; allowed range 1000-30000." },
@@ -23,8 +23,9 @@ export const youtubeTranscriptTool: Tool = {
     const language = stringField(input, "language", { optional: true });
     const maxChars = integerField(input, "maxChars", 12_000);
     if (maxChars < 1_000 || maxChars > 30_000) throw new ToolInputError("maxChars must be from 1000 to 30000");
+    const video = youtubeVideo(url);
 
-    const transcript = await fetchTranscript(url, language ? { lang: language } : undefined);
+    const transcript = await fetchTranscript(video.id, language ? { lang: language } : undefined);
     if (!transcript.length) throw new Error("No transcript is available for this video");
     const milliseconds = transcript.some((item) => item.duration > 100);
     const rows = transcript.map((item) => ({
@@ -34,9 +35,8 @@ export const youtubeTranscriptTool: Tool = {
     const selected = query ? relevantRows(rows, query) : rows;
     if (!selected.length) return { content: `No transcript passages matched “${query}”.` };
 
-    const videoUrl = canonicalYoutubeUrl(url);
     const complete = selected.map((item) =>
-      `[${timestamp(item.seconds)}](${videoUrl}&t=${Math.floor(item.seconds)}s) ${item.text}`,
+      `[${timestamp(item.seconds)}](${video.url}&t=${Math.floor(item.seconds)}s) ${item.text}`,
     ).join("\n");
     const content = complete.slice(0, maxChars);
     const notice = content.length < complete.length
@@ -44,7 +44,7 @@ export const youtubeTranscriptTool: Tool = {
       : "";
     return {
       content: `${query ? `Transcript passages for: ${query}` : "Transcript"}\n\n${content}${notice}`,
-      sources: [{ title: "YouTube transcript", url: videoUrl }],
+      sources: [{ title: "YouTube transcript", url: video.url }],
     };
   },
 };
@@ -61,12 +61,27 @@ function relevantRows(rows: { text: string; seconds: number }[], query: string):
   return [...indexes].sort((a, b) => a - b).map((index) => rows[index]!);
 }
 
-function canonicalYoutubeUrl(value: string): string {
-  const id = /^[\w-]{11}$/.test(value)
-    ? value
-    : /(?:v=|youtu\.be\/|embed\/)([\w-]{11})/.exec(value)?.[1];
-  if (!id) throw new ToolInputError("url must be a YouTube URL or video id");
-  return `https://www.youtube.com/watch?v=${id}`;
+function youtubeVideo(value: string): { id: string; url: string } {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new ToolInputError("url must be a full YouTube video URL");
+  }
+
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+  let id: string | undefined;
+  if (host === "youtu.be") {
+    id = parsed.pathname.split("/").filter(Boolean)[0];
+  } else if (host === "youtube.com" || host === "m.youtube.com" || host === "youtube-nocookie.com") {
+    id = parsed.searchParams.get("v") ?? undefined;
+    if (!id) {
+      const [kind, pathId] = parsed.pathname.split("/").filter(Boolean);
+      if (["embed", "live", "shorts"].includes(kind ?? "")) id = pathId;
+    }
+  }
+  if (!id || !/^[\w-]{11}$/.test(id)) throw new ToolInputError("url must identify a YouTube video");
+  return { id, url: `https://www.youtube.com/watch?v=${id}` };
 }
 
 function timestamp(seconds: number): string {

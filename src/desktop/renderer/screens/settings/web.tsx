@@ -38,8 +38,8 @@ export function WebSettings({
 
         <label className="setting-field text-setting">
           <span>
-            <strong>Web search</strong>
-            <small>Expose web_search to the model. The selected connection decides cost and output style.</small>
+            <strong>Web tools</strong>
+            <small>Expose search, direct page fetching, and YouTube transcripts to the model.</small>
           </span>
           <input
             className="selection-checkbox"
@@ -58,6 +58,11 @@ export function WebSettings({
             {WEB_BACKENDS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select>
         </label>
+
+        {backend === "ddg" ? <p className="settings-warning" role="note">
+          DuckDuckGo is frequently rate-limited and is not recommended for a reliable agent experience.
+          Try Tavily instead—its free tier includes 1,000 credits each month, enough for up to 1,000 basic searches.
+        </p> : null}
 
         <p className="editor-current">
           <span>Connection status</span>
