@@ -780,6 +780,11 @@ textarea {
   font-size: 20px;
   line-height: 1;
   overflow: visible;
+  transition:
+    color 240ms ease,
+    background-color 320ms ease,
+    border-color 320ms ease,
+    box-shadow 320ms ease;
 }
 
 .send-button-orb {
@@ -811,8 +816,40 @@ textarea {
 }
 
 .send-button-symbol {
-  position: relative;
+  position: absolute;
+  inset: 0;
   z-index: 1;
+  display: grid;
+  place-items: center;
+  transition:
+    opacity 180ms ease,
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.send-button-send-symbol {
+  padding-bottom: 2px;
+  opacity: 1;
+  transform: scale(1);
+}
+
+.send-button-stop-symbol {
+  width: 13px;
+  height: 13px;
+  margin: auto;
+  background: currentColor;
+  border-radius: 1px;
+  opacity: 0;
+  transform: scale(0.55) rotate(-12deg);
+}
+
+.send-button.stop .send-button-send-symbol {
+  opacity: 0;
+  transform: scale(0.6) rotate(12deg);
+}
+
+.send-button.stop .send-button-stop-symbol {
+  opacity: 1;
+  transform: scale(1) rotate(0);
 }
 
 html[data-accented-theme="true"] .send-button:not(.stop) {
@@ -852,15 +889,6 @@ html[data-theme="snaffle-sage"] .send-button:not(.stop) .send-button-orb {
   }
 }
 
-.send-button.stop .send-button-symbol {
-  width: 13px;
-  height: 13px;
-  overflow: hidden;
-  font-size: 0;
-  background: currentColor;
-  border-radius: 1px;
-}
-
 .send-button.stop .thinking-orb {
   animation: send-orb-pulse 1.5s ease-in-out infinite;
 }
@@ -886,6 +914,11 @@ html[data-theme="snaffle-sage"] .send-button:not(.stop) .send-button-orb {
   }
 
   .model-picker-caret {
+    transition: none;
+  }
+
+  .send-button,
+  .send-button-symbol {
     transition: none;
   }
 

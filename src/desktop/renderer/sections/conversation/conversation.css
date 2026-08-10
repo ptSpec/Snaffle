@@ -297,6 +297,8 @@
 .markdown-content th,
 .markdown-content td {
   padding: 7px 10px;
+  overflow-wrap: break-word;
+  word-break: normal;
   text-align: left;
   border-right: 1px solid var(--border-default);
   border-bottom: 1px solid var(--border-default);

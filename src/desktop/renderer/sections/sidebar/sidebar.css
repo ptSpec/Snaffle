@@ -243,10 +243,26 @@
   animation: active-thread-rise 280ms cubic-bezier(0.2, 0.75, 0.25, 1);
 }
 
+.workspace-navigation .thread-row.demoted {
+  animation: active-thread-settle 280ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
 @keyframes active-thread-rise {
   from {
     opacity: 0.72;
     transform: translateY(var(--thread-rise-distance, 36px));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes active-thread-settle {
+  from {
+    opacity: 0.72;
+    transform: translateY(calc(var(--thread-rise-distance, 36px) * -1));
   }
 
   to {
@@ -527,6 +543,7 @@ html[data-accented-theme="true"] .workspace-row.active .workspace-icon {
   --thread-row-fill: var(--hover-background);
 
   position: relative;
+  transition: background-color 180ms ease, filter 180ms ease;
 }
 
 .thread-row.active {
@@ -537,7 +554,7 @@ html[data-accented-theme="true"] .workspace-row.active .workspace-icon {
   background: var(--hover-background);
 }
 
-html[data-accented-theme="true"] .thread-row.active .thread-item {
+html[data-accented-theme="true"] .thread-row.selected .thread-item {
   color: var(--primary);
 }
 
@@ -654,7 +671,7 @@ html[data-accented-theme="true"] .thread-row.active .thread-item {
   stroke-width: 1.35;
 }
 
-html[data-accented-theme="true"] .thread-row.active .thread-fork-marker {
+html[data-accented-theme="true"] .thread-row.selected .thread-fork-marker {
   color: var(--primary);
 }
 

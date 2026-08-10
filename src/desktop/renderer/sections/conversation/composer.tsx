@@ -177,7 +177,8 @@ export function Composer({
           <span className="send-button-orb" aria-hidden="true">
             <ThinkingOrb motion={orbMotion} speed={1.7} />
           </span>
-          <span className="send-button-symbol" aria-hidden="true">{running ? "■" : "↑"}</span>
+          <span className="send-button-symbol send-button-send-symbol" aria-hidden="true">↑</span>
+          <span className="send-button-symbol send-button-stop-symbol" aria-hidden="true" />
         </button>
       </div>
       {error ? <div className="composer-error" role="alert">{error}</div> : null}
