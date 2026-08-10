@@ -1376,13 +1376,17 @@ export function App(): JSX.Element {
     ...desktopState.skills.map((skill): AppCommand => ({
       id: `skill:${skill.name}`,
       label: `/${skill.name}`,
-      detail: skill.description,
+      detail: skill.compatibility === "compatible"
+        ? skill.description
+        : `${skill.description} · ${skill.compatibility === "incompatible" ? "Unavailable" : "Compatibility unknown"}: ${skill.compatibilityNote ?? "Verify required capabilities before use."}`,
       keywords: `skill workflow ${skill.source}`,
       scope: "chat",
-      disabled: !activeThread || running,
+      disabled: !activeThread || running || skill.compatibility === "incompatible",
       run: () => {
-        const activation =
-          `Use the "${skill.name}" skill for this task. Load its instructions with use_skill before proceeding.`;
+        const warning = skill.compatibility === "unknown"
+          ? ` Its compatibility is unknown: ${skill.compatibilityNote} Stop and explain the limitation if a required capability is unavailable.`
+          : "";
+        const activation = `Use the "${skill.name}" skill for this task. Load its instructions with use_skill before proceeding.${warning}`;
         setTask((current) => current.trim()
           ? `${activation}\n\n${current}`
           : `${activation}\n\n`);

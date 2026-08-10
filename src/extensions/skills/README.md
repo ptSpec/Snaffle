@@ -10,3 +10,11 @@ There is one runtime with two entrances:
 - A person explicitly selects `/skill-name` from the chat command palette, which inserts an activation request into the composer.
 
 Skills provide context and workflows. They never bypass tool permissions, workspace boundaries, approvals, or the normal agent loop.
+
+Skills imported from `.codex` or `.claude` are marked as having unknown compatibility unless they opt in. A skill may declare comma- or space-separated required tools; Snaffle disables it when a declared tool is unsupported. The standard free-form `compatibility` field is shown as a warning rather than guessed at.
+
+```yaml
+metadata:
+  snaffle.dev/compatible: "true"
+  snaffle.dev/required-tools: imagegen, browser
+```

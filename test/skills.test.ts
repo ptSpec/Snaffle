@@ -33,11 +33,59 @@ test("skills discover portable packages and prefer the project copy", async (t) 
 
   assert.deepEqual(
     registry.search("release notes").find((skill) => skill.name === "release-notes"),
-    { name: "release-notes", description: "Prepare concise release notes", source: "project" },
+    {
+      name: "release-notes",
+      description: "Prepare concise release notes",
+      source: "project",
+      origin: "agents",
+      compatibility: "compatible",
+    },
   );
   assert.match(registry.read("release-notes"), /Use references\/style\.md/);
   assert.equal(
     registry.read("release-notes", "references/style.md"),
     "Lead with user-visible changes.\n",
   );
+});
+
+test("Codex skills disclose unknown compatibility and declared missing tools are blocked", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "skill-compatibility-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const imported = path.join(root, ".codex", "skills", "pet-maker");
+  const blocked = path.join(root, ".snaffle", "skills", "image-workflow");
+  await mkdir(imported, { recursive: true });
+  await mkdir(blocked, { recursive: true });
+  await writeFile(path.join(imported, "SKILL.md"), [
+    "---",
+    "name: pet-maker",
+    "description: Make a Codex pet",
+    "---",
+    "Use Codex image generation.",
+  ].join("\n"));
+  await writeFile(path.join(blocked, "SKILL.md"), [
+    "---",
+    "name: image-workflow",
+    "description: Generate an image",
+    "metadata:",
+    "  snaffle.dev/required-tools: imagegen",
+    "---",
+    "Generate an image.",
+  ].join("\n"));
+
+  const skills = new SkillRegistry(root).summaries();
+  assert.equal(skills.find((skill) => skill.name === "pet-maker")?.compatibility, "unknown");
+  assert.match(new SkillRegistry(root).read("pet-maker"), /Compatibility: unknown/);
+  assert.deepEqual(
+    skills.find((skill) => skill.name === "image-workflow"),
+    {
+      name: "image-workflow",
+      description: "Generate an image",
+      source: "project",
+      origin: "snaffle",
+      compatibility: "incompatible",
+      compatibilityNote: "Missing required tools: imagegen.",
+    },
+  );
+  assert.throws(() => new SkillRegistry(root).read("image-workflow"), /Missing required tools: imagegen/);
 });
