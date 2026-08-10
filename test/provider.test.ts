@@ -66,6 +66,70 @@ test("local provider presets reuse the OpenAI-compatible runtime", () => {
   }
 });
 
+test("OpenCode Go discovers supported models and routes its two wire formats", async (t) => {
+  const paths: string[] = [];
+  const server = createServer((request, response) => {
+    paths.push(request.url ?? "");
+    if (request.url === "/models") {
+      assert.equal(request.headers.authorization, "Bearer secret");
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        data: [
+          { id: "deepseek-v4-flash" },
+          { id: "minimax-m2.7" },
+          { id: "gpt-5.6-luna" },
+        ],
+      }));
+      return;
+    }
+
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk: string) => (body += chunk));
+    request.on("end", () => {
+      assert.ok(JSON.parse(body));
+      response.writeHead(200, { "content-type": "application/json" });
+      if (request.url === "/messages") {
+        assert.equal(request.headers["x-api-key"], "secret");
+        response.end(JSON.stringify({ content: [{ type: "text", text: "Messages" }] }));
+      } else {
+        assert.equal(request.headers.authorization, "Bearer secret");
+        response.end(JSON.stringify({ choices: [{ message: { content: "Chat" } }] }));
+      }
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Test server did not start");
+  const connection = {
+    id: "opencode-go-test",
+    providerId: "opencode-go",
+    name: "OpenCode Go",
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    enabled: true,
+    requestLimit: 1,
+    fallbackProviderConnectionId: "",
+    fallbackModel: "",
+    hasApiKey: true,
+    apiKey: "secret",
+    manualModels: [],
+  };
+
+  assert.equal(providerProfile("opencode-go").defaultBaseUrl, "https://opencode.ai/zen/go/v1");
+  assert.equal(providerProfile("opencode-go").defaultRequestLimit, 8);
+  const catalog = await providerCatalog(connection);
+  assert.deepEqual(catalog.models.map((model) => model.id), ["deepseek-v4-flash", "minimax-m2.7"]);
+  assert.equal(await createProvider(connection, "deepseek-v4-flash", {}).complete(
+    [{ role: "user", content: "Hello" }], [], new AbortController().signal,
+  ).then((result) => result.text), "Chat");
+  assert.equal(await createProvider(connection, "minimax-m2.7", {}).complete(
+    [{ role: "user", content: "Hello" }], [], new AbortController().signal,
+  ).then((result) => result.text), "Messages");
+  assert.deepEqual(paths, ["/models", "/chat/completions", "/messages"]);
+});
+
 test("OpenAI-compatible provider sends attachment content without storing payloads in messages", async (t) => {
   let content: unknown;
   let resolutions = 0;
