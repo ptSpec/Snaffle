@@ -13,6 +13,7 @@ export type TimelineItem =
   | { id: string; kind: "tool-preparing"; step: number; index: number; name: string; argumentChars: number; startedAt: number }
   | { id: string; kind: "retry"; step: number; attempt: number; maxRetries: number; text: string }
   | { id: string; kind: "provider-fallback"; text: string }
+  | { id: string; kind: "image-understanding"; text: string }
   | {
       id: string;
       kind: "context";
@@ -46,6 +47,18 @@ export function addRunEvent(
   event: RunEvent,
   setTimeline: (update: (items: TimelineItem[]) => TimelineItem[]) => void,
 ): void {
+  if (event.type === "image.interpreted") {
+    setTimeline((items) => [
+      ...items,
+      {
+        id: newTimelineId(),
+        kind: "image-understanding",
+        text: `${event.count} ${event.count === 1 ? "image" : "images"} interpreted by ${event.model} via ${event.connectionName}`,
+      },
+    ]);
+    return;
+  }
+
   if (event.type === "provider.fallback") {
     setTimeline((items) => [
       ...items,
