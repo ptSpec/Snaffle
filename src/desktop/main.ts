@@ -19,6 +19,8 @@ import {
   type CompactionMode,
 } from "../context/budget.js";
 import { ContextCompactor } from "../context/compaction.js";
+import { currentEnvironmentContent } from "../context/environment.js";
+import { SYSTEM_PROMPT } from "../context/prompt.js";
 import { buildContextReport, type ContextReport } from "../context/report.js";
 import { PROJECT } from "../identity.js";
 import {
@@ -104,12 +106,14 @@ let providerRetries = DEFAULT_PROVIDER_RETRIES;
 let subagent: SubagentProfile = subagentProfile(undefined);
 let compactionMode: CompactionMode = "automatic";
 let customCompactionThreshold = DEFAULT_COMPACTION_THRESHOLD;
-let webSearchEnabled = true;
+let webSearchEnabled = false;
 let webSearchBackend: WebSearchBackend = "ddg";
 const storedWebSearchApiKeys: Partial<Record<KetchSearchBackend, string>> = {};
 const DEVELOPMENT_MODEL = "openai/gpt-5.6-luna";
 let selectedModel = DEVELOPMENT_MODEL;
 let selectedProviderConnectionId = OPENROUTER_CONNECTION_ID;
+let systemPrompt = SYSTEM_PROMPT;
+let disabledTools: string[] = [];
 
 
 async function start(): Promise<void> {
@@ -160,7 +164,11 @@ async function start(): Promise<void> {
     selectedProviderConnectionId = providerConnections.list().find((connection) => connection.enabled)?.id
       ?? OPENROUTER_CONNECTION_ID;
   }
-  webSearchEnabled = settings.webSearchEnabled !== false;
+  webSearchEnabled = settings.webSearchEnabled === true;
+  systemPrompt = typeof settings.systemPrompt === "string" && settings.systemPrompt.trim()
+    ? settings.systemPrompt
+    : SYSTEM_PROMPT;
+  disabledTools = validDisabledTools(settings.disabledTools);
   webSearchBackend = validWebSearchBackend(settings.webSearchBackend) ?? "ddg";
   loadWebSearchApiKeys(settings.webSearchApiKeys);
   const oldTavilyKey = decodeSecret(settings.tavilyApiKey);
@@ -236,6 +244,8 @@ function registerIpc(): void {
       compactionMode,
       compactionThreshold: customCompactionThreshold,
       subagent,
+      systemPrompt,
+      disabledTools,
     }),
     sendEvent: sendRunEvent,
   });
@@ -444,6 +454,27 @@ function registerIpc(): void {
     saveSettings({ compactionMode, compactionThreshold: customCompactionThreshold });
   });
 
+  ipcMain.handle("desktop:set-system-prompt", async (_event, value: unknown): Promise<DesktopState> => {
+    if (typeof value !== "string" || !value.trim()) throw new Error("System prompt cannot be empty");
+    systemPrompt = value.trim();
+    saveSettings({ systemPrompt });
+    return desktopState(false);
+  });
+
+  ipcMain.handle("desktop:set-tool-enabled", async (
+    _event,
+    rawName: unknown,
+    rawEnabled: unknown,
+  ): Promise<DesktopState> => {
+    if (typeof rawName !== "string" || !MODEL_TOOL_NAMES.has(rawName)) throw new Error("Unknown tool");
+    if (typeof rawEnabled !== "boolean") throw new Error("Tool state must be true or false");
+    disabledTools = rawEnabled
+      ? disabledTools.filter((name) => name !== rawName)
+      : [...new Set([...disabledTools, rawName])];
+    saveSettings({ disabledTools });
+    return desktopState(false);
+  });
+
   ipcMain.handle("desktop:set-web-search-backend", async (_event, value: unknown): Promise<DesktopState> => {
     const backend = validWebSearchBackend(value);
     if (!backend) throw new Error("Unknown web search backend");
@@ -496,6 +527,10 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     contextCheckpoints: includeConversation ? await store.context.checkpoints(state.activeThreadId) : [],
     modelInstructions: await store.systemInstructions(state.activeThreadId),
     toolSpecs: currentToolSpecs(activeThread?.subagentMode, workspace?.path),
+    modelTools: modelToolSettings(activeThread?.subagentMode, workspace?.path),
+    systemPrompt,
+    runtimeMetadata: currentEnvironmentContent(workspace?.path),
+    disabledTools,
     skills: skillsFor(workspace?.path).summaries(),
     savedMessages: await store.savedMessages.summaries(),
     providerConnections: providerConnections.list(),
@@ -568,6 +603,11 @@ function skillsFor(workspacePath?: string): SkillRegistry {
 }
 
 function currentCapabilities(workspacePath?: string) {
+  return activeCapabilities(configuredTools(workspacePath)
+    .filter(({ tool }) => !disabledTools.includes(tool.name)));
+}
+
+function configuredTools(workspacePath?: string): ActiveTool[] {
   const tools: ActiveTool[] = defaultTools(webSearchEnabled
       ? {
           webSearchEnabled: true,
@@ -583,16 +623,48 @@ function currentCapabilities(workspacePath?: string) {
   if (mcpManager.enabled().length) {
     tools.push({ source: { type: "mcp", serverId: "broker" }, tool: mcpTool(mcpManager) });
   }
-  return activeCapabilities(tools);
+  return tools;
 }
 
 function currentToolSpecs(mode: ThreadSubagentMode = "inherit", workspacePath?: string) {
   const tools = currentCapabilities(workspacePath).tools.map(({ tool }) => tool);
-  if (threadSubagent(subagent, mode)) tools.push(delegateTaskTool(async () => ""));
+  if (threadSubagent(subagent, mode) && !disabledTools.includes("delegate_task")) {
+    tools.push(delegateTaskTool(async () => ""));
+  }
   return tools.map((tool) => ({
     name: tool.name,
     description: tool.description,
     inputSchema: tool.inputSchema,
+  }));
+}
+
+const MODEL_TOOL_NAMES = new Set([
+  "run_command", "read_file", "search_files", "edit_file", "write_file",
+  "web_search", "web_fetch", "youtube_transcript", "use_skill", "mcp", "delegate_task",
+]);
+
+function validDisabledTools(value: unknown): string[] {
+  return Array.isArray(value)
+    ? [...new Set(value.filter((name): name is string => typeof name === "string" && MODEL_TOOL_NAMES.has(name)))]
+    : [];
+}
+
+function modelToolSettings(mode: ThreadSubagentMode = "inherit", workspacePath?: string) {
+  const configured = new Set(configuredTools(workspacePath).map(({ tool }) => tool.name));
+  if (threadSubagent(subagent, mode)) configured.add("delegate_task");
+  const skills = skillsFor(workspacePath);
+  const catalog = [
+    ...defaultTools({ webSearchEnabled: true, backend: "ddg", ketchPath: "catalog" }),
+    skillTool(skills),
+    mcpTool(mcpManager),
+    delegateTaskTool(async () => ""),
+  ];
+  return catalog.map(({ name, description, inputSchema }) => ({
+    name,
+    description,
+    inputSchema,
+    available: configured.has(name),
+    enabled: !disabledTools.includes(name),
   }));
 }
 

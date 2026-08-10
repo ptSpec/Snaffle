@@ -7,7 +7,7 @@ export type SubagentProfile = {
 
 export type ThreadSubagentMode = "inherit" | "enabled" | "disabled";
 
-export const DEFAULT_SUBAGENT_MAX_STEPS = 30;
+export const DEFAULT_SUBAGENT_MAX_STEPS = 50;
 
 export function subagentProfile(value: unknown): SubagentProfile {
   const input = value && typeof value === "object" && !Array.isArray(value)
@@ -17,7 +17,7 @@ export function subagentProfile(value: unknown): SubagentProfile {
     enabled: input.enabled === true,
     providerConnectionId: text(input.providerConnectionId),
     model: text(input.model),
-    maxSteps: Number.isInteger(input.maxSteps) && Number(input.maxSteps) >= 0 && Number(input.maxSteps) <= 100
+    maxSteps: Number.isInteger(input.maxSteps) && Number(input.maxSteps) >= 0 && Number(input.maxSteps) <= 250
       ? Number(input.maxSteps)
       : DEFAULT_SUBAGENT_MAX_STEPS,
   };
