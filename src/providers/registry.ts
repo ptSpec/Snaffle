@@ -10,6 +10,11 @@ import {
 } from "./anthropic-messages.js";
 import { getDeepSeekStatus } from "./deepseek.js";
 import {
+  createOpenCodeGoProvider,
+  listOpenCodeGoModels,
+  testOpenCodeGoModel,
+} from "./opencode-go.js";
+import {
   getOpenRouterStatus,
   listOpenRouterModels,
 } from "./openrouter.js";
@@ -51,6 +56,12 @@ const definitions: ProviderDefinition[] = [
       requiredKey(connection),
       signal,
     ),
+  },
+  {
+    ...providerProfile("opencode-go"),
+    create: createOpenCodeGoProvider,
+    listModels: listOpenCodeGoModels,
+    testModel: testOpenCodeGoModel,
   },
   openAICompatibleDefinition("llama-cpp"),
   openAICompatibleDefinition("ollama"),
