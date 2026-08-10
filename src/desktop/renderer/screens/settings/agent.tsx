@@ -30,17 +30,44 @@ export function AgentSettings({
 }): JSX.Element {
   const [openSection, setOpenSection] = useState<"agent" | "subagent" | null>("agent");
   const connections = providerConnections.filter((connection) => connection.enabled);
+  const modelChoices = providerCatalogs.flatMap((catalog) =>
+    connections.some((connection) => connection.id === catalog.connection.id)
+      ? catalog.models.map((model) => ({
+          connectionId: catalog.connection.id,
+          connectionName: catalog.connection.name,
+          modelId: model.id,
+          modelName: model.name,
+        }))
+      : [],
+  );
   const selectedConnection = connections.find((connection) => connection.id === subagent.providerConnectionId);
-  const models = providerCatalogs.find((catalog) => catalog.connection.id === selectedConnection?.id)?.models ?? [];
+  const fallbackChoices = modelChoices.filter((choice) => choice.connectionId !== subagent.providerConnectionId);
+  const selectedChoice = modelChoices.find((choice) =>
+    choice.connectionId === subagent.providerConnectionId && choice.modelId === subagent.model
+  );
+  const overflowChoice = fallbackChoices.find((choice) =>
+    choice.connectionId === subagent.overflowProviderConnectionId && choice.modelId === subagent.overflowModel
+  );
   const overflowConnection = connections.find(
     (connection) => connection.id === subagent.overflowProviderConnectionId,
   );
-  const overflowModels = providerCatalogs.find(
-    (catalog) => catalog.connection.id === overflowConnection?.id,
-  )?.models ?? [];
+  const usesOverflow = Boolean(subagent.overflowProviderConnectionId && subagent.overflowModel);
 
   function update(change: Partial<SubagentProfile>): void {
     onSubagent({ ...subagent, ...change });
+  }
+
+  function selectModel(value: string, overflow = false): void {
+    const [connectionId, model] = value.split("\n");
+    update(overflow
+      ? { overflowProviderConnectionId: connectionId ?? "", overflowModel: model ?? "" }
+      : {
+          providerConnectionId: connectionId ?? "",
+          model: model ?? "",
+          ...(connectionId === subagent.overflowProviderConnectionId
+            ? { overflowProviderConnectionId: "", overflowModel: "" }
+            : {}),
+        });
   }
 
   return (
@@ -95,7 +122,7 @@ export function AgentSettings({
             aria-expanded={openSection === "subagent"}
             onClick={() => setOpenSection((value) => value === "subagent" ? null : "subagent")}
           >
-            <span><strong>Subagent <span className="agent-guns subagent-guns">🔫🔫🔫</span></strong><small>Delegated model, limits, and overflow routing.</small></span>
+            <span><strong>Subagent <span className="agent-guns subagent-guns">🔫🔫🔫</span></strong><small>Delegated model and busy behavior.</small></span>
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
           </button>
           <div className="agent-settings-reveal"><div className="agent-settings-body">
@@ -113,98 +140,98 @@ export function AgentSettings({
           </label>
           <label className="setting-field">
             <span>
-              <strong>Provider</strong>
-              <small>The child can use a local or remote connection independently of the main model.</small>
+              <strong>Model</strong>
+              <small>The provider and model used for delegated tasks.</small>
             </span>
             <select
-              value={subagent.providerConnectionId}
-              onChange={(event) => {
-                const providerConnectionId = event.target.value;
-                const firstModel = providerCatalogs.find(
-                  (catalog) => catalog.connection.id === providerConnectionId,
-                )?.models[0]?.id ?? "";
-                update({ providerConnectionId, model: firstModel });
-              }}
+              value={modelValue(subagent.providerConnectionId, subagent.model)}
+              disabled={!modelChoices.length}
+              onChange={(event) => selectModel(event.target.value)}
             >
-              <option value="">Select provider</option>
+              <option value="">{modelChoices.length ? "Select model" : "No models available"}</option>
+              {subagent.model && !selectedChoice
+                ? <option value={modelValue(subagent.providerConnectionId, subagent.model)}>{subagent.model}</option>
+                : null}
               {connections.map((connection) => (
-                <option key={connection.id} value={connection.id}>{connection.name}</option>
+                <optgroup key={connection.id} label={connection.name}>
+                  {modelChoices
+                    .filter((choice) => choice.connectionId === connection.id)
+                    .map((choice) => (
+                      <option key={choice.modelId} value={modelValue(choice.connectionId, choice.modelId)}>
+                        {choice.modelName}
+                      </option>
+                    ))}
+                </optgroup>
               ))}
             </select>
           </label>
           <label className="setting-field">
             <span>
-              <strong>Model</strong>
-              <small>The model used for delegated tasks.</small>
+              <strong>When busy</strong>
+              <small>Wait for the selected provider or send extra subagents to another model.</small>
             </span>
             <select
-              value={subagent.model}
-              disabled={!selectedConnection || models.length === 0}
-              onChange={(event) => update({ model: event.target.value })}
-            >
-              <option value="">{models.length ? "Select model" : "No models available"}</option>
-              {subagent.model && !models.some((model) => model.id === subagent.model)
-                ? <option value={subagent.model}>{subagent.model}</option>
-                : null}
-              {models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-            </select>
-          </label>
-          <NumberSetting
-            label="Maximum subagent turns"
-            description="Maximum turns for one delegated task, from 0 to 100. Zero disables delegation."
-            value={subagent.maxSteps}
-            min={0}
-            max={100}
-            onChange={(maxSteps) => update({ maxSteps })}
-          />
-          <NumberSetting
-            label="Connection request limit"
-            description="Maximum simultaneous model requests through this connection. Main conversations using the same connection share this limit."
-            value={subagent.localConcurrency}
-            min={1}
-            max={16}
-            onChange={(localConcurrency) => update({ localConcurrency })}
-          />
-          <label className="setting-field">
-            <span>
-              <strong>Overflow connection</strong>
-              <small>Optional. Delegated tasks use this connection while every primary connection slot is occupied.</small>
-            </span>
-            <select
-              value={subagent.overflowProviderConnectionId}
+              value={usesOverflow ? "fallback" : "wait"}
               onChange={(event) => {
-                const overflowProviderConnectionId = event.target.value;
-                const overflowModel = providerCatalogs.find(
-                  (catalog) => catalog.connection.id === overflowProviderConnectionId,
-                )?.models[0]?.id ?? "";
-                update({ overflowProviderConnectionId, overflowModel });
+                const fallback = fallbackChoices[0];
+                update(event.target.value === "fallback" && fallback
+                  ? { overflowProviderConnectionId: fallback.connectionId, overflowModel: fallback.modelId }
+                  : { overflowProviderConnectionId: "", overflowModel: "" });
               }}
             >
-              <option value="">Wait for an available slot</option>
-              {connections
-                .filter((connection) => connection.id !== subagent.providerConnectionId)
-                .map((connection) => (
-                  <option key={connection.id} value={connection.id}>{connection.name}</option>
-                ))}
+              <option value="wait">Wait for availability</option>
+              <option value="fallback" disabled={!fallbackChoices.length}>Use another model</option>
             </select>
           </label>
-          <label className="setting-field">
-            <span>
-              <strong>Overflow model</strong>
-              <small>The fallback model used only when the configured capacity is full.</small>
-            </span>
-            <select
-              value={subagent.overflowModel}
-              disabled={!overflowConnection || overflowModels.length === 0}
-              onChange={(event) => update({ overflowModel: event.target.value })}
-            >
-              <option value="">{overflowModels.length ? "Select model" : "No overflow provider"}</option>
-              {subagent.overflowModel && !overflowModels.some((model) => model.id === subagent.overflowModel)
-                ? <option value={subagent.overflowModel}>{subagent.overflowModel}</option>
-                : null}
-              {overflowModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-            </select>
-          </label>
+          {usesOverflow ? (
+            <label className="setting-field">
+              <span>
+                <strong>Fallback model</strong>
+                <small>Used for subagents only while the selected provider is full.</small>
+              </span>
+              <select
+                value={modelValue(subagent.overflowProviderConnectionId, subagent.overflowModel)}
+                onChange={(event) => selectModel(event.target.value, true)}
+              >
+                {subagent.overflowModel && !overflowChoice
+                  ? <option value={modelValue(subagent.overflowProviderConnectionId, subagent.overflowModel)}>{subagent.overflowModel}</option>
+                  : null}
+                {connections
+                  .filter((connection) => connection.id !== subagent.providerConnectionId)
+                  .map((connection) => (
+                    <optgroup key={connection.id} label={connection.name}>
+                      {fallbackChoices
+                        .filter((choice) => choice.connectionId === connection.id)
+                        .map((choice) => (
+                          <option key={choice.modelId} value={modelValue(choice.connectionId, choice.modelId)}>
+                            {choice.modelName}
+                          </option>
+                        ))}
+                    </optgroup>
+                  ))}
+              </select>
+            </label>
+          ) : null}
+          {selectedConnection ? (
+            <p className="subagent-routing-summary">
+              Subagents use {selectedChoice?.modelName ?? subagent.model} through {selectedConnection.name}. Up to{" "}
+              {selectedConnection.requestLimit} {selectedConnection.requestLimit === 1 ? "request" : "requests"} share this
+              connection across the app. Additional subagents {overflowConnection && overflowChoice
+                ? `use ${overflowChoice.modelName} through ${overflowConnection.name}`
+                : "wait for availability"}. Main conversations always wait.
+            </p>
+          ) : null}
+          <details className="subagent-advanced">
+            <summary>Advanced</summary>
+            <NumberSetting
+              label="Maximum subagent turns"
+              description="Maximum turns for one delegated task, from 0 to 100. Zero disables delegation."
+              value={subagent.maxSteps}
+              min={0}
+              max={100}
+              onChange={(maxSteps) => update({ maxSteps })}
+            />
+          </details>
           </div></div>
         </div>
 
@@ -212,4 +239,8 @@ export function AgentSettings({
       </div>
     </section>
   );
+}
+
+function modelValue(connectionId: string, modelId: string): string {
+  return connectionId && modelId ? `${connectionId}\n${modelId}` : "";
 }

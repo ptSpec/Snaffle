@@ -54,6 +54,7 @@ test("local provider presets reuse the OpenAI-compatible runtime", () => {
       name: profile.name,
       baseUrl: baseUrl!,
       enabled: true,
+      requestLimit: 1,
       hasApiKey: false,
       manualModels: [],
     }, "local-model", {});
@@ -181,6 +182,7 @@ test("a manual model can test successfully when discovery is unavailable", async
     name: "Manual provider",
     baseUrl: `http://127.0.0.1:${address.port}/v1`,
     enabled: true,
+    requestLimit: 1,
     hasApiKey: false,
     manualModels: [{
       id: "manual-model",
@@ -234,6 +236,7 @@ test("DeepSeek uses the shared model catalog and adds account balance", async (t
     name: "DeepSeek",
     baseUrl: `http://127.0.0.1:${address.port}`,
     enabled: true,
+    requestLimit: 1,
     hasApiKey: true,
     apiKey: "secret",
     manualModels: [],

@@ -2,6 +2,7 @@ import type { AttachmentRef, ResolvedAttachment } from "../attachments/types.js"
 import type { Message, ModelResponse, ToolSpec } from "../protocol.js";
 
 export const DEFAULT_MODEL_CONTEXT_LENGTH = 128_000;
+export const DEFAULT_PROVIDER_REQUEST_LIMIT = 1;
 
 export type ProviderModel = {
   id: string;
@@ -18,6 +19,7 @@ export type ProviderConnection = {
   name: string;
   baseUrl: string;
   enabled: boolean;
+  requestLimit: number;
   hasApiKey: boolean;
   manualModels: ProviderModel[];
 };

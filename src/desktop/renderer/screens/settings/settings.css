@@ -138,6 +138,29 @@
   border-bottom: 0;
 }
 
+.subagent-routing-summary {
+  margin: 14px 0;
+  padding: 12px 14px;
+  color: var(--text-muted);
+  line-height: 1.45;
+  background: var(--hover-background);
+  border-radius: 10px;
+}
+
+.subagent-advanced {
+  border-top: 1px solid var(--border-default);
+}
+
+.subagent-advanced > summary {
+  padding: 16px 0;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.subagent-advanced .setting-field {
+  border-top: 1px solid var(--border-default);
+}
+
 .theme-picker {
   position: relative;
 }

@@ -83,6 +83,7 @@ export function ProviderSettings({
       name: draft.name,
       baseUrl: draft.baseUrl,
       enabled: draft.enabled,
+      requestLimit: draft.requestLimit,
       manualModels: draft.models.flatMap((model) => {
         const id = model.id.trim();
         if (!id) return [];
@@ -260,6 +261,23 @@ export function ProviderSettings({
                 value={draft.baseUrl}
                 disabled={profile.fixedBaseUrl}
                 onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })}
+              />
+            </label>
+
+            <label className="setting-field text-setting">
+              <span>
+                <strong>Concurrent requests</strong>
+                <small>Shared by every main conversation and subagent using this connection.</small>
+              </span>
+              <input
+                type="number"
+                min="1"
+                max="16"
+                value={draft.requestLimit}
+                onChange={(event) => setDraft({
+                  ...draft,
+                  requestLimit: Math.max(1, Math.min(16, Number(event.target.value) || 1)),
+                })}
               />
             </label>
 
@@ -441,6 +459,7 @@ type ConnectionDraft = {
   name: string;
   baseUrl: string;
   enabled: boolean;
+  requestLimit: number;
   hasApiKey: boolean;
   models: ProviderModel[];
 };
@@ -451,6 +470,7 @@ function connectionDraft(connection?: ProviderConnection): ConnectionDraft {
     name: connection.name,
     baseUrl: connection.baseUrl,
     enabled: connection.enabled,
+    requestLimit: connection.requestLimit,
     hasApiKey: connection.hasApiKey,
     models: connection.manualModels.map((model) => ({
       ...model,
@@ -461,6 +481,7 @@ function connectionDraft(connection?: ProviderConnection): ConnectionDraft {
     name: "Local model",
     baseUrl: "http://localhost:8080/v1",
     enabled: true,
+    requestLimit: 1,
     hasApiKey: false,
     models: [],
   };

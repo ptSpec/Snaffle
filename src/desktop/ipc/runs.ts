@@ -42,6 +42,7 @@ export function registerRunIpc(options: {
     model: string,
     resolveAttachment: (attachment: AttachmentRef) => ReturnType<AttachmentStore["resolve"]>,
   ) => ModelProvider;
+  connectionLimit(connectionId: string): number;
   settings: () => {
     maxSteps: number;
     providerTimeoutMinutes: number;
@@ -151,6 +152,7 @@ export function registerRunIpc(options: {
                     subagent,
                     providerCapacity,
                     signal,
+                    options.connectionLimit,
                     (connectionId, model) => options.provider(
                       connectionId,
                       model,
@@ -233,16 +235,14 @@ export function registerRunIpc(options: {
       throw error;
     }
 
-    const mainProvider = options.provider(
+    const mainProvider = providerCapacity.limit(options.provider(
       input.providerConnectionId,
       input.model,
       (attachment) => options.attachments.resolve(attachment),
-    );
+    ), options.connectionLimit(input.providerConnectionId));
     void runAgent({
       task: input.task,
-      provider: subagent && input.providerConnectionId === subagent.providerConnectionId
-        ? providerCapacity.limit(mainProvider, subagent.localConcurrency)
-        : mainProvider,
+      provider: mainProvider,
       capabilities,
       workspace,
       trace: memoryTrace,
@@ -342,16 +342,26 @@ async function subagentRoute(
   profile: SubagentProfile,
   capacity: ProviderCapacity,
   signal: AbortSignal,
+  connectionLimit: (connectionId: string) => number,
   create: (connectionId: string, model: string) => ModelProvider,
 ): Promise<SubagentProviderRoute> {
-  const immediate = capacity.tryAcquire(profile.providerConnectionId, profile.localConcurrency);
+  const immediate = capacity.tryAcquire(profile.providerConnectionId, connectionLimit(profile.providerConnectionId));
   if (immediate) return createRoute(create, profile.providerConnectionId, profile.model, immediate);
 
   if (profile.overflowProviderConnectionId && profile.overflowModel) {
-    return createRoute(create, profile.overflowProviderConnectionId, profile.overflowModel, () => {});
+    const release = await capacity.acquire(
+      profile.overflowProviderConnectionId,
+      connectionLimit(profile.overflowProviderConnectionId),
+      signal,
+    );
+    return createRoute(create, profile.overflowProviderConnectionId, profile.overflowModel, release);
   }
 
-  const release = await capacity.acquire(profile.providerConnectionId, profile.localConcurrency, signal);
+  const release = await capacity.acquire(
+    profile.providerConnectionId,
+    connectionLimit(profile.providerConnectionId),
+    signal,
+  );
   return createRoute(create, profile.providerConnectionId, profile.model, release);
 }
 

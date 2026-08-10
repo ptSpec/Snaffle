@@ -138,7 +138,11 @@ async function start(): Promise<void> {
       openrouter: process.env.OPENROUTER_API_KEY ?? "",
       deepseek: process.env.DEEPSEEK_API_KEY ?? "",
     },
+    legacyRequestLimits(settings.subagent, subagent.providerConnectionId),
   );
+  if (hasLegacySubagentLimit(settings.subagent)) {
+    saveSettings({ providerConnections: providerConnections.serialize(), subagent });
+  }
   try {
     providerConnections.resolve(selectedProviderConnectionId);
   } catch {
@@ -213,6 +217,7 @@ function registerIpc(): void {
         resolveAttachment,
       },
     ),
+    connectionLimit: (connectionId) => providerConnections.resolve(connectionId).requestLimit,
     settings: () => ({
       maxSteps,
       providerTimeoutMinutes,
@@ -604,6 +609,17 @@ function validProviderRetries(value: unknown): number | undefined {
   return Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 10
     ? Number(value)
     : undefined;
+}
+
+function hasLegacySubagentLimit(value: unknown): boolean {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value) &&
+    Number.isInteger((value as Record<string, unknown>).localConcurrency));
+}
+
+function legacyRequestLimits(value: unknown, connectionId: string): Record<string, number> {
+  if (!connectionId || !hasLegacySubagentLimit(value)) return {};
+  const limit = Number((value as Record<string, unknown>).localConcurrency);
+  return limit >= 1 && limit <= 16 ? { [connectionId]: limit } : {};
 }
 
 function parseId(value: unknown, label: string): string {
