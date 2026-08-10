@@ -115,6 +115,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         ...(response.sources?.length ? { sources: response.sources } : {}),
         ...(response.finishReason ? { finishReason: response.finishReason } : {}),
         toolNames: toolSpecs.map((tool) => tool.name),
+        ...(response.providerState ? { providerState: response.providerState } : {}),
       };
       messages.push(assistantMessage);
       await options.onMessage?.(assistantMessage, nextSequence);

@@ -56,8 +56,8 @@ export function projectContext(
 }
 
 export function withoutCompletedReasoning(message: Message): Message {
-  if (message.role !== "assistant" || !message.reasoning) return message;
-  const { reasoning: _reasoning, ...projected } = message;
+  if (message.role !== "assistant" || (!message.reasoning && !message.providerState)) return message;
+  const { reasoning: _reasoning, providerState: _providerState, ...projected } = message;
   return projected;
 }
 
