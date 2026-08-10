@@ -296,6 +296,34 @@ textarea {
   stroke: none;
 }
 
+.model-provider-mark .local-provider-mark,
+.provider-filter-mark .local-provider-mark {
+  stroke: none;
+}
+
+.local-provider-mark rect {
+  fill: #141414;
+}
+
+.local-provider-mark path,
+.local-provider-mark circle {
+  fill: none;
+  stroke: #f5f5f5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.local-provider-mark.unsloth-mark > circle:first-of-type {
+  fill: #19bf91;
+  stroke: none;
+}
+
+.local-provider-mark.unsloth-mark circle:not(:first-of-type) {
+  fill: #f5f5f5;
+  stroke: none;
+}
+
 .model-provider-mark .openrouter-mark {
   fill: #f8fafc;
   stroke: none;
@@ -548,7 +576,8 @@ textarea {
 }
 
 .provider-filter-mark .openrouter-mark,
-.provider-filter-mark .llama-cpp-mark {
+.provider-filter-mark .llama-cpp-mark,
+.provider-filter-mark .local-provider-mark {
   stroke: none;
 }
 

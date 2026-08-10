@@ -8,9 +8,7 @@ The design has three small pieces:
 - A **profile** is renderer-safe metadata for Settings and defaults. Profiles live in `profiles.ts`.
 - A **definition** attaches inference, catalog, and status behavior. Definitions live in `registry.ts`.
 
-Most hosted and local servers need no new provider code. llama.cpp, Ollama, and LM Studio are named presets over the same OpenAI-compatible runtime. Other servers can use an OpenAI-compatible or Anthropic-compatible connection in Settings, then use model discovery or enter manual models if `/models` is unavailable. Each wire protocol lives in its own adapter.
-
-Before v1, add named profiles for oMLX, MLX, and Unsloth Studio. Reuse an existing wire adapter where possible, discover models when the server documents a catalog endpoint, and keep manual model entry as the fallback. Evaluate provider-specific status, model-loading, usage, and hardware information in that later provider branch; add only the capabilities that materially improve the desktop experience.
+Most hosted and local servers need no new provider code. llama.cpp, Ollama, LM Studio, oMLX, MLX-LM, and Unsloth Studio are named presets over the same OpenAI-compatible runtime. Other servers can use an OpenAI-compatible or Anthropic-compatible connection in Settings, then use model discovery or enter manual models if `/models` is unavailable. Each wire protocol lives in its own adapter.
 
 Add a definition only when a provider has a useful native capability, such as OpenRouter's catalog and key status or DeepSeek's catalog and account balance. If a future provider uses another inference protocol, implement its adapter here and register its small definition in `registry.ts`.
 
