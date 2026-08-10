@@ -22,6 +22,24 @@ export function mcpTool(manager: McpManager): Tool {
       required: ["action"],
       additionalProperties: false,
     },
+    presentation(raw) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+      const input = raw as Record<string, unknown>;
+      const serverId = typeof input.server === "string" ? input.server : undefined;
+      if (input.action === "call" && typeof input.tool === "string") {
+        return {
+          title: input.tool,
+          ...(serverId ? { subtitle: manager.serverName(serverId) ?? serverId } : {}),
+        };
+      }
+      if (input.action === "search") {
+        return {
+          title: "Search MCP tools",
+          ...(serverId ? { subtitle: manager.serverName(serverId) ?? serverId } : {}),
+        };
+      }
+      return undefined;
+    },
     async execute(_workspace, raw) {
       const input = objectInput(raw);
       const action = stringField(input, "action");
@@ -38,7 +56,11 @@ export function mcpTool(manager: McpManager): Tool {
       if (!args || typeof args !== "object" || Array.isArray(args)) {
         throw new ToolInputError("arguments must be one JSON object matching the schema returned by MCP search");
       }
-      return { content: await manager.call(server!, tool!, args as Record<string, unknown>) };
+      const result = await manager.call(server!, tool!, args as Record<string, unknown>);
+      return {
+        content: result.content,
+        presentation: { title: tool!, subtitle: result.serverName },
+      };
     },
   };
 }

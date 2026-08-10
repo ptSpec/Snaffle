@@ -15,6 +15,11 @@ export type ToolCall = {
   inputRepair?: string;
 };
 
+export type ToolPresentation = {
+  title: string;
+  subtitle?: string;
+};
+
 export type Message =
   | { role: "system"; content: string }
   | { role: "user"; content: string; attachments?: AttachmentRef[] }
@@ -41,6 +46,8 @@ export type Message =
       exitCode?: number | null;
       inputRepair?: string;
       details?: SubagentActivity;
+      durationMs?: number;
+      presentation?: ToolPresentation;
     };
 
 export type ToolSpec = {
@@ -121,6 +128,8 @@ export type RunEvent =
       isError: boolean;
       exitCode?: number | null;
       details?: SubagentActivity;
+      durationMs?: number;
+      presentation?: ToolPresentation;
     }
   | { type: "run.completed"; text: string; steps: number }
   | { type: "run.persisted" }
