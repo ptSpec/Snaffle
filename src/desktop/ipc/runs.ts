@@ -1,7 +1,7 @@
 import { ipcMain } from "electron";
 import { randomUUID } from "node:crypto";
 import { runAgent } from "../../agent/loop.js";
-import { activeSubagent, type SubagentProfile } from "../../agent/subagents/profile.js";
+import { threadSubagent, type SubagentProfile } from "../../agent/subagents/profile.js";
 import { ProviderCapacity } from "../../agent/subagents/capacity.js";
 import { runSubagents, type SubagentProviderRoute } from "../../agent/subagents/runner.js";
 import { delegateTaskTool } from "../../agent/subagents/tool.js";
@@ -107,6 +107,8 @@ export function registerRunIpc(options: {
       (workspace) => workspace.threads.some((thread) => thread.id === input.threadId),
     );
     if (!selectedWorkspace) throw new Error("The selected thread no longer exists");
+    const selectedThread = selectedWorkspace.threads.find((thread) => thread.id === input.threadId);
+    if (!selectedThread) throw new Error("The selected thread no longer exists");
     if (active.has(input.threadId)) throw new Error("This thread is already running");
     const unrestricted = unsafe.has(input.threadId);
     if (!unrestricted) {
@@ -132,7 +134,7 @@ export function registerRunIpc(options: {
     };
     active.set(threadId, run);
     const baseCapabilities = options.capabilities();
-    const subagent = activeSubagent(settings.subagent);
+    const subagent = threadSubagent(settings.subagent, selectedThread.subagentMode);
     const capabilities = subagent
       ? activeCapabilities([
           ...baseCapabilities.tools,

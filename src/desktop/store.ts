@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Message } from "../protocol.js";
+import type { ThreadSubagentMode } from "../agent/subagents/profile.js";
 import { ContextStore } from "../context/store.js";
 import type { DesktopEntry, DesktopSearchResult, DesktopThread, DesktopWorkspace } from "./api.js";
 import { SavedMessageStore } from "./saved-messages-store.js";
@@ -52,6 +53,7 @@ export class DesktopStore {
           source_thread_id TEXT,
           source_entry_id TEXT,
           branch_label TEXT,
+          subagent_mode TEXT NOT NULL DEFAULT 'inherit',
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
         )`,
@@ -116,6 +118,11 @@ export class DesktopStore {
     }
     if (!threadColumns.has("branch_label")) {
       await this.database.execute("ALTER TABLE threads ADD COLUMN branch_label TEXT");
+    }
+    if (!threadColumns.has("subagent_mode")) {
+      await this.database.execute(
+        "ALTER TABLE threads ADD COLUMN subagent_mode TEXT NOT NULL DEFAULT 'inherit'",
+      );
     }
     await this.database.execute("PRAGMA foreign_keys = ON");
     const searchVersion = await this.database.execute({
@@ -202,7 +209,8 @@ export class DesktopStore {
 
   async forkThread(sourceThreadId: string, throughSequence: number, branchLabel?: string, fallbackModel?: string): Promise<void> {
     const source = await this.database.execute({
-      sql: `SELECT t.workspace_id, t.title, t.model, t.provider_connection_id, e.id AS source_entry_id
+      sql: `SELECT t.workspace_id, t.title, t.model, t.provider_connection_id, t.subagent_mode,
+          e.id AS source_entry_id
         FROM threads t
         JOIN entries e ON e.thread_id = t.id
         WHERE t.id = ? AND e.sequence = ? AND e.role IN ('user', 'assistant')`,
@@ -226,8 +234,9 @@ export class DesktopStore {
         {
           sql: `INSERT INTO threads(
               id, workspace_id, title, model, provider_connection_id, source_thread_id, source_entry_id, branch_label,
+              subagent_mode,
               created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           args: [
             threadId,
             workspaceId,
@@ -237,6 +246,7 @@ export class DesktopStore {
             sourceThreadId,
             rowText(sourceRow, "source_entry_id"),
             label,
+            rowText(sourceRow, "subagent_mode"),
             now,
             now,
           ],
@@ -284,6 +294,25 @@ export class DesktopStore {
       args: [draft, threadId],
     });
     if (result.rowsAffected === 0) throw new Error("Thread no longer exists");
+  }
+
+  async setThreadSubagentMode(threadId: string, mode: ThreadSubagentMode): Promise<void> {
+    const result = await this.database.execute({
+      sql: "UPDATE threads SET subagent_mode = ? WHERE id = ?",
+      args: [mode, threadId],
+    });
+    if (result.rowsAffected === 0) throw new Error("Thread no longer exists");
+  }
+
+  async threadSubagentMode(threadId: string): Promise<ThreadSubagentMode> {
+    const result = await this.database.execute({
+      sql: "SELECT subagent_mode FROM threads WHERE id = ?",
+      args: [threadId],
+    });
+    const row = result.rows[0];
+    if (!row) throw new Error("Thread no longer exists");
+    const mode = rowText(row, "subagent_mode");
+    return mode === "enabled" || mode === "disabled" ? mode : "inherit";
   }
 
   async setThreadModel(threadId: string, providerConnectionId: string, model: string): Promise<void> {
@@ -598,8 +627,13 @@ function threadFromRow(row: Row): DesktopThread {
     sourceThreadId: rowOptionalText(row, "source_thread_id"),
     sourceEntryId: rowOptionalText(row, "source_entry_id"),
     branchLabel: rowOptionalText(row, "branch_label"),
+    subagentMode: threadMode(rowText(row, "subagent_mode")),
     updatedAt: rowNumber(row, "updated_at"),
   };
+}
+
+function threadMode(value: string): ThreadSubagentMode {
+  return value === "enabled" || value === "disabled" ? value : "inherit";
 }
 
 function forkTitle(title: string): string {

@@ -1,0 +1,97 @@
+.command-palette-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: min(18vh, 160px);
+  background: rgb(0 0 0 / 0.24);
+}
+
+.command-palette {
+  width: min(620px, calc(100vw - 40px));
+  max-height: min(560px, 70vh);
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 18px;
+  background: var(--card-background);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.3);
+}
+
+.command-palette > input {
+  width: calc(100% - 24px);
+  margin: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  color: var(--text-primary);
+  background: var(--input-background);
+  font: inherit;
+  outline: none;
+}
+
+.command-palette > input:focus {
+  border-color: var(--border-focus);
+}
+
+.command-palette-list {
+  max-height: calc(min(560px, 70vh) - 66px);
+  overflow: auto;
+  padding: 0 8px 8px;
+}
+
+.command-palette-list button {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--text-primary);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.command-palette-list button.selected {
+  background: var(--hover-background);
+}
+
+.command-palette-list button:disabled {
+  opacity: 0.45;
+}
+
+.command-palette-copy {
+  min-width: 0;
+}
+
+.command-palette-copy strong,
+.command-palette-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-palette-copy small {
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+
+.command-palette-mark {
+  color: var(--accent);
+}
+
+.command-palette kbd {
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.82em;
+}
+
+.command-palette-list > p {
+  margin: 22px;
+  color: var(--text-muted);
+  text-align: center;
+}

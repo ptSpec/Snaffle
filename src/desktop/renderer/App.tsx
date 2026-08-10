@@ -15,7 +15,7 @@ import type { CommandApprovalDecision } from "../../protocol.js";
 import type { DesktopApi, DesktopRunEvent, DesktopSearchResult, DesktopState, DesktopThread, SavedMessage } from "../api.js";
 import type { ProviderCatalog, ProviderConnectionInput, ProviderStatus } from "../../providers/provider.js";
 import type { CompactionMode } from "../../context/budget.js";
-import type { SubagentProfile } from "../../agent/subagents/profile.js";
+import type { SubagentProfile, ThreadSubagentMode } from "../../agent/subagents/profile.js";
 import type { ContextReport } from "../../context/report.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../../tools/web/types.js";
 import { DEFAULT_MODEL_CONTEXT_LENGTH } from "../../providers/provider.js";
@@ -40,6 +40,7 @@ import { Sidebar, type AppView, type SettingsPage } from "./sections/sidebar/sid
 import { InspectorPanel, type InspectorTab } from "./sections/inspector/panel.js";
 import type { OrbMotion } from "./components/thinking-orb.js";
 import { Composer } from "./sections/conversation/composer.js";
+import { CommandPalette, type AppCommand } from "./commands/palette.js";
 import {
   TimelineEntry,
 } from "./sections/conversation/timeline.js";
@@ -125,6 +126,7 @@ export function App(): JSX.Element {
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("inspect");
   const [view, setView] = useState<AppView>("conversation");
+  const [commandMode, setCommandMode] = useState<"all" | "slash" | null>(null);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("appearance");
   const [bookmarksPage, setBookmarksPage] = useState<BookmarksPage>("threads");
   const [sendOrbMotion, setSendOrbMotion] = useState<OrbMotion>("stopped");
@@ -153,6 +155,17 @@ export function App(): JSX.Element {
     window.addEventListener("keydown", toggleSearch);
     return () => window.removeEventListener("keydown", toggleSearch);
   }, [view]);
+
+  useEffect(() => {
+    function toggleCommands(event: KeyboardEvent): void {
+      if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.key.toLowerCase() !== "p") return;
+      event.preventDefault();
+      setCommandMode((current) => current === "all" ? null : "all");
+    }
+
+    window.addEventListener("keydown", toggleCommands);
+    return () => window.removeEventListener("keydown", toggleCommands);
+  }, []);
   const followTimeline = useRef(true);
   const leftAutoCollapsed = useRef(false);
   const fileEditorExpanded = useRef(false);
@@ -405,6 +418,9 @@ export function App(): JSX.Element {
   const previousAssistantModels = useMemo(() => modelTransitions(timeline), [timeline]);
   const visibleLeftWidth = leftCollapsed ? 0 : leftWidth;
   const visibleRightWidth = view !== "conversation" || rightCollapsed ? 0 : rightWidth;
+  const activeThread = desktopState.workspace?.threads.find(
+    (thread) => thread.id === desktopState.activeThreadId,
+  );
   const activeContextAttachments = useMemo(() => {
     const active = new Map<string, AttachmentRef>();
     for (const item of timeline) {
@@ -784,6 +800,18 @@ export function App(): JSX.Element {
     setError(null);
     try {
       setDesktopState(withoutConversation(await window.desktop.setThreadUnsafe(threadId, unsafe)));
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function setThreadSubagentMode(mode: ThreadSubagentMode): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId) return;
+    setError(null);
+    try {
+      setDesktopState(withoutConversation(await window.desktop.setThreadSubagentMode(threadId, mode)));
+      setContextRefresh((value) => value + 1);
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -1202,6 +1230,105 @@ export function App(): JSX.Element {
     window.addEventListener("pointerup", stop, { once: true });
   }
 
+  const subagentReady = Boolean(
+    desktopState.subagent.providerConnectionId &&
+    desktopState.subagent.model &&
+    desktopState.subagent.maxSteps > 0,
+  );
+  const subagentsEnabledForThread = subagentReady && Boolean(activeThread) && (
+    activeThread?.subagentMode === "enabled" ||
+    (activeThread?.subagentMode === "inherit" && desktopState.subagent.enabled)
+  );
+  const commands: AppCommand[] = [
+    {
+      id: "thread-new",
+      label: "New chat thread",
+      detail: desktopState.workspace ? `Create in ${desktopState.workspace.name}` : "Open a workspace first",
+      keywords: "chat conversation",
+      shortcut: "",
+      scope: "chat",
+      disabled: !desktopState.workspace,
+      run: () => {
+        const workspace = desktopState.workspace;
+        if (!workspace) return;
+        void saveDraft()
+          .then(() => window.desktop.createThread(workspace.id))
+          .then(showDesktopState)
+          .catch((cause: unknown) => setError(errorMessage(cause)));
+      },
+    },
+    {
+      id: "search",
+      label: "Search conversations",
+      detail: "Search messages across workspaces",
+      keywords: "find history",
+      shortcut: window.desktop.platform === "darwin" ? "⌘K" : "Ctrl+K",
+      scope: "chat",
+      run: () => showView("search"),
+    },
+    {
+      id: "context-compact",
+      label: "Compact context now",
+      detail: "Create a context checkpoint for this thread",
+      keywords: "summarize tokens",
+      scope: "chat",
+      disabled: !activeThread || !selectedModel || running || compactingContext,
+      run: () => void compactCurrentContext(),
+    },
+    {
+      id: "subagents-enable",
+      label: "Enable subagents for this thread",
+      detail: subagentReady ? "Expose delegate_task in this thread" : "Configure a subagent model in Settings first",
+      keywords: "agent delegate on enable",
+      scope: "chat",
+      active: subagentsEnabledForThread,
+      disabled: !activeThread || running || !subagentReady,
+      run: () => void setThreadSubagentMode("enabled"),
+    },
+    {
+      id: "subagents-disable",
+      label: "Disable subagents for this thread",
+      detail: "Hides delegate_task from this thread",
+      keywords: "agent delegate off disable",
+      scope: "chat",
+      active: Boolean(activeThread) && !subagentsEnabledForThread,
+      disabled: !activeThread || running,
+      run: () => void setThreadSubagentMode("disabled"),
+    },
+    {
+      id: "settings-agent",
+      label: "Open agent settings",
+      detail: "Configure subagent models and limits",
+      keywords: "preferences configuration",
+      run: () => {
+        setSettingsPage("agent");
+        setView("settings");
+      },
+    },
+    {
+      id: "sidebar-toggle",
+      label: leftCollapsed ? "Show workspace sidebar" : "Hide workspace sidebar",
+      keywords: "left panel",
+      run: () => {
+        leftAutoCollapsed.current = false;
+        setLeftCollapsed((value) => !value);
+      },
+    },
+    {
+      id: "inspector-toggle",
+      label: rightCollapsed ? "Show inspector" : "Hide inspector",
+      keywords: "right panel inspect",
+      disabled: view !== "conversation",
+      run: () => setRightCollapsed((value) => !value),
+    },
+  ];
+
+  function closeCommands(): void {
+    const refocus = commandMode === "slash";
+    setCommandMode(null);
+    if (refocus) window.requestAnimationFrame(() => taskInput.current?.focus());
+  }
+
   return (
     <main className={`app-shell platform-${window.desktop.platform}`}>
       <section
@@ -1389,6 +1516,7 @@ export function App(): JSX.Element {
             onCompact={() => void compactCurrentContext()}
             onUnsafe={(value) => void setThreadUnsafe(value)}
             onStop={() => void stopRun()}
+            onSlashCommand={() => setCommandMode("slash")}
           />
           </section>
         )}
@@ -1467,6 +1595,9 @@ export function App(): JSX.Element {
           />
         )}
       </section>
+      {commandMode ? (
+        <CommandPalette mode={commandMode} commands={commands} onClose={closeCommands} />
+      ) : null}
     </main>
   );
 }
