@@ -13,6 +13,7 @@ export function registerWorkspaceIpc(options: {
   runningWorkspace: (workspaceId: string) => boolean;
   threadsDeleted: (threadIds: string[]) => void;
   defaultModel: () => string;
+  defaultProviderConnectionId: () => string;
 }): void {
   const { store, state } = options;
 
@@ -24,16 +25,29 @@ export function registerWorkspaceIpc(options: {
       : await dialog.showOpenDialog(dialogOptions);
     const selectedPath = result.filePaths[0];
     if (result.canceled || !selectedPath) return null;
-    await store.addWorkspace(selectedPath, path.basename(selectedPath) || selectedPath, options.defaultModel());
+    await store.addWorkspace(
+      selectedPath,
+      path.basename(selectedPath) || selectedPath,
+      options.defaultModel(),
+      options.defaultProviderConnectionId(),
+    );
     return state();
   });
 
   ipcMain.handle("desktop:select-workspace", async (_event, value: unknown): Promise<DesktopState> => {
-    await store.selectWorkspace(id(value, "Workspace"), options.defaultModel());
+    await store.selectWorkspace(
+      id(value, "Workspace"),
+      options.defaultModel(),
+      options.defaultProviderConnectionId(),
+    );
     return state();
   });
   ipcMain.handle("desktop:create-thread", async (_event, value: unknown): Promise<DesktopState> => {
-    await store.createThread(id(value, "Workspace"), options.defaultModel());
+    await store.createThread(
+      id(value, "Workspace"),
+      options.defaultModel(),
+      options.defaultProviderConnectionId(),
+    );
     return state();
   });
   ipcMain.handle("desktop:fork-thread", async (
@@ -46,7 +60,13 @@ export function registerWorkspaceIpc(options: {
     if (!Number.isInteger(sequenceValue) || Number(sequenceValue) < 0) {
       throw new Error("Fork point must be a message sequence");
     }
-    await store.forkThread(threadId, Number(sequenceValue), undefined, options.defaultModel());
+    await store.forkThread(
+      threadId,
+      Number(sequenceValue),
+      undefined,
+      options.defaultModel(),
+      options.defaultProviderConnectionId(),
+    );
     return state();
   });
   ipcMain.handle("desktop:select-thread", async (_event, value: unknown): Promise<DesktopState> => {

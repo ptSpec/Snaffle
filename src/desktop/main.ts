@@ -177,6 +177,7 @@ async function start(): Promise<void> {
     saveWebSearchApiKeys();
   }
   store = await openStore(path.join(app.getPath("userData"), `${PROJECT.slug}.db`));
+  await store.repairLegacyBlankThreadProviders(selectedModel, selectedProviderConnectionId);
   contextCompactor = new ContextCompactor({
     repository: store.context,
     settings: () => ({ mode: compactionMode, threshold: customCompactionThreshold }),
@@ -189,7 +190,12 @@ async function start(): Promise<void> {
   attachments = new AttachmentStore(path.join(app.getPath("userData"), "attachments"));
   if (process.platform === "darwin" && !app.isPackaged) app.dock?.setIcon(applicationIcon());
   if (!app.isPackaged && (await store.state()).workspaces.length === 0) {
-    await store.addWorkspace(process.cwd(), path.basename(process.cwd()) || process.cwd());
+    await store.addWorkspace(
+      process.cwd(),
+      path.basename(process.cwd()) || process.cwd(),
+      selectedModel,
+      selectedProviderConnectionId,
+    );
   }
   registerIpc();
   createWindow();
@@ -278,6 +284,7 @@ function registerIpc(): void {
     runningWorkspace: runs.isWorkspaceRunning,
     threadsDeleted: runs.forgetThreads,
     defaultModel: () => selectedModel,
+    defaultProviderConnectionId: () => selectedProviderConnectionId,
   });
   registerSavedMessageIpc(store, desktopState);
   registerSearchIpc(store);
