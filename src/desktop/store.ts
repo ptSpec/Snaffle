@@ -164,7 +164,33 @@ export class DesktopStore {
     };
   }
 
-  async addWorkspace(workspacePath: string, name: string, model?: string): Promise<void> {
+  async repairLegacyBlankThreadProviders(model: string, providerConnectionId: string): Promise<void> {
+    if (!model || providerConnectionId === "openrouter") return;
+    const migration = await this.database.execute({
+      sql: "SELECT value FROM app_state WHERE key = ?",
+      args: ["blank_thread_provider_v1"],
+    });
+    if (migration.rows[0]) return;
+    await this.database.batch(
+      [
+        {
+          sql: `UPDATE threads SET provider_connection_id = ?
+            WHERE provider_connection_id = 'openrouter' AND model = ? AND draft = ''
+              AND NOT EXISTS (SELECT 1 FROM entries WHERE entries.thread_id = threads.id)`,
+          args: [providerConnectionId, model],
+        },
+        stateStatement("blank_thread_provider_v1", "1"),
+      ],
+      "write",
+    );
+  }
+
+  async addWorkspace(
+    workspacePath: string,
+    name: string,
+    model?: string,
+    providerConnectionId = "openrouter",
+  ): Promise<void> {
     const existing = await this.database.execute({
       sql: "SELECT id FROM workspaces WHERE path = ?",
       args: [workspacePath],
@@ -180,17 +206,25 @@ export class DesktopStore {
       });
     }
 
-    const threadId = await this.ensureThread(workspaceId, model);
+    const threadId = await this.ensureThread(workspaceId, model, providerConnectionId);
     await this.setActive(workspaceId, threadId);
   }
 
-  async selectWorkspace(workspaceId: string, model?: string): Promise<void> {
+  async selectWorkspace(
+    workspaceId: string,
+    model?: string,
+    providerConnectionId = "openrouter",
+  ): Promise<void> {
     await this.requireWorkspace(workspaceId);
-    const threadId = await this.ensureThread(workspaceId, model);
+    const threadId = await this.ensureThread(workspaceId, model, providerConnectionId);
     await this.setActive(workspaceId, threadId);
   }
 
-  async createThread(workspaceId: string, model?: string): Promise<void> {
+  async createThread(
+    workspaceId: string,
+    model?: string,
+    providerConnectionId = "openrouter",
+  ): Promise<void> {
     await this.requireWorkspace(workspaceId);
     const count = await this.database.execute({
       sql: "SELECT COUNT(*) AS count FROM threads WHERE workspace_id = ?",
@@ -200,14 +234,21 @@ export class DesktopStore {
     const now = Date.now();
     const number = rowNumber(count.rows[0], "count") + 1;
     await this.database.execute({
-      sql: `INSERT INTO threads(id, workspace_id, title, model, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [threadId, workspaceId, `Thread ${number}`, model ?? null, now, now],
+      sql: `INSERT INTO threads(
+          id, workspace_id, title, model, provider_connection_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [threadId, workspaceId, `Thread ${number}`, model ?? null, providerConnectionId, now, now],
     });
     await this.setActive(workspaceId, threadId);
   }
 
-  async forkThread(sourceThreadId: string, throughSequence: number, branchLabel?: string, fallbackModel?: string): Promise<void> {
+  async forkThread(
+    sourceThreadId: string,
+    throughSequence: number,
+    branchLabel?: string,
+    fallbackModel?: string,
+    fallbackProviderConnectionId = "openrouter",
+  ): Promise<void> {
     const source = await this.database.execute({
       sql: `SELECT t.workspace_id, t.title, t.model, t.provider_connection_id, t.subagent_mode,
           e.id AS source_entry_id
@@ -242,7 +283,7 @@ export class DesktopStore {
             workspaceId,
             title,
             rowOptionalText(sourceRow, "model") ?? fallbackModel ?? null,
-            rowText(sourceRow, "provider_connection_id"),
+            rowOptionalText(sourceRow, "provider_connection_id") ?? fallbackProviderConnectionId,
             sourceThreadId,
             rowText(sourceRow, "source_entry_id"),
             label,
@@ -567,7 +608,11 @@ export class DesktopStore {
     this.database.close();
   }
 
-  private async ensureThread(workspaceId: string, model?: string): Promise<string> {
+  private async ensureThread(
+    workspaceId: string,
+    model?: string,
+    providerConnectionId = "openrouter",
+  ): Promise<string> {
     const existing = await this.database.execute({
       sql: "SELECT id FROM threads WHERE workspace_id = ? ORDER BY updated_at DESC LIMIT 1",
       args: [workspaceId],
@@ -577,9 +622,10 @@ export class DesktopStore {
     const threadId = randomUUID();
     const now = Date.now();
     await this.database.execute({
-      sql: `INSERT INTO threads(id, workspace_id, title, model, created_at, updated_at)
-        VALUES (?, ?, 'Thread 1', ?, ?, ?)`,
-      args: [threadId, workspaceId, model ?? null, now, now],
+      sql: `INSERT INTO threads(
+          id, workspace_id, title, model, provider_connection_id, created_at, updated_at
+        ) VALUES (?, ?, 'Thread 1', ?, ?, ?, ?)`,
+      args: [threadId, workspaceId, model ?? null, providerConnectionId, now, now],
     });
     return threadId;
   }
