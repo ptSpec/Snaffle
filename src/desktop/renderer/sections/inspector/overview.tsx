@@ -1,5 +1,9 @@
 import { useState, type ReactNode } from "react";
-import type { SubagentRunActivity } from "../../../../agent/subagents/activity.js";
+import type {
+  SubagentActivity,
+  SubagentProfileName,
+  SubagentRunActivity,
+} from "../../../../agent/subagents/activity.js";
 import type { Usage } from "../../../../protocol.js";
 import type { TimelineItem } from "../conversation/timeline-state.js";
 
@@ -172,6 +176,7 @@ function TurnOverview({
                   <div className="execution-branch" key={tool.id}>
                     <ExecutionNode
                       label={tool.call.name}
+                      profile={subagentProfile(tool.details)}
                       detail={tool.phase === "running" ? "running" : tool.isError ? "failed" : "completed"}
                       status={tool.phase === "running" ? "running" : tool.isError ? "failed" : "completed"}
                       onClick={() => onSelect(tool.id)}
@@ -182,7 +187,7 @@ function TurnOverview({
                           <ExecutionNode
                             key={run.id}
                             label={run.task}
-                            detail={subagentDetail(run, providerNames)}
+                            detail={subagentDetail(run, tool.details?.profile, providerNames)}
                             status={run.status}
                             onClick={() => onSelect(tool.id)}
                           />
@@ -228,11 +233,13 @@ function ExecutionGroup({
 function ExecutionNode({
   label,
   detail,
+  profile,
   status,
   onClick,
 }: {
   label: string;
   detail: string;
+  profile?: SubagentProfileName | undefined;
   status: string;
   onClick(): void;
 }): JSX.Element {
@@ -240,7 +247,10 @@ function ExecutionNode({
     <button className={`execution-node ${status}`} type="button" onClick={onClick}>
       <span className="execution-node-marker" aria-hidden="true" />
       <span className="execution-node-copy">
-        <strong>{label}</strong>
+        <span className="execution-node-title">
+          <strong>{label}</strong>
+          {profile ? <ProfileBadge profile={profile} /> : null}
+        </span>
         <small>{detail}</small>
       </span>
     </button>
@@ -315,13 +325,30 @@ function compactUsage(usage: Usage): string {
   return `${input}${cached} → ${output}${cost}`;
 }
 
-function subagentDetail(run: SubagentRunActivity, providerNames: Record<string, string>): string {
+function subagentDetail(
+  run: SubagentRunActivity,
+  profile: string | undefined,
+  providerNames: Record<string, string>,
+): string {
   const toolCount = run.steps.reduce((total, step) => total + step.tools.length, 0);
   const durationMs = run.steps.reduce((total, step) => total + (step.durationMs ?? 0), 0);
   const provider = run.providerConnectionId
     ? providerNames[run.providerConnectionId] ?? run.providerConnectionId
     : "provider pending";
-  return `${run.status} · ${run.model ?? "model pending"} via ${provider} · ${toolCount} tool${toolCount === 1 ? "" : "s"}${durationMs ? ` · ${formatDuration(durationMs)}` : ""}`;
+  return `${profile ?? "explore"} · ${run.status} · ${run.model ?? "model pending"} via ${provider} · ${toolCount} tool${toolCount === 1 ? "" : "s"}${durationMs ? ` · ${formatDuration(durationMs)}` : ""}`;
+}
+
+function subagentProfile(activity: SubagentActivity | undefined): SubagentProfileName | undefined {
+  if (!activity) return undefined;
+  return activity.profile ?? (activity.access === "write" ? "implement" : "explore");
+}
+
+function ProfileBadge({ profile }: { profile: SubagentProfileName }): JSX.Element {
+  return <span className={`subagent-profile-badge ${profile}`}>{profileLabel(profile)}</span>;
+}
+
+function profileLabel(profile: SubagentProfileName): string {
+  return profile[0]!.toUpperCase() + profile.slice(1);
 }
 
 function oneLine(text: string): string {

@@ -6,7 +6,8 @@ import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_MAX_STEPS } from "../agent/loop.js";
 import {
-  activeSubagent,
+  threadSubagent,
+  type ThreadSubagentMode,
   subagentProfile,
   type SubagentProfile,
 } from "../agent/subagents/profile.js";
@@ -137,7 +138,12 @@ async function start(): Promise<void> {
       openrouter: process.env.OPENROUTER_API_KEY ?? "",
       deepseek: process.env.DEEPSEEK_API_KEY ?? "",
     },
+    legacyRequestLimits(settings.subagent, subagent.providerConnectionId),
+    legacyFallbacks(settings.subagent, subagent.providerConnectionId),
   );
+  if (hasLegacySubagentRouting(settings.subagent)) {
+    saveSettings({ providerConnections: providerConnections.serialize(), subagent });
+  }
   try {
     providerConnections.resolve(selectedProviderConnectionId);
   } catch {
@@ -212,6 +218,7 @@ function registerIpc(): void {
         resolveAttachment,
       },
     ),
+    connection: (connectionId) => providerConnections.resolve(connectionId),
     settings: () => ({
       maxSteps,
       providerTimeoutMinutes,
@@ -258,7 +265,7 @@ function registerIpc(): void {
     return buildContextReport({
       entries: await store.context.entries(threadId, checkpoint),
       checkpoint,
-      tools: currentToolSpecs(),
+      tools: currentToolSpecs(await store.threadSubagentMode(threadId)),
       contextLength,
       mode: compactionMode,
       threshold: customCompactionThreshold,
@@ -282,7 +289,7 @@ function registerIpc(): void {
       providerConnectionId,
       model,
       contextLength: parseContextLength(rawContextLength),
-      tools: currentToolSpecs(),
+      tools: currentToolSpecs(await store.threadSubagentMode(threadId)),
     });
   });
 
@@ -455,6 +462,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
   const conversation = includeConversation ? await store.entries(state.activeThreadId) : [];
   const workspace =
     state.workspaces.find((item) => item.id === state.activeWorkspaceId) ?? null;
+  const activeThread = workspace?.threads.find((thread) => thread.id === state.activeThreadId);
   return {
     workspace,
     workspaces: state.workspaces,
@@ -462,7 +470,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     conversation,
     contextCheckpoints: includeConversation ? await store.context.checkpoints(state.activeThreadId) : [],
     modelInstructions: await store.systemInstructions(state.activeThreadId),
-    toolSpecs: currentToolSpecs(),
+    toolSpecs: currentToolSpecs(activeThread?.subagentMode),
     savedMessages: await store.savedMessages.summaries(),
     providerConnections: providerConnections.list(),
     openRouterAvailable: providerConnections.list().find(
@@ -541,9 +549,9 @@ function currentCapabilities() {
   );
 }
 
-function currentToolSpecs() {
+function currentToolSpecs(mode: ThreadSubagentMode = "inherit") {
   const tools = currentCapabilities().tools.map(({ tool }) => tool);
-  if (activeSubagent(subagent)) tools.push(delegateTaskTool(async () => ""));
+  if (threadSubagent(subagent, mode)) tools.push(delegateTaskTool(async () => ""));
   return tools.map((tool) => ({
     name: tool.name,
     description: tool.description,
@@ -596,6 +604,35 @@ function validProviderRetries(value: unknown): number | undefined {
   return Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 10
     ? Number(value)
     : undefined;
+}
+
+function hasLegacySubagentLimit(value: unknown): boolean {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value) &&
+    Number.isInteger((value as Record<string, unknown>).localConcurrency));
+}
+
+function hasLegacySubagentRouting(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const profile = value as Record<string, unknown>;
+  return hasLegacySubagentLimit(value) || typeof profile.overflowProviderConnectionId === "string";
+}
+
+function legacyRequestLimits(value: unknown, connectionId: string): Record<string, number> {
+  if (!connectionId || !hasLegacySubagentLimit(value)) return {};
+  const limit = Number((value as Record<string, unknown>).localConcurrency);
+  return limit >= 1 && limit <= 16 ? { [connectionId]: limit } : {};
+}
+
+function legacyFallbacks(
+  value: unknown,
+  connectionId: string,
+): Record<string, { connectionId: string; model: string }> {
+  if (!connectionId || !value || typeof value !== "object" || Array.isArray(value)) return {};
+  const profile = value as Record<string, unknown>;
+  if (typeof profile.overflowProviderConnectionId !== "string" ||
+      typeof profile.overflowModel !== "string" ||
+      !profile.overflowProviderConnectionId || !profile.overflowModel) return {};
+  return { [connectionId]: { connectionId: profile.overflowProviderConnectionId, model: profile.overflowModel } };
 }
 
 function parseId(value: unknown, label: string): string {

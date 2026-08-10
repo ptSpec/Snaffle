@@ -14,6 +14,6 @@ Add a definition only when a provider has a useful native capability, such as Op
 
 Keep provider retry, stream parsing, catalog discovery, and usage normalization here. Keep agent behavior, tools, UI, and analytics provider-neutral. Secrets remain in the Electron main process and must not cross into the renderer.
 
-## Pinned capacity scheduler
+## Capacity scheduling
 
-Revisit a provider-level scheduler when concurrent local work becomes a measured need. A connection may declare a parallel capacity shared by main threads, subagents, compaction, and background requests. Eligible delegated or background work may use an explicitly approved remote overflow connection when local slots are full; main conversations should preserve their selected model and normally queue. Remote overflow must be opt-in because it can move workspace content outside the local privacy boundary.
+The first scheduler slice is deliberately scoped to the configured subagent connection. Main conversation requests and subagents share its in-memory generation limit. Delegated work may use an explicitly configured overflow provider while those slots are full; main conversations preserve their selected model and queue. Compaction and other background requests do not yet join this scheduler. Remote overflow remains opt-in because it can move workspace content outside the local privacy boundary.

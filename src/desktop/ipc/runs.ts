@@ -1,8 +1,9 @@
 import { ipcMain } from "electron";
 import { randomUUID } from "node:crypto";
 import { runAgent } from "../../agent/loop.js";
-import { activeSubagent, type SubagentProfile } from "../../agent/subagents/profile.js";
-import { runSubagents } from "../../agent/subagents/runner.js";
+import { threadSubagent, type SubagentProfile } from "../../agent/subagents/profile.js";
+import { ProviderCapacity } from "../../agent/subagents/capacity.js";
+import { runSubagents, type SubagentProviderRoute } from "../../agent/subagents/runner.js";
 import { delegateTaskTool } from "../../agent/subagents/tool.js";
 import type { Trace } from "../../agent/trace.js";
 import type { AttachmentStore } from "../../attachments/store.js";
@@ -16,7 +17,7 @@ import { projectContext } from "../../context/projection.js";
 import { estimateContextCharacters, estimateContextTokens } from "../../context/budget.js";
 import { probeNativeSandbox } from "../../execution/native/sandbox.js";
 import { LocalWorkspace, type CommandApprovalRequest } from "../../execution/workspace.js";
-import type { ModelProvider } from "../../providers/provider.js";
+import type { ModelProvider, ProviderConnection } from "../../providers/provider.js";
 import type { CommandApprovalDecision, Message, RunEvent } from "../../protocol.js";
 import type { DesktopState, StartRunInput } from "../api.js";
 import type { DesktopStore } from "../store.js";
@@ -41,6 +42,7 @@ export function registerRunIpc(options: {
     model: string,
     resolveAttachment: (attachment: AttachmentRef) => ReturnType<AttachmentStore["resolve"]>,
   ) => ModelProvider;
+  connection(connectionId: string): ProviderConnection;
   settings: () => {
     maxSteps: number;
     providerTimeoutMinutes: number;
@@ -59,6 +61,8 @@ export function registerRunIpc(options: {
     acceptingSteering: boolean;
   }>();
   const unsafe = new Set<string>();
+  const providerCapacity = new ProviderCapacity();
+  const implementCapacity = new ProviderCapacity();
   const approvals = new Map<string, {
     threadId: string;
     resolve: (decision: CommandApprovalDecision) => void;
@@ -104,6 +108,8 @@ export function registerRunIpc(options: {
       (workspace) => workspace.threads.some((thread) => thread.id === input.threadId),
     );
     if (!selectedWorkspace) throw new Error("The selected thread no longer exists");
+    const selectedThread = selectedWorkspace.threads.find((thread) => thread.id === input.threadId);
+    if (!selectedThread) throw new Error("The selected thread no longer exists");
     if (active.has(input.threadId)) throw new Error("This thread is already running");
     const unrestricted = unsafe.has(input.threadId);
     if (!unrestricted) {
@@ -129,24 +135,40 @@ export function registerRunIpc(options: {
     };
     active.set(threadId, run);
     const baseCapabilities = options.capabilities();
-    const subagent = activeSubagent(settings.subagent);
+    const subagent = threadSubagent(settings.subagent, selectedThread.subagentMode);
     const capabilities = subagent
       ? activeCapabilities([
           ...baseCapabilities.tools,
           {
             source: { type: "built-in" },
-            tool: delegateTaskTool((request, onUpdate) => runSubagents({
-              ...request,
-              provider: options.provider(
-                subagent.providerConnectionId,
-                subagent.model,
-                (attachment) => options.attachments.resolve(attachment),
-              ),
-              workspace,
-              signal: controller.signal,
-              maxSteps: subagent.maxSteps,
-              ...(onUpdate ? { onUpdate } : {}),
-            })),
+            tool: delegateTaskTool(async (request, onUpdate) => {
+              const releaseImplement = request.profile === "implement"
+                ? await implementCapacity.acquire(selectedWorkspace.id, 1, controller.signal)
+                : () => {};
+              try {
+                return await runSubagents({
+                  ...request,
+                  provider: (signal) => providerRoute(
+                    subagent.providerConnectionId,
+                    subagent.model,
+                    providerCapacity,
+                    signal,
+                    options.connection,
+                    (connectionId, model) => options.provider(
+                      connectionId,
+                      model,
+                      (attachment) => options.attachments.resolve(attachment),
+                    ),
+                  ),
+                  workspace,
+                  signal: controller.signal,
+                  maxSteps: subagent.maxSteps,
+                  ...(onUpdate ? { onUpdate } : {}),
+                });
+              } finally {
+                releaseImplement();
+              }
+            }),
           },
         ])
       : baseCapabilities;
@@ -214,13 +236,37 @@ export function registerRunIpc(options: {
       throw error;
     }
 
-    void runAgent({
-      task: input.task,
-      provider: options.provider(
+    let mainRoute: ProviderRoute;
+    try {
+      mainRoute = await providerRoute(
         input.providerConnectionId,
         input.model,
-        (attachment) => options.attachments.resolve(attachment),
-      ),
+        providerCapacity,
+        controller.signal,
+        options.connection,
+        (connectionId, model) => options.provider(
+          connectionId,
+          model,
+          (attachment) => options.attachments.resolve(attachment),
+        ),
+      );
+    } catch (error) {
+      active.delete(threadId);
+      throw error;
+    }
+    if (mainRoute.fallbackFromConnectionName) {
+      const primaryConnection = options.connection(input.providerConnectionId);
+      const fallbackConnection = options.connection(mainRoute.provider.connectionId);
+      options.sendEvent(threadId, {
+        type: "provider.fallback",
+        fromConnectionName: primaryConnection.name,
+        toConnectionName: fallbackConnection.name,
+        model: mainRoute.provider.model,
+      });
+    }
+    void runAgent({
+      task: input.task,
+      provider: mainRoute.provider,
       capabilities,
       workspace,
       trace: memoryTrace,
@@ -239,6 +285,7 @@ export function registerRunIpc(options: {
       options.sendEvent(threadId, { type: "run.persisted" });
       options.compactor.schedule(compactionInput);
     }).catch(() => undefined).finally(() => {
+      mainRoute.release();
       if (active.get(threadId) === run) active.delete(threadId);
     });
   });
@@ -314,6 +361,55 @@ export function registerRunIpc(options: {
       }
     },
   };
+}
+
+type ProviderRoute = SubagentProviderRoute;
+
+async function providerRoute(
+  connectionId: string,
+  model: string,
+  capacity: ProviderCapacity,
+  signal: AbortSignal,
+  connection: (connectionId: string) => ProviderConnection,
+  create: (connectionId: string, model: string) => ModelProvider,
+): Promise<ProviderRoute> {
+  const primary = connection(connectionId);
+  const immediate = capacity.tryAcquire(connectionId, primary.requestLimit);
+  if (immediate) return createRoute(create, capacity, primary, model, immediate);
+
+  if (primary.fallbackProviderConnectionId && primary.fallbackModel) {
+    const fallback = connection(primary.fallbackProviderConnectionId);
+    const release = await capacity.acquire(
+      fallback.id,
+      fallback.requestLimit,
+      signal,
+    );
+    return createRoute(create, capacity, fallback, primary.fallbackModel, release, primary.name);
+  }
+
+  const release = await capacity.acquire(connectionId, primary.requestLimit, signal);
+  return createRoute(create, capacity, primary, model, release);
+}
+
+function createRoute(
+  create: (connectionId: string, model: string) => ModelProvider,
+  capacity: ProviderCapacity,
+  connection: ProviderConnection,
+  model: string,
+  release: () => void,
+  fallbackFromConnectionName?: string,
+): ProviderRoute {
+  try {
+    const route = capacity.reserve(create(connection.id, model), connection.requestLimit, release);
+    return {
+      ...route,
+      connectionName: connection.name,
+      ...(fallbackFromConnectionName ? { fallbackFromConnectionName } : {}),
+    };
+  } catch (error) {
+    release();
+    throw error;
+  }
 }
 
 const memoryTrace: Trace = { async write(): Promise<void> {} };

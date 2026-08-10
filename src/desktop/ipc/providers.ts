@@ -74,6 +74,13 @@ function parseProviderConnection(input: unknown): ProviderConnectionInput {
     name: typeof value.name === "string" ? value.name : "",
     baseUrl: typeof value.baseUrl === "string" ? value.baseUrl : "",
     enabled: value.enabled !== false,
+    requestLimit: Number.isInteger(value.requestLimit) && Number(value.requestLimit) >= 1 && Number(value.requestLimit) <= 16
+      ? Number(value.requestLimit)
+      : 1,
+    fallbackProviderConnectionId: typeof value.fallbackProviderConnectionId === "string"
+      ? value.fallbackProviderConnectionId
+      : "",
+    fallbackModel: typeof value.fallbackModel === "string" ? value.fallbackModel : "",
     manualModels: Array.isArray(value.manualModels)
       ? value.manualModels.map(parseProviderModel)
       : [],

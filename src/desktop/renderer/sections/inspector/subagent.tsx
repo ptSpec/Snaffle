@@ -1,5 +1,6 @@
 import type {
   SubagentActivity,
+  SubagentProfileName,
   SubagentRunActivity,
   SubagentStep,
 } from "../../../../agent/subagents/activity.js";
@@ -7,15 +8,18 @@ import { JsonInspector } from "./json-inspector.js";
 
 export function SubagentInspector({ activity }: { activity: SubagentActivity }): JSX.Element {
   const runs = activityRuns(activity);
-  const access = activity.access ?? "read";
+  const profile = activity.profile ?? (activity.access === "write" ? "implement" : "explore");
   return (
     <div className="subagent-inspector">
       <div className="subagent-heading">
         <div>
           <p className="eyebrow">Delegation</p>
-          <h3>{delegationLabel(access, runs.length)}</h3>
+          <h3>{delegationLabel(profile, runs.length)}</h3>
         </div>
-        <span className={`subagent-status ${activity.status}`}>{activity.status}</span>
+        <div className="subagent-heading-badges">
+          <span className={`subagent-profile-badge ${profile}`}>{profileLabel(profile)}</span>
+          <span className={`subagent-status ${activity.status}`}>{activity.status}</span>
+        </div>
       </div>
 
       <div className="subagent-runs">
@@ -26,11 +30,16 @@ export function SubagentInspector({ activity }: { activity: SubagentActivity }):
             open={runs.length === 1 || run.status === "running"}
           >
             <summary>
-              <span>Agent {index + 1}</span>
+              <span>{profileLabel(profile)} agent {index + 1}</span>
               <small>{run.status}</small>
             </summary>
             <div className="subagent-run-body">
-              {run.model ? <p className="subagent-provider">{run.model} · {run.providerConnectionId}</p> : null}
+              {run.model ? (
+                <p className="subagent-provider">
+                  {run.model} · {run.providerConnectionName ?? run.providerConnectionId}
+                  {run.fallbackFromConnectionName ? ` · fallback from ${run.fallbackFromConnectionName}` : ""}
+                </p>
+              ) : null}
               <h4>Task</h4>
               <pre>{run.task}</pre>
 
@@ -99,6 +108,8 @@ function activityRuns(activity: SubagentActivity): SubagentRunActivity[] {
     model?: string;
     providerId?: string;
     providerConnectionId?: string;
+    providerConnectionName?: string;
+    fallbackFromConnectionName?: string;
     status?: SubagentRunActivity["status"];
     steps?: SubagentStep[];
     result?: string;
@@ -111,15 +122,20 @@ function activityRuns(activity: SubagentActivity): SubagentRunActivity[] {
     ...(legacy.model ? { model: legacy.model } : {}),
     ...(legacy.providerId ? { providerId: legacy.providerId } : {}),
     ...(legacy.providerConnectionId ? { providerConnectionId: legacy.providerConnectionId } : {}),
+    ...(legacy.providerConnectionName ? { providerConnectionName: legacy.providerConnectionName } : {}),
+    ...(legacy.fallbackFromConnectionName ? { fallbackFromConnectionName: legacy.fallbackFromConnectionName } : {}),
     steps: legacy.steps ?? [],
     ...(legacy.result ? { result: legacy.result } : {}),
     ...(legacy.error ? { error: legacy.error } : {}),
   }];
 }
 
-function delegationLabel(access: "read" | "write", count: number): string {
-  if (access === "write") return "Coding agent";
-  return `${count} read agent${count === 1 ? "" : "s"}`;
+function delegationLabel(profile: SubagentProfileName, count: number): string {
+  return `${count} ${profileLabel(profile)} agent${count === 1 ? "" : "s"}`;
+}
+
+function profileLabel(profile: SubagentProfileName): string {
+  return profile[0]!.toUpperCase() + profile.slice(1);
 }
 
 function stepMetadata(step: SubagentStep): string {

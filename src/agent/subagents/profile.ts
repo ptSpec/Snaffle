@@ -5,6 +5,8 @@ export type SubagentProfile = {
   maxSteps: number;
 };
 
+export type ThreadSubagentMode = "inherit" | "enabled" | "disabled";
+
 export const DEFAULT_SUBAGENT_MAX_STEPS = 30;
 
 export function subagentProfile(value: unknown): SubagentProfile {
@@ -23,6 +25,18 @@ export function subagentProfile(value: unknown): SubagentProfile {
 
 export function activeSubagent(profile: SubagentProfile): SubagentProfile | null {
   return profile.enabled && profile.providerConnectionId && profile.model && profile.maxSteps > 0 ? profile : null;
+}
+
+export function threadSubagent(
+  profile: SubagentProfile,
+  mode: ThreadSubagentMode,
+): SubagentProfile | null {
+  if (mode === "disabled") return null;
+  return activeSubagent(mode === "enabled" ? { ...profile, enabled: true } : profile);
+}
+
+export function isThreadSubagentMode(value: unknown): value is ThreadSubagentMode {
+  return value === "inherit" || value === "enabled" || value === "disabled";
 }
 
 function text(value: unknown): string {
