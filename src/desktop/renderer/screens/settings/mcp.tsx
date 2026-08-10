@@ -20,10 +20,11 @@ export function McpSettings({
   const [selectedId, setSelectedId] = useState(servers[0]?.id ?? NEW_SERVER);
   const [draft, setDraft] = useState<McpServerConfig>(() => servers[0] ?? newServer());
   const [status, setStatus] = useState("");
+  const [statusError, setStatusError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [importText, setImportText] = useState("");
   const [imported, setImported] = useState<McpServerConfig[]>([]);
-  const [manualOpen, setManualOpen] = useState(selectedId !== NEW_SERVER);
+  const [manualOpen, setManualOpen] = useState(false);
 
   useEffect(() => {
     const server = servers.find((item) => item.id === selectedId);
@@ -35,6 +36,7 @@ export function McpSettings({
     setSelectedId(id);
     setDraft(servers.find((server) => server.id === id) ?? newServer());
     setStatus("");
+    setStatusError(false);
     setImported([]);
     setImportText("");
     setManualOpen(id !== NEW_SERVER);
@@ -73,73 +75,33 @@ export function McpSettings({
       setDraft(first);
       setManualOpen(true);
       setStatus([
-        `${result.servers.length} server${result.servers.length === 1 ? "" : "s"} detected. Review before saving.`,
+        `${result.servers.length} server${result.servers.length === 1 ? "" : "s"} detected. Add any credentials required by the server, then test the connection.`,
         ...result.warnings,
       ].join(" "));
+      setStatusError(false);
     } catch (cause) {
       setStatus(errorMessage(cause));
+      setStatusError(true);
     }
   }
 
-  async function act(action: () => Promise<void>): Promise<void> {
+  async function act(action: () => Promise<void>, pending = ""): Promise<void> {
     setBusy(true);
-    setStatus("");
+    setStatus(pending);
+    setStatusError(false);
     try {
       await action();
     } catch (cause) {
       setStatus(errorMessage(cause));
+      setStatusError(true);
     } finally {
       setBusy(false);
     }
   }
 
-  return (
-    <section className="settings view-enter" aria-label="MCP settings">
-      <div className="settings-content">
-        <p className="eyebrow">Settings</p>
-        <h1>MCP</h1>
-        <p className="settings-description">Connect external tools without loading every tool into each model request.</p>
-
-        <div className="mcp-server-bar">
-          <select value={selectedId} onChange={(event) => select(event.target.value)} aria-label="MCP server">
-            {selectedId === NEW_SERVER ? <option value={NEW_SERVER}>New MCP server</option> : null}
-            {servers.map((server) => <option value={server.id} key={server.id}>{server.name}</option>)}
-          </select>
-          <button type="button" onClick={() => select(NEW_SERVER)}>+ Add server</button>
-        </div>
-
-        {selectedId === NEW_SERVER ? (
-          <div className="mcp-import">
-            <div>
-              <strong>Paste MCP configuration</strong>
-              <p>Accepts common <code>mcpServers</code>, <code>servers</code>, or single-server JSON.</p>
-            </div>
-            <textarea
-              aria-label="MCP configuration JSON"
-              value={importText}
-              placeholder={'{\n  "mcpServers": {\n    "Example": { "command": "npx", "args": ["-y", "example-mcp"] }\n  }\n}'}
-              onChange={(event) => setImportText(event.target.value)}
-            />
-            <button className="primary" type="button" disabled={!importText.trim()} onClick={parseImport}>Review configuration</button>
-          </div>
-        ) : null}
-
-        {imported.length > 1 ? (
-          <label className="mcp-imported-server">
-            <span>Imported server</span>
-            <select value={draft.id} onChange={(event) => {
-              const server = imported.find((item) => item.id === event.target.value);
-              if (server) setDraft(server);
-            }}>
-              {imported.map((server) => <option value={server.id} key={server.id}>{server.name}</option>)}
-            </select>
-          </label>
-        ) : null}
-
-        <details className="mcp-manual" open={manualOpen} onToggle={(event) => setManualOpen(event.currentTarget.open)}>
-          <summary>{imported.length ? "Review imported configuration" : selectedId === NEW_SERVER ? "Configure manually" : "Server configuration"}</summary>
-          <div className="mcp-manual-body">
-
+  function renderEditor(): JSX.Element {
+    return <>
+      <div className="mcp-manual-body">
         <label className="setting-field text-setting">
           <span><strong>Name</strong><small>Shown to you and the model.</small></span>
           <input value={draft.name} onChange={(event) => updateDraft({ ...draft, name: event.target.value })} />
@@ -174,14 +136,7 @@ export function McpSettings({
                 onChange={(event) => updateStdio({ command: event.target.value })}
               />
             </label>
-            <label className="setting-field text-setting">
-              <span><strong>Arguments</strong><small>One argument per line.</small></span>
-              <textarea
-                value={draft.transport.args.join("\n")}
-                placeholder={"-y\n@modelcontextprotocol/server-filesystem\n/path"}
-                onChange={(event) => updateStdio({ args: event.target.value.split("\n").filter(Boolean) })}
-              />
-            </label>
+            <McpArguments args={draft.transport.args} onChange={(args) => updateStdio({ args })} />
             <label className="setting-field text-setting">
               <span><strong>Working directory</strong><small>Optional process directory.</small></span>
               <input
@@ -189,9 +144,10 @@ export function McpSettings({
                 onChange={(event) => updateStdio({ cwd: event.target.value })}
               />
             </label>
+            <p className="mcp-host-warning">Local MCP commands run directly on your computer, outside the workspace command sandbox.</p>
             <McpValues
-              title="Environment variables"
-              description="Passed only to the local MCP process."
+              title="Authentication and environment"
+              description="Add API keys or other variables documented by this server. Mark sensitive values Secret."
               namePlaceholder="MINIMAX_API_KEY"
               values={draft.transport.env}
               onChange={updateValues}
@@ -208,8 +164,8 @@ export function McpSettings({
               />
             </label>
             <McpValues
-              title="Request headers"
-              description="Sent with every request to this MCP server."
+              title="Authentication and headers"
+              description="Add Authorization or other headers documented by this server. Mark sensitive values Secret."
               namePlaceholder="Authorization"
               valuePlaceholder="Bearer ..."
               values={draft.transport.headers}
@@ -227,30 +183,103 @@ export function McpSettings({
             onChange={(event) => updateDraft({ ...draft, enabled: event.target.checked })}
           />
         </label>
+      </div>
 
-          </div>
-        </details>
-
-        {error || status ? <p className="settings-error">{status || error}</p> : null}
-        {manualOpen ? <div className="editor-actions provider-actions">
-          <button className="primary" type="button" disabled={busy} onClick={() => void act(async () => {
-            const next = imported.length ? imported : [draft];
-            for (const server of next) await onSave(server);
-            setSelectedId(draft.id);
-            setImported([]);
-            setStatus(`${next.length} server${next.length === 1 ? "" : "s"} saved`);
-          })}>Save{imported.length > 1 ? ` ${imported.length} servers` : ""}</button>
+      {error || status ? (
+        <p className={error || statusError ? "settings-error" : "settings-status"}>{status || error}</p>
+      ) : null}
+      <div className="editor-actions provider-actions mcp-editor-actions">
+        <button className="primary" type="button" disabled={busy} onClick={() => void act(async () => {
+          const next = imported.length ? imported : [draft];
+          for (const server of next) await onSave(server);
+          setSelectedId(draft.id);
+          setImported([]);
+          setStatus(`${next.length} server${next.length === 1 ? "" : "s"} saved`);
+        })}>Save{imported.length > 1 ? ` ${imported.length} servers` : ""}</button>
+        <button type="button" disabled={busy} onClick={() => void act(async () => {
+          const result = await onTest(draft);
+          setStatus(`Connected · ${result.toolCount} tools`);
+        }, "Connecting…")}>{busy && status === "Connecting…" ? "Connecting…" : "Test connection"}</button>
+        {selectedId !== NEW_SERVER ? (
           <button type="button" disabled={busy} onClick={() => void act(async () => {
-            const result = await onTest(draft);
-            setStatus(`Connected · ${result.toolCount} tools`);
-          })}>Test connection</button>
-          {selectedId !== NEW_SERVER ? (
-            <button type="button" disabled={busy} onClick={() => void act(async () => {
-              await onRemove(draft.id);
-              select(NEW_SERVER);
-            })}>Remove</button>
-          ) : null}
-        </div> : null}
+            await onRemove(draft.id);
+            select(NEW_SERVER);
+          })}>Remove</button>
+        ) : null}
+      </div>
+    </>;
+  }
+
+  return (
+    <section className="settings view-enter" aria-label="MCP settings">
+      <div className="settings-content">
+        <p className="eyebrow">Settings</p>
+        <h1>MCP</h1>
+        <p className="settings-description">Connect external tools without loading every tool into each model request.</p>
+
+        <button
+          className="mcp-add-server"
+          type="button"
+          onClick={() => { if (selectedId !== NEW_SERVER) select(NEW_SERVER); }}
+        >+ Add new server</button>
+
+        {selectedId === NEW_SERVER ? (
+          <div className="mcp-import">
+            <div>
+              <strong>Paste MCP configuration</strong>
+              <p>Accepts common <code>mcpServers</code>, <code>servers</code>, or single-server JSON.</p>
+            </div>
+            <textarea
+              aria-label="MCP configuration JSON"
+              value={importText}
+              placeholder={'{\n  "mcpServers": {\n    "Example": { "command": "npx", "args": ["-y", "example-mcp"] }\n  }\n}'}
+              onChange={(event) => setImportText(event.target.value)}
+            />
+            <button className="primary" type="button" disabled={!importText.trim()} onClick={parseImport}>Review configuration</button>
+          </div>
+        ) : null}
+
+        {imported.length > 1 ? (
+          <label className="mcp-imported-server">
+            <span>Imported server</span>
+            <select value={draft.id} onChange={(event) => {
+              const server = imported.find((item) => item.id === event.target.value);
+              if (server) setDraft(server);
+            }}>
+              {imported.map((server) => <option value={server.id} key={server.id}>{server.name}</option>)}
+            </select>
+          </label>
+        ) : null}
+
+        {selectedId === NEW_SERVER ? (
+          <details className="mcp-manual" open={manualOpen} onToggle={(event) => setManualOpen(event.currentTarget.open)}>
+            <summary>{imported.length ? "Review imported configuration" : "Configure manually"}</summary>
+            {manualOpen ? renderEditor() : null}
+          </details>
+        ) : null}
+
+        <div className="mcp-server-list">
+          {servers.map((server) => {
+            const open = selectedId === server.id && manualOpen;
+            return <div className={open ? "mcp-server-card open" : "mcp-server-card"} key={server.id}>
+              <button
+                className="mcp-server-summary"
+                type="button"
+                aria-expanded={open}
+                onClick={() => open ? setManualOpen(false) : select(server.id)}
+              >
+                <span>
+                  <strong>{server.name}</strong>
+                  <small>{server.enabled ? "Enabled" : "Disabled"} · {server.transport.type === "stdio" ? "Local command" : "HTTP"}</small>
+                </span>
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+              </button>
+              <div className="mcp-server-reveal"><div className="mcp-server-body">
+                {selectedId === server.id ? renderEditor() : null}
+              </div></div>
+            </div>;
+          })}
+        </div>
       </div>
     </section>
   );
@@ -286,24 +315,30 @@ function McpValues({
   }
 
   return (
-    <div className="setting-field mcp-values">
+    <div className="setting-field mcp-collection">
       <span><strong>{title}</strong><small>{description}</small></span>
       <div className="mcp-value-list">
         {values.map((entry) => (
-          <div className="mcp-value-row" key={entry.id}>
-            <input
-              aria-label={`${title} name`}
-              value={entry.name}
-              placeholder={namePlaceholder}
-              onChange={(event) => update(entry.id, { name: event.target.value })}
-            />
-            <input
-              aria-label={`${entry.name || title} value`}
-              type={entry.secret ? "password" : "text"}
-              value={entry.value}
-              placeholder={entry.hasValue ? "Stored secret" : valuePlaceholder}
-              onChange={(event) => update(entry.id, { value: event.target.value, hasValue: false })}
-            />
+          <div className="mcp-entry-row mcp-value-row" key={entry.id}>
+            <label className="mcp-entry-field">
+              <span>Name</span>
+              <input
+                aria-label={`${title} name`}
+                value={entry.name}
+                placeholder={namePlaceholder}
+                onChange={(event) => update(entry.id, { name: event.target.value })}
+              />
+            </label>
+            <label className="mcp-entry-field">
+              <span>Value</span>
+              <input
+                aria-label={`${entry.name || title} value`}
+                type={entry.secret ? "password" : "text"}
+                value={entry.value}
+                placeholder={entry.hasValue ? "Stored secret" : valuePlaceholder}
+                onChange={(event) => update(entry.id, { value: event.target.value, hasValue: false })}
+              />
+            </label>
             <label className="mcp-secret-toggle">
               <input
                 className="selection-checkbox"
@@ -330,7 +365,40 @@ function McpValues({
             value: "",
             secret: false,
           }])}
-        >+ Add {title === "Request headers" ? "header" : "variable"}</button>
+        >+ Add {title.includes("headers") ? "header" : "variable"}</button>
+      </div>
+    </div>
+  );
+}
+
+function McpArguments({
+  args,
+  onChange,
+}: {
+  args: string[];
+  onChange(args: string[]): void;
+}): JSX.Element {
+  return (
+    <div className="setting-field mcp-collection">
+      <span><strong>Arguments</strong><small>Passed to the command in this order.</small></span>
+      <div className="mcp-argument-list">
+        {args.map((argument, index) => (
+          <div className="mcp-entry-row mcp-argument-row" key={index}>
+            <input
+              aria-label={`Argument ${index + 1}`}
+              value={argument}
+              placeholder={index === 0 ? "-y" : "Argument"}
+              onChange={(event) => onChange(args.map((item, itemIndex) => itemIndex === index ? event.target.value : item))}
+            />
+            <button
+              className="mcp-value-remove"
+              type="button"
+              aria-label={`Remove argument ${index + 1}`}
+              onClick={() => onChange(args.filter((_, itemIndex) => itemIndex !== index))}
+            >×</button>
+          </div>
+        ))}
+        <button className="mcp-value-add" type="button" onClick={() => onChange([...args, ""])}>+ Add argument</button>
       </div>
     </div>
   );
