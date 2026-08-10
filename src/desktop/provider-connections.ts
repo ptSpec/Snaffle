@@ -20,6 +20,7 @@ export class ProviderConnections {
     raw: unknown,
     private readonly environmentKeys: Record<string, string> = {},
     private readonly legacyRequestLimits: Record<string, number> = {},
+    private readonly legacyFallbacks: Record<string, { connectionId: string; model: string }> = {},
   ) {
     for (const value of Array.isArray(raw) ? raw : []) this.load(value);
     if (!this.connections.has(OPENROUTER_CONNECTION_ID)) {
@@ -30,7 +31,11 @@ export class ProviderConnections {
         name: definition.name,
         baseUrl: definition.defaultBaseUrl,
         enabled: true,
-        requestLimit: legacyRequestLimits[OPENROUTER_CONNECTION_ID] ?? DEFAULT_PROVIDER_REQUEST_LIMIT,
+        requestLimit: legacyRequestLimits[OPENROUTER_CONNECTION_ID]
+          ?? definition.defaultRequestLimit
+          ?? DEFAULT_PROVIDER_REQUEST_LIMIT,
+        fallbackProviderConnectionId: legacyFallbacks[OPENROUTER_CONNECTION_ID]?.connectionId ?? "",
+        fallbackModel: legacyFallbacks[OPENROUTER_CONNECTION_ID]?.model ?? "",
         hasApiKey: Boolean(environmentKeys.openrouter),
         manualModels: [],
       });
@@ -55,6 +60,15 @@ export class ProviderConnections {
     const existing = input.id ? this.connections.get(input.id) : undefined;
     const definition = providerDefinition(input.providerId);
     const id = existing?.id ?? (input.id || randomUUID());
+    const fallbackProviderConnectionId = input.fallbackProviderConnectionId.trim();
+    const fallbackModel = input.fallbackModel.trim();
+    if (fallbackProviderConnectionId === id) {
+      throw new Error("A provider connection cannot use itself as its fallback");
+    }
+    if (fallbackProviderConnectionId && !this.connections.get(fallbackProviderConnectionId)?.enabled) {
+      throw new Error("The fallback provider connection is unavailable");
+    }
+    const useFallback = Boolean(fallbackProviderConnectionId && fallbackModel);
     const connection: ProviderConnection = {
       id,
       providerId: definition.id,
@@ -62,10 +76,13 @@ export class ProviderConnections {
       baseUrl: (input.baseUrl.trim() || definition.defaultBaseUrl).replace(/\/$/, ""),
       enabled: input.enabled,
       requestLimit: input.requestLimit,
+      fallbackProviderConnectionId: useFallback ? fallbackProviderConnectionId : "",
+      fallbackModel: useFallback ? fallbackModel : "",
       hasApiKey: false,
       manualModels: input.manualModels,
     };
     this.connections.set(id, connection);
+    if (!connection.enabled) this.clearFallback(id);
     if (input.apiKey !== undefined) {
       if (input.apiKey.trim()) this.secrets.set(id, input.apiKey.trim());
       else this.secrets.delete(id);
@@ -77,6 +94,18 @@ export class ProviderConnections {
     if (id === OPENROUTER_CONNECTION_ID) throw new Error("The built-in OpenRouter connection cannot be removed");
     this.connections.delete(id);
     this.secrets.delete(id);
+    this.clearFallback(id);
+  }
+
+  private clearFallback(id: string): void {
+    for (const [connectionId, connection] of this.connections) {
+      if (connection.fallbackProviderConnectionId !== id) continue;
+      this.connections.set(connectionId, {
+        ...connection,
+        fallbackProviderConnectionId: "",
+        fallbackModel: "",
+      });
+    }
   }
 
   serialize(): unknown[] {
@@ -111,13 +140,24 @@ export class ProviderConnections {
       enabled: value.enabled !== false,
       requestLimit: providerRequestLimit(value.requestLimit)
         ?? this.legacyRequestLimits[value.id]
+        ?? providerDefinition(value.providerId).defaultRequestLimit
         ?? DEFAULT_PROVIDER_REQUEST_LIMIT,
+      fallbackProviderConnectionId: text(value.fallbackProviderConnectionId)
+        || this.legacyFallbacks[value.id]?.connectionId
+        || "",
+      fallbackModel: text(value.fallbackModel)
+        || this.legacyFallbacks[value.id]?.model
+        || "",
       hasApiKey: Boolean(secret),
       manualModels: Array.isArray(value.manualModels)
         ? value.manualModels.filter(isProviderModel)
         : [],
     });
   }
+}
+
+function text(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }
 
 function providerRequestLimit(value: unknown): number | undefined {

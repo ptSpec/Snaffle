@@ -17,7 +17,7 @@ import { projectContext } from "../../context/projection.js";
 import { estimateContextCharacters, estimateContextTokens } from "../../context/budget.js";
 import { probeNativeSandbox } from "../../execution/native/sandbox.js";
 import { LocalWorkspace, type CommandApprovalRequest } from "../../execution/workspace.js";
-import type { ModelProvider } from "../../providers/provider.js";
+import type { ModelProvider, ProviderConnection } from "../../providers/provider.js";
 import type { CommandApprovalDecision, Message, RunEvent } from "../../protocol.js";
 import type { DesktopState, StartRunInput } from "../api.js";
 import type { DesktopStore } from "../store.js";
@@ -42,7 +42,7 @@ export function registerRunIpc(options: {
     model: string,
     resolveAttachment: (attachment: AttachmentRef) => ReturnType<AttachmentStore["resolve"]>,
   ) => ModelProvider;
-  connectionLimit(connectionId: string): number;
+  connection(connectionId: string): ProviderConnection;
   settings: () => {
     maxSteps: number;
     providerTimeoutMinutes: number;
@@ -148,11 +148,12 @@ export function registerRunIpc(options: {
               try {
                 return await runSubagents({
                   ...request,
-                  provider: (signal) => subagentRoute(
-                    subagent,
+                  provider: (signal) => providerRoute(
+                    subagent.providerConnectionId,
+                    subagent.model,
                     providerCapacity,
                     signal,
-                    options.connectionLimit,
+                    options.connection,
                     (connectionId, model) => options.provider(
                       connectionId,
                       model,
@@ -235,14 +236,37 @@ export function registerRunIpc(options: {
       throw error;
     }
 
-    const mainProvider = providerCapacity.limit(options.provider(
-      input.providerConnectionId,
-      input.model,
-      (attachment) => options.attachments.resolve(attachment),
-    ), options.connectionLimit(input.providerConnectionId));
+    let mainRoute: ProviderRoute;
+    try {
+      mainRoute = await providerRoute(
+        input.providerConnectionId,
+        input.model,
+        providerCapacity,
+        controller.signal,
+        options.connection,
+        (connectionId, model) => options.provider(
+          connectionId,
+          model,
+          (attachment) => options.attachments.resolve(attachment),
+        ),
+      );
+    } catch (error) {
+      active.delete(threadId);
+      throw error;
+    }
+    if (mainRoute.fallbackFromConnectionName) {
+      const primaryConnection = options.connection(input.providerConnectionId);
+      const fallbackConnection = options.connection(mainRoute.provider.connectionId);
+      options.sendEvent(threadId, {
+        type: "provider.fallback",
+        fromConnectionName: primaryConnection.name,
+        toConnectionName: fallbackConnection.name,
+        model: mainRoute.provider.model,
+      });
+    }
     void runAgent({
       task: input.task,
-      provider: mainProvider,
+      provider: mainRoute.provider,
       capabilities,
       workspace,
       trace: memoryTrace,
@@ -261,6 +285,7 @@ export function registerRunIpc(options: {
       options.sendEvent(threadId, { type: "run.persisted" });
       options.compactor.schedule(compactionInput);
     }).catch(() => undefined).finally(() => {
+      mainRoute.release();
       if (active.get(threadId) === run) active.delete(threadId);
     });
   });
@@ -338,41 +363,49 @@ export function registerRunIpc(options: {
   };
 }
 
-async function subagentRoute(
-  profile: SubagentProfile,
+type ProviderRoute = SubagentProviderRoute;
+
+async function providerRoute(
+  connectionId: string,
+  model: string,
   capacity: ProviderCapacity,
   signal: AbortSignal,
-  connectionLimit: (connectionId: string) => number,
+  connection: (connectionId: string) => ProviderConnection,
   create: (connectionId: string, model: string) => ModelProvider,
-): Promise<SubagentProviderRoute> {
-  const immediate = capacity.tryAcquire(profile.providerConnectionId, connectionLimit(profile.providerConnectionId));
-  if (immediate) return createRoute(create, profile.providerConnectionId, profile.model, immediate);
+): Promise<ProviderRoute> {
+  const primary = connection(connectionId);
+  const immediate = capacity.tryAcquire(connectionId, primary.requestLimit);
+  if (immediate) return createRoute(create, capacity, primary, model, immediate);
 
-  if (profile.overflowProviderConnectionId && profile.overflowModel) {
+  if (primary.fallbackProviderConnectionId && primary.fallbackModel) {
+    const fallback = connection(primary.fallbackProviderConnectionId);
     const release = await capacity.acquire(
-      profile.overflowProviderConnectionId,
-      connectionLimit(profile.overflowProviderConnectionId),
+      fallback.id,
+      fallback.requestLimit,
       signal,
     );
-    return createRoute(create, profile.overflowProviderConnectionId, profile.overflowModel, release);
+    return createRoute(create, capacity, fallback, primary.fallbackModel, release, primary.name);
   }
 
-  const release = await capacity.acquire(
-    profile.providerConnectionId,
-    connectionLimit(profile.providerConnectionId),
-    signal,
-  );
-  return createRoute(create, profile.providerConnectionId, profile.model, release);
+  const release = await capacity.acquire(connectionId, primary.requestLimit, signal);
+  return createRoute(create, capacity, primary, model, release);
 }
 
 function createRoute(
   create: (connectionId: string, model: string) => ModelProvider,
-  connectionId: string,
+  capacity: ProviderCapacity,
+  connection: ProviderConnection,
   model: string,
   release: () => void,
-): SubagentProviderRoute {
+  fallbackFromConnectionName?: string,
+): ProviderRoute {
   try {
-    return { provider: create(connectionId, model), release };
+    const route = capacity.reserve(create(connection.id, model), connection.requestLimit, release);
+    return {
+      ...route,
+      connectionName: connection.name,
+      ...(fallbackFromConnectionName ? { fallbackFromConnectionName } : {}),
+    };
   } catch (error) {
     release();
     throw error;

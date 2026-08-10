@@ -47,6 +47,30 @@ export class ProviderCapacity {
     };
   }
 
+  reserve(provider: ModelProvider, limit: number, initial: Release): { provider: ModelProvider; release: Release } {
+    let reservation: Release | null = initial;
+    return {
+      provider: {
+        model: provider.model,
+        providerId: provider.providerId,
+        connectionId: provider.connectionId,
+        complete: async (messages, tools, signal, onEvent) => {
+          const release = reservation ?? await this.acquire(provider.connectionId, limit, signal);
+          reservation = null;
+          try {
+            return await provider.complete(messages, tools, signal, onEvent);
+          } finally {
+            release();
+          }
+        },
+      },
+      release: () => {
+        reservation?.();
+        reservation = null;
+      },
+    };
+  }
+
   private release(connectionId: string): Release {
     let released = false;
     return () => {

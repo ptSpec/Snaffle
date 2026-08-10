@@ -55,6 +55,8 @@ test("local provider presets reuse the OpenAI-compatible runtime", () => {
       baseUrl: baseUrl!,
       enabled: true,
       requestLimit: 1,
+      fallbackProviderConnectionId: "",
+      fallbackModel: "",
       hasApiKey: false,
       manualModels: [],
     }, "local-model", {});
@@ -183,6 +185,8 @@ test("a manual model can test successfully when discovery is unavailable", async
     baseUrl: `http://127.0.0.1:${address.port}/v1`,
     enabled: true,
     requestLimit: 1,
+    fallbackProviderConnectionId: "",
+    fallbackModel: "",
     hasApiKey: false,
     manualModels: [{
       id: "manual-model",
@@ -237,6 +241,8 @@ test("DeepSeek uses the shared model catalog and adds account balance", async (t
     baseUrl: `http://127.0.0.1:${address.port}`,
     enabled: true,
     requestLimit: 1,
+    fallbackProviderConnectionId: "",
+    fallbackModel: "",
     hasApiKey: true,
     apiKey: "secret",
     manualModels: [],

@@ -39,6 +39,8 @@ export type SubagentRequest = {
 
 export type SubagentProviderRoute = {
   provider: ModelProvider;
+  connectionName: string;
+  fallbackFromConnectionName?: string;
   release(): void;
 };
 
@@ -106,6 +108,10 @@ async function runChild(options: {
             model: event.model,
             providerId: event.providerId,
             providerConnectionId: event.providerConnectionId,
+            providerConnectionName: route.connectionName,
+            ...(route.fallbackFromConnectionName
+              ? { fallbackFromConnectionName: route.fallbackFromConnectionName }
+              : {}),
           });
         }
         if (event.type === "model.reasoning.delta") {

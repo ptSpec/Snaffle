@@ -3,8 +3,6 @@ export type SubagentProfile = {
   providerConnectionId: string;
   model: string;
   maxSteps: number;
-  overflowProviderConnectionId: string;
-  overflowModel: string;
 };
 
 export type ThreadSubagentMode = "inherit" | "enabled" | "disabled";
@@ -22,8 +20,6 @@ export function subagentProfile(value: unknown): SubagentProfile {
     maxSteps: Number.isInteger(input.maxSteps) && Number(input.maxSteps) >= 0 && Number(input.maxSteps) <= 100
       ? Number(input.maxSteps)
       : DEFAULT_SUBAGENT_MAX_STEPS,
-    overflowProviderConnectionId: text(input.overflowProviderConnectionId),
-    overflowModel: text(input.overflowModel),
   };
 }
 

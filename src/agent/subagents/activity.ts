@@ -23,6 +23,8 @@ export type SubagentRunActivity = {
   model?: string;
   providerId?: string;
   providerConnectionId?: string;
+  providerConnectionName?: string;
+  fallbackFromConnectionName?: string;
   steps: SubagentStep[];
   result?: string;
   error?: string;
@@ -39,7 +41,14 @@ export type SubagentActivity = {
 };
 
 type ChildUpdate = { runId: string } & (
-  | { type: "run.started"; model: string; providerId: string; providerConnectionId: string }
+  | {
+      type: "run.started";
+      model: string;
+      providerId: string;
+      providerConnectionId: string;
+      providerConnectionName: string;
+      fallbackFromConnectionName?: string;
+    }
   | { type: "reasoning.delta"; step: number; text: string }
   | { type: "response.delta"; step: number; text: string }
   | { type: "model.completed"; step: number; reasoning: string; response: string; usage?: Usage; durationMs: number }
@@ -90,6 +99,8 @@ export function applySubagentUpdate(
       model: update.model,
       providerId: update.providerId,
       providerConnectionId: update.providerConnectionId,
+      providerConnectionName: update.providerConnectionName,
+      fallbackFromConnectionName: update.fallbackFromConnectionName,
     });
   } else if (update.type === "run.completed") {
     run.status = "completed";
