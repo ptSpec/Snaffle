@@ -399,6 +399,12 @@ function registerIpc(): void {
   ipcMain.handle("desktop:set-subagent", (_event, value: unknown): void => {
     const next = subagentProfile(value);
     if (next.providerConnectionId) providerConnections.resolve(next.providerConnectionId);
+    if (next.overflowProviderConnectionId) {
+      if (next.overflowProviderConnectionId === next.providerConnectionId) {
+        throw new Error("Remote overflow must use a different provider connection");
+      }
+      providerConnections.resolve(next.overflowProviderConnectionId);
+    }
     subagent = next;
     saveSettings({ subagent });
   });

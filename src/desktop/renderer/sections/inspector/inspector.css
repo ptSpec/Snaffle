@@ -357,6 +357,13 @@
   gap: 2px;
 }
 
+.execution-node-title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 7px;
+}
+
 .execution-node-copy strong,
 .execution-node-copy small {
   overflow: hidden;
@@ -463,6 +470,36 @@ pre {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.subagent-heading-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.subagent-profile-badge {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, currentColor 8%, var(--card-background));
+  border: 1px solid color-mix(in srgb, currentColor 42%, transparent);
+  border-radius: 999px;
+  font-size: calc(11px * var(--interface-font-scale));
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.subagent-profile-badge.review {
+  color: var(--status-warning-text);
+}
+
+.subagent-profile-badge.test {
+  color: var(--status-success-text);
+}
+
+.subagent-profile-badge.implement {
+  color: var(--primary);
 }
 
 .subagent-status {

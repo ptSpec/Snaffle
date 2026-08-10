@@ -30,6 +30,12 @@ export function AgentSettings({
   const connections = providerConnections.filter((connection) => connection.enabled);
   const selectedConnection = connections.find((connection) => connection.id === subagent.providerConnectionId);
   const models = providerCatalogs.find((catalog) => catalog.connection.id === selectedConnection?.id)?.models ?? [];
+  const overflowConnection = connections.find(
+    (connection) => connection.id === subagent.overflowProviderConnectionId,
+  );
+  const overflowModels = providerCatalogs.find(
+    (catalog) => catalog.connection.id === overflowConnection?.id,
+  )?.models ?? [];
 
   function update(change: Partial<SubagentProfile>): void {
     onSubagent({ ...subagent, ...change });
@@ -130,6 +136,54 @@ export function AgentSettings({
             max={100}
             onChange={(maxSteps) => update({ maxSteps })}
           />
+          <NumberSetting
+            label="Local parallel capacity"
+            description="Maximum simultaneous model requests on the subagent connection, shared with main conversations."
+            value={subagent.localConcurrency}
+            min={1}
+            max={16}
+            onChange={(localConcurrency) => update({ localConcurrency })}
+          />
+          <label className="setting-field">
+            <span>
+              <strong>Remote overflow provider</strong>
+              <small>Optional. Delegated tasks use this connection while every local slot is occupied.</small>
+            </span>
+            <select
+              value={subagent.overflowProviderConnectionId}
+              onChange={(event) => {
+                const overflowProviderConnectionId = event.target.value;
+                const overflowModel = providerCatalogs.find(
+                  (catalog) => catalog.connection.id === overflowProviderConnectionId,
+                )?.models[0]?.id ?? "";
+                update({ overflowProviderConnectionId, overflowModel });
+              }}
+            >
+              <option value="">Wait for a local slot</option>
+              {connections
+                .filter((connection) => connection.id !== subagent.providerConnectionId)
+                .map((connection) => (
+                  <option key={connection.id} value={connection.id}>{connection.name}</option>
+                ))}
+            </select>
+          </label>
+          <label className="setting-field">
+            <span>
+              <strong>Remote overflow model</strong>
+              <small>The fallback model used only when the configured capacity is full.</small>
+            </span>
+            <select
+              value={subagent.overflowModel}
+              disabled={!overflowConnection || overflowModels.length === 0}
+              onChange={(event) => update({ overflowModel: event.target.value })}
+            >
+              <option value="">{overflowModels.length ? "Select model" : "No overflow provider"}</option>
+              {subagent.overflowModel && !overflowModels.some((model) => model.id === subagent.overflowModel)
+                ? <option value={subagent.overflowModel}>{subagent.overflowModel}</option>
+                : null}
+              {overflowModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+            </select>
+          </label>
         </div>
 
         {error ? <p className="settings-error">{error}</p> : null}
