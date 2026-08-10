@@ -12,7 +12,6 @@ test("thread subagent mode can inherit or override the app default", () => {
     providerConnectionId: "local",
     model: "small-model",
     maxSteps: 30,
-    localConcurrency: 1,
     overflowProviderConnectionId: "",
     overflowModel: "",
   };

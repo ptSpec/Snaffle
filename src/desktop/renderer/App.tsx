@@ -99,7 +99,6 @@ const initialState: DesktopState = {
     providerConnectionId: "",
     model: "",
     maxSteps: 30,
-    localConcurrency: 1,
     overflowProviderConnectionId: "",
     overflowModel: "",
   },

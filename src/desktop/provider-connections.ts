@@ -9,13 +9,18 @@ import type {
   ProviderConnectionInput,
   ResolvedProviderConnection,
 } from "../providers/provider.js";
+import { DEFAULT_PROVIDER_REQUEST_LIMIT } from "../providers/provider.js";
 import { decodeSecret, encodeSecret } from "./settings.js";
 
 export class ProviderConnections {
   private readonly connections = new Map<string, ProviderConnection>();
   private readonly secrets = new Map<string, string>();
 
-  constructor(raw: unknown, private readonly environmentKeys: Record<string, string> = {}) {
+  constructor(
+    raw: unknown,
+    private readonly environmentKeys: Record<string, string> = {},
+    private readonly legacyRequestLimits: Record<string, number> = {},
+  ) {
     for (const value of Array.isArray(raw) ? raw : []) this.load(value);
     if (!this.connections.has(OPENROUTER_CONNECTION_ID)) {
       const definition = providerDefinition("openrouter");
@@ -25,6 +30,7 @@ export class ProviderConnections {
         name: definition.name,
         baseUrl: definition.defaultBaseUrl,
         enabled: true,
+        requestLimit: legacyRequestLimits[OPENROUTER_CONNECTION_ID] ?? DEFAULT_PROVIDER_REQUEST_LIMIT,
         hasApiKey: Boolean(environmentKeys.openrouter),
         manualModels: [],
       });
@@ -55,6 +61,7 @@ export class ProviderConnections {
       name: input.name.trim() || definition.name,
       baseUrl: (input.baseUrl.trim() || definition.defaultBaseUrl).replace(/\/$/, ""),
       enabled: input.enabled,
+      requestLimit: input.requestLimit,
       hasApiKey: false,
       manualModels: input.manualModels,
     };
@@ -102,12 +109,21 @@ export class ProviderConnections {
       name: value.name,
       baseUrl: value.baseUrl,
       enabled: value.enabled !== false,
+      requestLimit: providerRequestLimit(value.requestLimit)
+        ?? this.legacyRequestLimits[value.id]
+        ?? DEFAULT_PROVIDER_REQUEST_LIMIT,
       hasApiKey: Boolean(secret),
       manualModels: Array.isArray(value.manualModels)
         ? value.manualModels.filter(isProviderModel)
         : [],
     });
   }
+}
+
+function providerRequestLimit(value: unknown): number | undefined {
+  return Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 16
+    ? Number(value)
+    : undefined;
 }
 
 function isProviderModel(value: unknown): value is ProviderConnection["manualModels"][number] {
