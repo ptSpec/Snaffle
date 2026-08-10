@@ -14,6 +14,7 @@ import type { ContextReport } from "../context/report.js";
 import type { SubagentProfile, ThreadSubagentMode } from "../agent/subagents/profile.js";
 import type { GitChanges, GitDiffPreview, GitFileContents } from "../git/types.js";
 import type { McpServerConfig, McpServerStatus } from "../mcp/types.js";
+import type { SkillSummary } from "../extensions/skills/types.js";
 
 export type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents } from "../git/types.js";
 
@@ -94,6 +95,7 @@ export type DesktopState = {
   contextCheckpoints: ContextCheckpoint[];
   modelInstructions: string[];
   toolSpecs: ToolSpec[];
+  skills: SkillSummary[];
   savedMessages: SavedMessageSummary[];
   providerConnections: ProviderConnection[];
   mcpServers: McpServerConfig[];

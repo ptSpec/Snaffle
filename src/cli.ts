@@ -12,6 +12,7 @@ import { defaultTools } from "./tools/built-ins.js";
 import { WEB_SEARCH_BACKENDS, type WebSearchBackend } from "./tools/web/types.js";
 import { JsonlTrace } from "./agent/trace.js";
 import { LocalWorkspace } from "./execution/workspace.js";
+import { SkillRegistry, skillTool } from "./extensions/skills/index.js";
 
 type CliOptions = {
   task: string;
@@ -50,10 +51,14 @@ async function main(): Promise<void> {
   const controller = new AbortController();
   process.once("SIGINT", () => controller.abort());
 
+  const tools = defaultTools(webSearchOptions(options));
+  const skills = new SkillRegistry(options.workspace);
+  if (skills.summaries().length) tools.push(skillTool(skills));
+
   const result = await runAgent({
     task: options.task,
     provider: createCliProvider(options),
-    capabilities: builtInCapabilities(defaultTools(webSearchOptions(options))),
+    capabilities: builtInCapabilities(tools),
     workspace: new LocalWorkspace(options.workspace, options.unsafeHost ? "unsafe" : "restricted"),
     trace: new JsonlTrace(options.tracePath),
     signal: controller.signal,
