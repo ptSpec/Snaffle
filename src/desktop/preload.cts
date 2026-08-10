@@ -5,6 +5,7 @@ import type { DesktopApi, DesktopRunEvent, GitFileContents, SaveMessageInput, St
 import type { FontId } from "./typography.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js";
 import type { SubagentProfile, ThreadSubagentMode } from "../agent/subagents/profile.js";
+import type { McpServerConfig } from "../mcp/types.js";
 
 const api: DesktopApi = {
   platform: process.platform,
@@ -35,6 +36,9 @@ const api: DesktopApi = {
   getProviderStatus: (connectionId: string) => ipcRenderer.invoke("desktop:get-provider-status", connectionId),
   saveProviderConnection: (input: ProviderConnectionInput) => ipcRenderer.invoke("desktop:save-provider-connection", input),
   removeProviderConnection: (connectionId: string) => ipcRenderer.invoke("desktop:remove-provider-connection", connectionId),
+  saveMcpServer: (server: McpServerConfig) => ipcRenderer.invoke("desktop:save-mcp-server", server),
+  removeMcpServer: (id: string) => ipcRenderer.invoke("desktop:remove-mcp-server", id),
+  testMcpServer: (server: McpServerConfig) => ipcRenderer.invoke("desktop:test-mcp-server", server),
   setSelectedModel: (threadId: string | null, connectionId: string, model: string) =>
     ipcRenderer.invoke("desktop:set-selected-model", threadId, connectionId, model),
   chooseAttachments: () => ipcRenderer.invoke("desktop:choose-attachments"),

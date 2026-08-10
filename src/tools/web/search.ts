@@ -65,8 +65,9 @@ async function searchKetch(
 ): Promise<SearchResult> {
   try {
     const results = await searchWithKetch(executable, backend, apiKey, query, maxResults);
-    if (!results.length) throw new Error("Ketch returned no results");
-    return resultList(results);
+    return results.length
+      ? resultList(results)
+      : { content: "No search results found. Try a shorter query and remove site: filters unless a specific domain is required.", sources: [] };
   } catch (error) {
     throw new Error(`Ketch search failed: ${error instanceof Error ? error.message : String(error)}`);
   }

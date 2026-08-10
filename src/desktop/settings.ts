@@ -4,6 +4,7 @@ import path from "node:path";
 import type { CompactionMode } from "../context/budget.js";
 import type { SubagentProfile } from "../agent/subagents/profile.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js";
+import type { McpServerConfig } from "../mcp/types.js";
 import type { FontId } from "./typography.js";
 
 export type SavedSettings = {
@@ -31,6 +32,7 @@ export type SavedSettings = {
   webSearchEnabled?: unknown;
   webSearchBackend?: unknown;
   webSearchApiKeys?: unknown;
+  mcpServers?: unknown;
 };
 
 export type SettingsUpdate = {
@@ -58,6 +60,7 @@ export type SettingsUpdate = {
   webSearchEnabled?: boolean;
   webSearchBackend?: WebSearchBackend;
   webSearchApiKeys?: Partial<Record<KetchSearchBackend, string>>;
+  mcpServers?: McpServerConfig[];
 };
 
 export function loadSettings(file: string): SavedSettings {

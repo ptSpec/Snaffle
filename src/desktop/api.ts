@@ -13,6 +13,7 @@ import type { ContextCheckpoint } from "../context/projection.js";
 import type { ContextReport } from "../context/report.js";
 import type { SubagentProfile, ThreadSubagentMode } from "../agent/subagents/profile.js";
 import type { GitChanges, GitDiffPreview, GitFileContents } from "../git/types.js";
+import type { McpServerConfig, McpServerStatus } from "../mcp/types.js";
 
 export type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents } from "../git/types.js";
 
@@ -95,6 +96,7 @@ export type DesktopState = {
   toolSpecs: ToolSpec[];
   savedMessages: SavedMessageSummary[];
   providerConnections: ProviderConnection[];
+  mcpServers: McpServerConfig[];
   openRouterAvailable: boolean;
   ketchAvailable: boolean;
   webSearchEnabled: boolean;
@@ -158,6 +160,9 @@ export interface DesktopApi {
   getProviderStatus(connectionId: string): Promise<ProviderStatus>;
   saveProviderConnection(input: ProviderConnectionInput): Promise<DesktopState>;
   removeProviderConnection(connectionId: string): Promise<DesktopState>;
+  saveMcpServer(server: McpServerConfig): Promise<DesktopState>;
+  removeMcpServer(id: string): Promise<DesktopState>;
+  testMcpServer(server: McpServerConfig): Promise<McpServerStatus>;
   setSelectedModel(threadId: string | null, connectionId: string, model: string): Promise<void>;
   chooseAttachments(): Promise<AttachmentPreview[]>;
   importDroppedFiles(files: File[]): Promise<AttachmentPreview[]>;

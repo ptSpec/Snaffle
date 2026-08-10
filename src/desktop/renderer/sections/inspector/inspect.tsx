@@ -45,10 +45,14 @@ export function Inspector({
   if (item.call.name === "delegate_task" && item.details) {
     return <SubagentInspector activity={item.details} />;
   }
+  if (item.call.name === "mcp") {
+    return <McpToolInspector item={item} />;
+  }
   return (
     <div className="inspector-card">
       <p className="eyebrow">Tool call</p>
       <h3>{item.call.name}</h3>
+      {item.durationMs ? <p className="inspector-duration">{formatDuration(item.durationMs)}</p> : null}
       <p className={`inspector-status ${status.className}`}>
         {status.marker} {status.label}
       </p>
@@ -60,11 +64,67 @@ export function Inspector({
       {item.phase === "completed" ? (
         <>
           <h4>Output</h4>
-          <pre>{item.content || "No output"}</pre>
+          <pre className={item.isError ? "inspector-tool-output failed" : "inspector-tool-output"}>
+            {item.content || "No output"}
+          </pre>
         </>
       ) : (
         <p className="muted">Waiting for the tool result.</p>
       )}
     </div>
   );
+}
+
+function McpToolInspector({ item }: { item: Extract<TimelineItem, { kind: "tool" }> }): JSX.Element {
+  const input = recordValue(item.call.input);
+  const action = input?.action === "search" ? "search" : "call";
+  const title = item.presentation?.title ?? stringValue(input?.tool) ?? "MCP";
+  const server = item.presentation?.subtitle ?? stringValue(input?.server) ?? "All configured servers";
+  const shownInput = action === "call"
+    ? input?.arguments ?? {}
+    : { query: input?.query ?? "", server };
+  const status = toolStatus(item);
+
+  return (
+    <div className="inspector-card mcp-tool-inspector">
+      <p className="eyebrow">{action === "search" ? "MCP catalog" : "MCP tool"}</p>
+      <h3>{title}</h3>
+      <div className="inspector-tool-meta">
+        <span><small>Server</small><strong>{server}</strong></span>
+        <span><small>Duration</small><strong>{item.durationMs ? formatDuration(item.durationMs) : "Running"}</strong></span>
+      </div>
+      <p className={`inspector-status ${status.className}`}>
+        {status.marker} {status.label}
+      </p>
+      {item.call.inputRepair ? (
+        <p className="inspector-repair"><strong>Input healed</strong> · {item.call.inputRepair}</p>
+      ) : null}
+      <h4>Input</h4>
+      <JsonInspector value={shownInput} />
+      {item.phase === "completed" ? (
+        <>
+          <h4>{item.isError ? "Error" : "Output"}</h4>
+          <pre className={item.isError ? "inspector-tool-output failed" : "inspector-tool-output"}>
+            {item.content || "No output"}
+          </pre>
+        </>
+      ) : (
+        <p className="muted">Waiting for the MCP server.</p>
+      )}
+    </div>
+  );
+}
+
+function recordValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function formatDuration(milliseconds: number): string {
+  return milliseconds < 1_000 ? `${milliseconds}ms` : `${(milliseconds / 1_000).toFixed(1)}s`;
 }
