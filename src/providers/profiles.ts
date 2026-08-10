@@ -78,6 +78,14 @@ export const PROVIDER_PROFILES: ProviderProfile[] = [
     description: "Connect a local or hosted OpenAI-compatible endpoint.",
     baseUrlHint: "Include the API version, such as /v1.",
   },
+  {
+    id: "anthropic-compatible",
+    name: "Anthropic-compatible",
+    defaultBaseUrl: "https://api.anthropic.com/v1",
+    apiKey: "optional",
+    description: "Connect an endpoint that implements the Anthropic Messages API.",
+    baseUrlHint: "Include the API version, such as /v1.",
+  },
 ];
 
 export function providerProfile(id: string): ProviderProfile {
