@@ -1131,6 +1131,38 @@ export function App(): JSX.Element {
     }
   }
 
+  async function resetAppearance(): Promise<void> {
+    try {
+      await Promise.all([
+        window.desktop.setTheme(DEFAULT_THEME.id),
+        window.desktop.setTypography(DEFAULT_FONTS.interface, DEFAULT_FONTS.primary, DEFAULT_FONTS.secondary, DEFAULT_FONTS.code),
+        window.desktop.setTypographyScale("interface", DEFAULT_FONT_SCALE),
+        window.desktop.setTypographyScale("conversation", DEFAULT_FONT_SCALE),
+        window.desktop.setCodeBlockFontSize(DEFAULT_CODE_BLOCK_FONT_SIZE),
+        window.desktop.setEditorFontSize(DEFAULT_EDITOR_FONT_SIZE),
+      ]);
+      applyTheme(DEFAULT_THEME);
+      applyTypography(DEFAULT_FONTS.interface, DEFAULT_FONTS.primary, DEFAULT_FONTS.secondary, DEFAULT_FONTS.code);
+      applyTypographyScale("interface", DEFAULT_FONT_SCALE);
+      applyTypographyScale("conversation", DEFAULT_FONT_SCALE);
+      setDesktopState((state) => ({
+        ...state,
+        themeId: DEFAULT_THEME.id,
+        interfaceFont: DEFAULT_FONTS.interface,
+        primaryFont: DEFAULT_FONTS.primary,
+        secondaryFont: DEFAULT_FONTS.secondary,
+        codeFont: DEFAULT_FONTS.code,
+        interfaceFontScale: DEFAULT_FONT_SCALE,
+        conversationFontScale: DEFAULT_FONT_SCALE,
+        codeBlockFontSize: DEFAULT_CODE_BLOCK_FONT_SIZE,
+        editorFontSize: DEFAULT_EDITOR_FONT_SIZE,
+      }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   async function setEditorLauncher(editorCommand: string, editorArguments: string): Promise<void> {
     try {
       await window.desktop.setEditorLauncher(editorCommand, editorArguments);
@@ -1413,6 +1445,7 @@ export function App(): JSX.Element {
             providerCatalogs={models}
             loadingProviderModels={loadingModels}
             error={error}
+            onResetAppearance={() => void resetAppearance()}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
             onTypography={(interfaceFont, primary, secondary, code) => void setTypography(interfaceFont, primary, secondary, code)}
             onTypographyScale={(role, value) => void setTypographyScale(role, value)}
