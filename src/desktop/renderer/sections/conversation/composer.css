@@ -824,6 +824,16 @@ html[data-accented-theme="true"] .send-button:not(.stop) .send-button-orb {
   opacity: 0.34;
 }
 
+html[data-theme="snaffle-sage"] .send-button:not(.stop) {
+  color: var(--primary);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--primary) 32%, transparent);
+}
+
+html[data-theme="snaffle-sage"] .send-button:not(.stop) .send-button-orb {
+  opacity: 0.72;
+}
+
 .send-button.stop {
   padding: 0;
 }

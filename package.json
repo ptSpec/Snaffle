@@ -41,6 +41,7 @@
     "@lezer/highlight": "^1.2.3",
     "@libsql/client": "^0.17.4",
     "@mozilla/readability": "^0.6.0",
+    "@typopro/web-junicode": "^3.7.5",
     "@vscode/ripgrep": "^1.18.0",
     "highlight.js": "^11.11.1",
     "linkedom": "^0.18.13",
