@@ -7,6 +7,7 @@ import type { KetchSearchBackend, WebSearchBackend } from "../../../../tools/web
 import type { CompactionMode } from "../../../../context/budget.js";
 import type { SubagentProfile } from "../../../../agent/subagents/profile.js";
 import type { McpServerConfig, McpServerStatus } from "../../../../mcp/types.js";
+import type { ModelToolSetting } from "../../../api.js";
 import type {
   ProviderCatalog,
   ProviderConnection,
@@ -20,6 +21,7 @@ import { EditorSettings } from "./editor.js";
 import { ProviderSettings } from "./providers.js";
 import { WebSettings } from "./web.js";
 import { McpSettings } from "./mcp.js";
+import { ModelSettings } from "./model.js";
 
 export function Settings({
   page,
@@ -47,6 +49,9 @@ export function Settings({
   webSearchKeyBackends,
   providerConnections,
   mcpServers,
+  modelTools,
+  systemPrompt,
+  runtimeMetadata,
   providerCatalogs,
   loadingProviderModels,
   error,
@@ -72,6 +77,8 @@ export function Settings({
   onSaveMcpServer,
   onRemoveMcpServer,
   onTestMcpServer,
+  onSystemPrompt,
+  onToolEnabled,
 }: {
   page: SettingsPage;
   themeId: string;
@@ -98,6 +105,9 @@ export function Settings({
   webSearchKeyBackends: KetchSearchBackend[];
   providerConnections: ProviderConnection[];
   mcpServers: McpServerConfig[];
+  modelTools: ModelToolSetting[];
+  systemPrompt: string;
+  runtimeMetadata: string;
   providerCatalogs: ProviderCatalog[];
   loadingProviderModels: boolean;
   error: string | null;
@@ -123,6 +133,8 @@ export function Settings({
   onSaveMcpServer(server: McpServerConfig): Promise<void>;
   onRemoveMcpServer(id: string): Promise<void>;
   onTestMcpServer(server: McpServerConfig): Promise<McpServerStatus>;
+  onSystemPrompt(prompt: string): void;
+  onToolEnabled(name: string, enabled: boolean): void;
 }): JSX.Element {
   const themePicker = useRef<HTMLDetailsElement>(null);
 
@@ -204,6 +216,19 @@ export function Settings({
         onProviderTimeoutMinutes={onProviderTimeoutMinutes}
         onProviderRetries={onProviderRetries}
         onSubagent={onSubagent}
+      />
+    );
+  }
+
+  if (page === "model") {
+    return (
+      <ModelSettings
+        systemPrompt={systemPrompt}
+        runtimeMetadata={runtimeMetadata}
+        tools={modelTools}
+        error={error}
+        onSystemPrompt={onSystemPrompt}
+        onToolEnabled={onToolEnabled}
       />
     );
   }

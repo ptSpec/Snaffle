@@ -98,7 +98,7 @@ async function runChild(options: {
       maxSteps: options.maxSteps,
       history: [{
         role: "system",
-        content: `${profilePrompt(options.profile)}\n\n${RETURN_TEMPLATE}\n\nExecution environment: ${options.workspace.environment}`,
+        content: `${profilePrompt(options.profile)}\n\n${RETURN_TEMPLATE}`,
       }],
       onEvent: async (event) => {
         if (event.type === "run.started") {

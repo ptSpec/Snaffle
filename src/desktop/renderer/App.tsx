@@ -68,13 +68,17 @@ const initialState: DesktopState = {
   contextCheckpoints: [],
   modelInstructions: [],
   toolSpecs: [],
+  modelTools: [],
+  systemPrompt: "",
+  runtimeMetadata: "",
+  disabledTools: [],
   skills: [],
   savedMessages: [],
   providerConnections: [],
   mcpServers: [],
   openRouterAvailable: false,
   ketchAvailable: false,
-  webSearchEnabled: true,
+  webSearchEnabled: false,
   webSearchBackend: "ddg",
   webSearchKeyBackends: [],
   runningThreadIds: [],
@@ -101,7 +105,7 @@ const initialState: DesktopState = {
     enabled: false,
     providerConnectionId: "",
     model: "",
-    maxSteps: 30,
+    maxSteps: 50,
   },
   compactionMode: "automatic",
   compactionThreshold: 65,
@@ -1223,6 +1227,31 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setSystemPrompt(systemPrompt: string): Promise<void> {
+    try {
+      const state = await window.desktop.setSystemPrompt(systemPrompt);
+      setDesktopState((current) => ({ ...current, systemPrompt: state.systemPrompt }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function setToolEnabled(name: string, enabled: boolean): Promise<void> {
+    try {
+      const state = await window.desktop.setToolEnabled(name, enabled);
+      setDesktopState((current) => ({
+        ...current,
+        modelTools: state.modelTools,
+        toolSpecs: state.toolSpecs,
+        disabledTools: state.disabledTools,
+      }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   async function setWebSearchBackend(webSearchBackend: WebSearchBackend): Promise<void> {
     try {
       await window.desktop.setWebSearchBackend(webSearchBackend);
@@ -1464,6 +1493,9 @@ export function App(): JSX.Element {
             webSearchKeyBackends={desktopState.webSearchKeyBackends}
             providerConnections={desktopState.providerConnections}
             mcpServers={desktopState.mcpServers}
+            modelTools={desktopState.modelTools}
+            systemPrompt={desktopState.systemPrompt}
+            runtimeMetadata={desktopState.runtimeMetadata}
             providerCatalogs={models}
             loadingProviderModels={loadingModels}
             error={error}
@@ -1489,6 +1521,8 @@ export function App(): JSX.Element {
             onSaveMcpServer={saveMcpServer}
             onRemoveMcpServer={removeMcpServer}
             onTestMcpServer={(server): Promise<McpServerStatus> => window.desktop.testMcpServer(server)}
+            onSystemPrompt={(prompt) => void setSystemPrompt(prompt)}
+            onToolEnabled={(name, enabled) => void setToolEnabled(name, enabled)}
           />
         ) : view === "saved" ? (
           <Bookmarks

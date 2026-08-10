@@ -1,4 +1,5 @@
-import { initialMessages } from "../context/prompt.js";
+import { initialMessages, SYSTEM_PROMPT, withSystemPrompt } from "../context/prompt.js";
+import { currentEnvironmentMessage, withCurrentEnvironment } from "../context/environment.js";
 import type { AttachmentRef } from "../attachments/types.js";
 import type { ActiveCapabilities } from "../capabilities/active.js";
 import { withoutMalformedToolCalls } from "../context/projection.js";
@@ -25,6 +26,7 @@ export type RunAgentOptions = {
   onMessage?: (message: Message, sequence: number) => void | Promise<void>;
   sequenceStart?: number;
   takeSteering?: () => string[];
+  systemPrompt?: string;
 };
 
 export type AgentResult = {
@@ -38,16 +40,20 @@ export const DEFAULT_MAX_STEPS = 50;
 export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
   const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
   const tools = options.capabilities.tools.map(({ tool }) => tool);
-  let messages = withoutMalformedToolCalls(options.history?.length
-    ? [
-        ...options.history,
-        {
-          role: "user" as const,
-          content: options.task,
-          ...(options.attachments?.length ? { attachments: options.attachments } : {}),
-        },
-      ]
-    : initialMessages(options.task, options.workspace.environment, options.attachments));
+  let messages = withSystemPrompt(
+    withoutMalformedToolCalls(options.history?.length
+      ? [
+          ...options.history,
+          {
+            role: "user" as const,
+            content: options.task,
+            ...(options.attachments?.length ? { attachments: options.attachments } : {}),
+          },
+        ]
+      : initialMessages(options.task, options.attachments, options.systemPrompt)),
+    options.systemPrompt ?? SYSTEM_PROMPT,
+  );
+  const environment = currentEnvironmentMessage(options.workspace);
   const toolSpecs = tools.map(({ name, description, inputSchema }) => ({
     name,
     description,
@@ -63,7 +69,8 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
     model: options.provider.model,
     providerId: options.provider.providerId,
     providerConnectionId: options.provider.connectionId,
-    instructions: messages.flatMap((message) => message.role === "system" ? [message.content] : []),
+    instructions: withCurrentEnvironment(messages, environment)
+      .flatMap((message) => message.role === "system" ? [message.content] : []),
   });
 
   try {
@@ -71,7 +78,11 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
       await emit(options, { type: "model.started", step });
       const requestStartedAt = Date.now();
       let generationStartedAt: number | undefined;
-      const rawResponse = await options.provider.complete(messages, toolSpecs, options.signal, (event) =>
+      const rawResponse = await options.provider.complete(
+        withCurrentEnvironment(messages, environment),
+        toolSpecs,
+        options.signal,
+        (event) =>
         {
           if (event.type.endsWith(".delta") && generationStartedAt === undefined) {
             generationStartedAt = Date.now();

@@ -161,10 +161,10 @@ export function AgentSettings({
             <summary>Advanced</summary>
             <NumberSetting
               label="Maximum subagent turns"
-              description="Maximum turns for one delegated task, from 0 to 100. Zero disables delegation."
+              description="Maximum turns for one delegated task, from 0 to 250. Zero disables delegation."
               value={subagent.maxSteps}
               min={0}
-              max={100}
+              max={250}
               onChange={(maxSteps) => update({ maxSteps })}
             />
           </details>

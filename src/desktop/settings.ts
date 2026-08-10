@@ -33,6 +33,8 @@ export type SavedSettings = {
   webSearchBackend?: unknown;
   webSearchApiKeys?: unknown;
   mcpServers?: unknown;
+  systemPrompt?: unknown;
+  disabledTools?: unknown;
 };
 
 export type SettingsUpdate = {
@@ -61,6 +63,8 @@ export type SettingsUpdate = {
   webSearchBackend?: WebSearchBackend;
   webSearchApiKeys?: Partial<Record<KetchSearchBackend, string>>;
   mcpServers?: McpServerConfig[];
+  systemPrompt?: string;
+  disabledTools?: string[];
 };
 
 export function loadSettings(file: string): SavedSettings {
