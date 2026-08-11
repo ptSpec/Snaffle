@@ -34,7 +34,7 @@ export function webSearchTool(options: WebSearchOptions): Tool | undefined {
 
   return {
     name: "web_search",
-    description: "Search the public web when a direct URL is not known. Results include source URLs; cite relevant sources inline immediately after the supported text. Depending on configuration, search may use a free local backend or a paid provider.",
+    description: "Search the public web when a direct URL is not known. Results include source URLs; cite relevant sources inline immediately after the supported text without surrounding brackets, parentheses, or citation numbers. Depending on configuration, search may use a free local backend or a paid provider.",
     inputSchema: {
       type: "object",
       properties: {
@@ -80,7 +80,7 @@ function resultList(results: { title: string; url: string; content: string }[]):
           const excerpt = result.content.length > 2_000
             ? `${result.content.slice(0, 2_000)}… [excerpt truncated]`
             : result.content;
-          return `[${index + 1}] ${result.title}\nURL: ${result.url}\n${excerpt}`;
+          return `Result ${index + 1}: ${result.title}\nURL: ${result.url}\n${excerpt}`;
         }).join("\n\n")
       : "No search results found.",
     sources: results.map(({ title, url }) => ({ title, url })),
@@ -101,7 +101,7 @@ async function searchOpenRouter(
       messages: [
         {
           role: "system",
-          content: "Search the web for the user's query. Return concise research notes grounded only in the sources. Put each Markdown source link inline immediately after the text it supports. Do not collect citations at the end or ask follow-up questions.",
+          content: "Search the web for the user's query. Return concise research notes grounded only in the sources. Put each Markdown source link inline immediately after the text it supports. Do not wrap links in extra brackets, parentheses, or citation numbers. Do not collect citations at the end or ask follow-up questions.",
         },
         { role: "user", content: query },
       ],

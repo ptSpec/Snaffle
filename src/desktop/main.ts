@@ -13,6 +13,10 @@ import {
 } from "../agent/subagents/profile.js";
 import { delegateTaskTool } from "../agent/subagents/tool.js";
 import { AttachmentStore } from "../attachments/store.js";
+import {
+  imageUnderstandingProfile,
+  type ImageUnderstandingProfile,
+} from "../attachments/vision.js";
 import { activeCapabilities, type ActiveTool } from "../capabilities/active.js";
 import {
   DEFAULT_COMPACTION_THRESHOLD,
@@ -114,6 +118,7 @@ let selectedModel = DEVELOPMENT_MODEL;
 let selectedProviderConnectionId = OPENROUTER_CONNECTION_ID;
 let systemPrompt = SYSTEM_PROMPT;
 let disabledTools: string[] = [];
+let imageUnderstanding: ImageUnderstandingProfile = imageUnderstandingProfile(undefined);
 
 
 async function start(): Promise<void> {
@@ -169,6 +174,7 @@ async function start(): Promise<void> {
     ? settings.systemPrompt
     : SYSTEM_PROMPT;
   disabledTools = validDisabledTools(settings.disabledTools);
+  imageUnderstanding = imageUnderstandingProfile(settings.imageUnderstanding);
   webSearchBackend = validWebSearchBackend(settings.webSearchBackend) ?? "ddg";
   loadWebSearchApiKeys(settings.webSearchApiKeys);
   const oldTavilyKey = decodeSecret(settings.tavilyApiKey);
@@ -177,6 +183,7 @@ async function start(): Promise<void> {
     saveWebSearchApiKeys();
   }
   store = await openStore(path.join(app.getPath("userData"), `${PROJECT.slug}.db`));
+  await store.repairLegacyBlankThreadProviders(selectedModel, selectedProviderConnectionId);
   contextCompactor = new ContextCompactor({
     repository: store.context,
     settings: () => ({ mode: compactionMode, threshold: customCompactionThreshold }),
@@ -189,7 +196,12 @@ async function start(): Promise<void> {
   attachments = new AttachmentStore(path.join(app.getPath("userData"), "attachments"));
   if (process.platform === "darwin" && !app.isPackaged) app.dock?.setIcon(applicationIcon());
   if (!app.isPackaged && (await store.state()).workspaces.length === 0) {
-    await store.addWorkspace(process.cwd(), path.basename(process.cwd()) || process.cwd());
+    await store.addWorkspace(
+      process.cwd(),
+      path.basename(process.cwd()) || process.cwd(),
+      selectedModel,
+      selectedProviderConnectionId,
+    );
   }
   registerIpc();
   createWindow();
@@ -246,6 +258,7 @@ function registerIpc(): void {
       subagent,
       systemPrompt,
       disabledTools,
+      imageUnderstanding,
     }),
     sendEvent: sendRunEvent,
   });
@@ -278,6 +291,7 @@ function registerIpc(): void {
     runningWorkspace: runs.isWorkspaceRunning,
     threadsDeleted: runs.forgetThreads,
     defaultModel: () => selectedModel,
+    defaultProviderConnectionId: () => selectedProviderConnectionId,
   });
   registerSavedMessageIpc(store, desktopState);
   registerSearchIpc(store);
@@ -445,6 +459,13 @@ function registerIpc(): void {
     saveSettings({ subagent });
   });
 
+  ipcMain.handle("desktop:set-image-understanding", (_event, value: unknown): void => {
+    const next = imageUnderstandingProfile(value);
+    if (next.providerConnectionId) providerConnections.resolve(next.providerConnectionId);
+    imageUnderstanding = next;
+    saveSettings({ imageUnderstanding });
+  });
+
   ipcMain.handle("desktop:set-compaction", (_event, modeValue: unknown, thresholdValue: unknown): void => {
     if (modeValue !== "automatic" && modeValue !== "custom") throw new Error("Unknown compaction mode");
     const threshold = validCompactionThreshold(thresholdValue);
@@ -567,6 +588,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     subagent,
     compactionMode,
     compactionThreshold: customCompactionThreshold,
+    imageUnderstanding,
   };
 }
 

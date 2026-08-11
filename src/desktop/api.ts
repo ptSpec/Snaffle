@@ -15,6 +15,7 @@ import type { SubagentProfile, ThreadSubagentMode } from "../agent/subagents/pro
 import type { GitChanges, GitDiffPreview, GitFileContents } from "../git/types.js";
 import type { McpServerConfig, McpServerStatus } from "../mcp/types.js";
 import type { SkillSummary } from "../extensions/skills/types.js";
+import type { ImageUnderstandingProfile } from "../attachments/vision.js";
 
 export type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents } from "../git/types.js";
 
@@ -131,6 +132,7 @@ export type DesktopState = {
   subagent: SubagentProfile;
   compactionMode: CompactionMode;
   compactionThreshold: number;
+  imageUnderstanding: ImageUnderstandingProfile;
 };
 
 export type ModelToolSetting = ToolSpec & {
@@ -144,6 +146,7 @@ export type StartRunInput = {
   model: string;
   providerConnectionId: string;
   contextLength: number;
+  imageInputSupported: boolean;
   attachments?: AttachmentRef[];
 };
 
@@ -198,6 +201,7 @@ export interface DesktopApi {
   setProviderTimeoutMinutes(minutes: number): Promise<void>;
   setProviderRetries(retries: number): Promise<void>;
   setSubagent(profile: SubagentProfile): Promise<void>;
+  setImageUnderstanding(profile: ImageUnderstandingProfile): Promise<void>;
   setCompaction(mode: CompactionMode, threshold: number): Promise<void>;
   setSystemPrompt(prompt: string): Promise<DesktopState>;
   setToolEnabled(name: string, enabled: boolean): Promise<DesktopState>;

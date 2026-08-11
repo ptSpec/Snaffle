@@ -9,6 +9,7 @@ import type { Trace } from "../../agent/trace.js";
 import type { AttachmentStore } from "../../attachments/store.js";
 import { MAX_ATTACHMENTS } from "../../attachments/store.js";
 import type { AttachmentRef } from "../../attachments/types.js";
+import { describeImages, type ImageUnderstandingProfile } from "../../attachments/vision.js";
 import { activeCapabilities, type ActiveCapabilities } from "../../capabilities/active.js";
 import { compactionThreshold, type CompactionMode } from "../../context/budget.js";
 import { compactionBoundary, type ContextCompactor } from "../../context/compaction.js";
@@ -52,6 +53,7 @@ export function registerRunIpc(options: {
     subagent: SubagentProfile;
     systemPrompt: string;
     disabledTools: string[];
+    imageUnderstanding: ImageUnderstandingProfile;
   };
   sendEvent: (threadId: string, event: RunEvent) => void;
 }): RunIpc {
@@ -238,6 +240,54 @@ export function registerRunIpc(options: {
       throw error;
     }
 
+    let modelTask = input.task;
+    let modelAttachments = input.attachments;
+    if (!input.imageInputSupported && hasContextImages(conversation, input.attachments)) {
+      const profile = settings.imageUnderstanding;
+      if (!profile.enabled || !profile.providerConnectionId || !profile.model) {
+        active.delete(threadId);
+        throw new Error("The selected model cannot read images. Configure Image understanding in Agent settings.");
+      }
+      try {
+        const connection = options.connection(profile.providerConnectionId);
+        const provider = providerCapacity.limit(
+          options.provider(
+            connection.id,
+            profile.model,
+            (attachment) => options.attachments.resolve(attachment),
+          ),
+          connection.requestLimit,
+        );
+        const currentUser: Message = {
+          role: "user",
+          content: input.task,
+          ...(input.attachments?.length ? { attachments: input.attachments } : {}),
+        };
+        const imageCount = contextImageCount([...conversation, currentUser]);
+        const projected = await describeImages({
+          messages: [...conversation, currentUser],
+          profile,
+          attachments: options.attachments,
+          provider,
+          signal: controller.signal,
+        });
+        const projectedUser = projected.at(-1)!;
+        if (projectedUser.role !== "user") throw new Error("Image interpretation lost the current user message");
+        conversation = projected.slice(0, -1);
+        modelTask = projectedUser.content;
+        modelAttachments = projectedUser.attachments;
+        options.sendEvent(threadId, {
+          type: "image.interpreted",
+          count: imageCount,
+          model: profile.model,
+          connectionName: connection.name,
+        });
+      } catch (error) {
+        active.delete(threadId);
+        throw error;
+      }
+    }
+
     let mainRoute: ProviderRoute;
     try {
       mainRoute = await providerRoute(
@@ -267,14 +317,14 @@ export function registerRunIpc(options: {
       });
     }
     void runAgent({
-      task: input.task,
+      task: modelTask,
       provider: mainRoute.provider,
       capabilities,
       workspace,
       trace: memoryTrace,
       signal: controller.signal,
       history: conversation,
-      ...(input.attachments?.length ? { attachments: input.attachments } : {}),
+      ...(modelAttachments?.length ? { attachments: modelAttachments } : {}),
       maxSteps: settings.maxSteps,
       sequenceStart: nextSequence,
       onMessage: (message, sequence) => options.store.appendMessage(threadId, sequence, message),
@@ -429,6 +479,7 @@ function parseStartRunInput(input: unknown): StartRunInput {
     ? Number(value.contextLength)
     : 128_000;
   const attachments = Array.isArray(value.attachments) ? value.attachments.map(parseAttachment) : [];
+  const imageInputSupported = value.imageInputSupported !== false;
   if (attachments.length > MAX_ATTACHMENTS) throw new Error(`Attach at most ${MAX_ATTACHMENTS} files`);
   if (!task && attachments.length === 0) throw new Error("Enter a task or attach a file before starting a run");
   if (task.length > 30000) throw new Error("Task is too long");
@@ -442,8 +493,25 @@ function parseStartRunInput(input: unknown): StartRunInput {
     providerConnectionId,
     model,
     contextLength,
+    imageInputSupported,
     ...(attachments.length ? { attachments } : {}),
   };
+}
+
+function hasContextImages(history: Message[], attachments?: AttachmentRef[]): boolean {
+  return [
+    ...history.flatMap((message) => message.role === "user" ? message.attachments ?? [] : []),
+    ...attachments ?? [],
+  ]
+    .some((attachment) => attachment.kind === "image" && attachment.includeInContext !== false);
+}
+
+function contextImageCount(messages: Message[]): number {
+  return new Set(messages.flatMap((message) => message.role === "user"
+    ? (message.attachments ?? [])
+      .filter((attachment) => attachment.kind === "image" && attachment.includeInContext !== false)
+      .map((attachment) => attachment.id)
+    : [])).size;
 }
 
 function parseAttachment(input: unknown): AttachmentRef {

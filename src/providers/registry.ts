@@ -66,6 +66,9 @@ const definitions: ProviderDefinition[] = [
   openAICompatibleDefinition("llama-cpp"),
   openAICompatibleDefinition("ollama"),
   openAICompatibleDefinition("lm-studio"),
+  openAICompatibleDefinition("omlx"),
+  openAICompatibleDefinition("mlx-lm"),
+  openAICompatibleDefinition("unsloth-studio"),
   openAICompatibleDefinition("openai-compatible"),
   anthropicCompatibleDefinition(),
 ];
