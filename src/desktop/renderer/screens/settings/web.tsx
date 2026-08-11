@@ -64,13 +64,13 @@ export function WebSettings({
           Try Tavily instead—its free tier includes 1,000 credits each month, enough for up to 1,000 basic searches.
         </p> : null}
 
-        <p className="editor-current">
+        <div className="setting-field web-connection-status">
           <span>Connection status</span>
           <strong>{backend === "openrouter"
             ? openRouterAvailable ? "Ready · uses the existing OpenRouter key" : "OpenRouter key is unavailable"
             : ketchAvailable ? info.needsKey && !configured ? "API key required" : "Ready · powered by Ketch"
             : "Ketch is unavailable in this build"}</strong>
-        </p>
+        </div>
 
         {ketchBackend && ketchBackend !== "ddg" ? <>
         <label className="setting-field text-setting">
@@ -88,7 +88,7 @@ export function WebSettings({
             onChange={(event) => setApiKey(event.target.value)}
           />
         </label>
-        <div className="editor-actions">
+        <div className="editor-actions web-actions">
           <button
             className="primary"
             type="button"

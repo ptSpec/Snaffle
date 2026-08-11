@@ -53,6 +53,23 @@ function markSourceLinks(node: MarkdownNode, sources: Map<string, SourceReferenc
     node.children = [{ type: "text", value: websiteName(source.url) }];
   }
   for (const child of node.children ?? []) markSourceLinks(child, sources);
+  unwrapSourceLink(node, sources);
+}
+
+function unwrapSourceLink(node: MarkdownNode, sources: Map<string, SourceReference>): void {
+  const children = node.children ?? [];
+  for (let index = 1; index < children.length - 1; index += 1) {
+    const link = children[index];
+    if (link?.type !== "link" || !link.url || !sources.has(link.url)) continue;
+    const before = children[index - 1];
+    const after = children[index + 1];
+    if (before?.type !== "text" || after?.type !== "text") continue;
+    const opening = before.value?.at(-1);
+    const closing = after.value?.at(0);
+    if (!((opening === "(" && closing === ")") || (opening === "[" && closing === "]"))) continue;
+    before.value = before.value!.slice(0, -1);
+    after.value = after.value!.slice(1);
+  }
 }
 
 function websiteName(rawUrl: string): string {

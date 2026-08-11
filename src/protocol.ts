@@ -107,6 +107,12 @@ export type RunEvent =
       model: string;
     }
   | {
+      type: "image.interpreted";
+      count: number;
+      model: string;
+      connectionName: string;
+    }
+  | {
       type: "context.applied";
       id: string;
       injectedCharacters: number;

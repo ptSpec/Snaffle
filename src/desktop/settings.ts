@@ -6,6 +6,7 @@ import type { SubagentProfile } from "../agent/subagents/profile.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js";
 import type { McpServerConfig } from "../mcp/types.js";
 import type { FontId } from "./typography.js";
+import type { ImageUnderstandingProfile } from "../attachments/vision.js";
 
 export type SavedSettings = {
   themeId?: unknown;
@@ -35,6 +36,7 @@ export type SavedSettings = {
   mcpServers?: unknown;
   systemPrompt?: unknown;
   disabledTools?: unknown;
+  imageUnderstanding?: unknown;
 };
 
 export type SettingsUpdate = {
@@ -65,6 +67,7 @@ export type SettingsUpdate = {
   mcpServers?: McpServerConfig[];
   systemPrompt?: string;
   disabledTools?: string[];
+  imageUnderstanding?: ImageUnderstandingProfile;
 };
 
 export function loadSettings(file: string): SavedSettings {

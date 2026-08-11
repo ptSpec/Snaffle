@@ -38,15 +38,18 @@ test("provider-declared model variants preserve the base model identity", () => 
 
 test("local provider presets reuse the OpenAI-compatible runtime", () => {
   const expected = [
-    ["llama-cpp", "http://localhost:8080/v1"],
-    ["ollama", "http://localhost:11434/v1"],
-    ["lm-studio", "http://localhost:1234/v1"],
+    ["llama-cpp", "http://localhost:8080/v1", "none"],
+    ["ollama", "http://localhost:11434/v1", "none"],
+    ["lm-studio", "http://localhost:1234/v1", "none"],
+    ["omlx", "http://localhost:8000/v1", "optional"],
+    ["mlx-lm", "http://localhost:8080/v1", "none"],
+    ["unsloth-studio", "http://localhost:8888/v1", "optional"],
   ];
 
-  for (const [id, baseUrl] of expected) {
+  for (const [id, baseUrl, apiKey] of expected) {
     const profile = providerProfile(id!);
     assert.equal(profile.defaultBaseUrl, baseUrl);
-    assert.equal(profile.apiKey, "none");
+    assert.equal(profile.apiKey, apiKey);
     assert.ok(providerDefinitions().some((definition) => definition.id === id));
 
     const provider = createProvider({

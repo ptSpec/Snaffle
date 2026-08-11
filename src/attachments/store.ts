@@ -65,6 +65,29 @@ export class AttachmentStore {
       : { type: "pdf", data };
   }
 
+  async imageDescription(id: string, connectionId: string, model: string): Promise<string | null> {
+    try {
+      const value = JSON.parse(await readFile(path.join(this.folder(safeId(id)), "vision.json"), "utf8")) as {
+        connectionId?: unknown;
+        model?: unknown;
+        description?: unknown;
+      };
+      return value.connectionId === connectionId && value.model === model && typeof value.description === "string"
+        ? value.description
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async saveImageDescription(id: string, connectionId: string, model: string, description: string): Promise<void> {
+    await writeFile(
+      path.join(this.folder(safeId(id)), "vision.json"),
+      JSON.stringify({ connectionId, model, description }),
+      "utf8",
+    );
+  }
+
   private async importFile(filePath: string): Promise<AttachmentPreview> {
     const info = await stat(filePath);
     if (!info.isFile()) throw new Error(`${path.basename(filePath)} is not a file`);

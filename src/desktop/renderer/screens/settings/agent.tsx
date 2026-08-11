@@ -2,6 +2,7 @@ import { useState } from "react";
 import { SearchPicker } from "../../components/search-picker.js";
 import { NumberSetting } from "./controls.js";
 import type { SubagentProfile } from "../../../../agent/subagents/profile.js";
+import type { ImageUnderstandingProfile } from "../../../../attachments/vision.js";
 import type { ProviderCatalog, ProviderConnection } from "../../../../providers/provider.js";
 
 export function AgentSettings({
@@ -9,6 +10,7 @@ export function AgentSettings({
   providerTimeoutMinutes,
   providerRetries,
   subagent,
+  imageUnderstanding,
   providerConnections,
   providerCatalogs,
   error,
@@ -16,11 +18,13 @@ export function AgentSettings({
   onProviderTimeoutMinutes,
   onProviderRetries,
   onSubagent,
+  onImageUnderstanding,
 }: {
   maxSteps: number;
   providerTimeoutMinutes: number;
   providerRetries: number;
   subagent: SubagentProfile;
+  imageUnderstanding: ImageUnderstandingProfile;
   providerConnections: ProviderConnection[];
   providerCatalogs: ProviderCatalog[];
   error: string | null;
@@ -28,8 +32,9 @@ export function AgentSettings({
   onProviderTimeoutMinutes: (minutes: number) => void;
   onProviderRetries: (retries: number) => void;
   onSubagent: (profile: SubagentProfile) => void;
+  onImageUnderstanding: (profile: ImageUnderstandingProfile) => void;
 }): JSX.Element {
-  const [openSection, setOpenSection] = useState<"agent" | "subagent" | null>("agent");
+  const [openSection, setOpenSection] = useState<"agent" | "subagent" | "images" | null>("agent");
   const connections = providerConnections.filter((connection) => connection.enabled);
   const modelChoices = providerCatalogs.flatMap((catalog) =>
     connections.some((connection) => connection.id === catalog.connection.id)
@@ -38,6 +43,7 @@ export function AgentSettings({
           connectionName: catalog.connection.name,
           modelId: model.id,
           modelName: model.name,
+          inputModalities: model.inputModalities,
         }))
       : [],
   );
@@ -46,6 +52,12 @@ export function AgentSettings({
     choice.connectionId === subagent.providerConnectionId && choice.modelId === subagent.model
   );
   const subagentModelOptions = modelChoices.map((choice) => ({
+    value: modelValue(choice.connectionId, choice.modelId),
+    label: choice.modelName,
+    detail: `${choice.connectionName} · ${choice.modelId}`,
+  }));
+  const imageModelChoices = modelChoices.filter((choice) => choice.inputModalities?.includes("image"));
+  const imageModelOptions = imageModelChoices.map((choice) => ({
     value: modelValue(choice.connectionId, choice.modelId),
     label: choice.modelName,
     detail: `${choice.connectionName} · ${choice.modelId}`,
@@ -65,6 +77,15 @@ export function AgentSettings({
   function selectModel(value: string): void {
     const [connectionId, model] = value.split("\n");
     update({ providerConnectionId: connectionId ?? "", model: model ?? "" });
+  }
+
+  function selectImageModel(value: string): void {
+    const [providerConnectionId, model] = value.split("\n");
+    onImageUnderstanding({
+      ...imageUnderstanding,
+      providerConnectionId: providerConnectionId ?? "",
+      model: model ?? "",
+    });
   }
 
   return (
@@ -168,6 +189,47 @@ export function AgentSettings({
               onChange={(maxSteps) => update({ maxSteps })}
             />
           </details>
+          </div></div>
+        </div>
+
+        <div className={openSection === "images" ? "agent-settings-card open" : "agent-settings-card"}>
+          <button
+            className="agent-settings-summary"
+            type="button"
+            aria-expanded={openSection === "images"}
+            onClick={() => setOpenSection((value) => value === "images" ? null : "images")}
+          >
+            <span><strong>Image understanding</strong><small>Optional vision helper for text-only models.</small></span>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+          </button>
+          <div className="agent-settings-reveal"><div className="agent-settings-body">
+            <label className="setting-field">
+              <span>
+                <strong>Use fallback helper</strong>
+                <small>When enabled, images are automatically routed here only when the main model is text-only.</small>
+              </span>
+              <input
+                className="selection-checkbox"
+                type="checkbox"
+                checked={imageUnderstanding.enabled}
+                onChange={(event) => onImageUnderstanding({ ...imageUnderstanding, enabled: event.target.checked })}
+              />
+            </label>
+            <div className="setting-field">
+              <span>
+                <strong>Vision model</strong>
+                <small>May use any configured provider independently of the main model.</small>
+              </span>
+              <SearchPicker
+                value={modelValue(imageUnderstanding.providerConnectionId, imageUnderstanding.model)}
+                disabled={!imageModelChoices.length}
+                className="subagent-model-picker"
+                placeholder={imageModelChoices.length ? "Select vision model" : "No vision models available"}
+                searchPlaceholder="Search vision models…"
+                options={imageModelOptions}
+                onChange={selectImageModel}
+              />
+            </div>
           </div></div>
         </div>
 

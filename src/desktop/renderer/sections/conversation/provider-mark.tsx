@@ -29,6 +29,9 @@ const knownProviders: Array<{
   { id: "ollama", name: "Ollama", localPort: "11434", short: "OL" },
   { id: "lm-studio", name: "LM Studio", localPort: "1234", short: "LM" },
   { id: "llama-cpp", name: "llama.cpp", hosts: ["llama.app"], localPort: "8080" },
+  { id: "omlx", name: "oMLX", localPort: "8000" },
+  { id: "mlx-lm", name: "MLX-LM", localPort: "8080" },
+  { id: "unsloth-studio", name: "Unsloth Studio", localPort: "8888" },
 ];
 
 export function providerVisual(baseUrl: string, providerId?: string): ProviderVisual {
@@ -42,13 +45,19 @@ export function providerVisual(baseUrl: string, providerId?: string): ProviderVi
   return {
     id: provider.id,
     name: provider.name,
-    logo: provider.id === "openrouter" || provider.id === "deepseek" || provider.id === "llama-cpp",
+    logo: ["openrouter", "deepseek", "llama-cpp", "omlx", "mlx-lm", "unsloth-studio"].includes(provider.id),
     mark: provider.id === "openrouter"
       ? <OpenRouterMark />
       : provider.id === "deepseek"
         ? <img src={deepSeekLogo} alt="" className="deepseek-mark" />
       : provider.id === "llama-cpp"
         ? <LlamaCppMark />
+      : provider.id === "omlx"
+        ? <OmlxMark />
+      : provider.id === "mlx-lm"
+        ? <MlxMark />
+      : provider.id === "unsloth-studio"
+        ? <UnslothMark />
         : <span className="provider-monogram" aria-hidden="true">{provider.short}</span>,
   };
 }
@@ -87,6 +96,37 @@ function LlamaCppMark(): JSX.Element {
     <svg viewBox="0 0 600 600" aria-hidden="true" className="llama-cpp-mark">
       <path d="M600 392 504.249 558l-.112-.071C487.252 584.069 458.193 600 426.864 600H120l120-208h360Z" />
       <path d="M240 392H0L199.602 46.025C216.032 17.546 246.411 0 279.29 0h186.864L240 392Z" />
+    </svg>
+  );
+}
+
+function OmlxMark(): JSX.Element {
+  return (
+    <svg viewBox="0 0 32 32" aria-hidden="true" className="local-provider-mark omlx-mark">
+      <rect width="32" height="32" rx="8" />
+      <path d="M8 22c1.4-8.5 4.9-13 10.4-13 2.8 0 4.7 1.1 6.1 2.7M13 22c1-4.9 2.8-7.4 5.4-7.4 1.4 0 2.4.5 3.2 1.4" />
+      <circle cx="20.7" cy="10.2" r="1.2" />
+    </svg>
+  );
+}
+
+function MlxMark(): JSX.Element {
+  return (
+    <svg viewBox="0 0 32 32" aria-hidden="true" className="local-provider-mark mlx-mark">
+      <rect width="32" height="32" rx="8" />
+      <path d="M5 22V10l5 8 5-8v12M18 10v12h5M24 10l5 12M29 10l-5 12" />
+    </svg>
+  );
+}
+
+function UnslothMark(): JSX.Element {
+  return (
+    <svg viewBox="0 0 32 32" aria-hidden="true" className="local-provider-mark unsloth-mark">
+      <rect width="32" height="32" rx="8" />
+      <circle cx="16" cy="16" r="10" />
+      <path d="M10.5 14.5c1.6-2 3.4-2 5.5 0 2.1-2 3.9-2 5.5 0M12 19c2.7 2.1 5.3 2.1 8 0" />
+      <circle cx="12.7" cy="15.2" r="1" />
+      <circle cx="19.3" cy="15.2" r="1" />
     </svg>
   );
 }
