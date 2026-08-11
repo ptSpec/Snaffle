@@ -63,6 +63,13 @@ export function GitPanel({
   }, [refresh, running, workspace]);
 
   useEffect(() => {
+    if (!workspace || running) return;
+    const refreshOnFocus = (): void => { void refresh(); };
+    window.addEventListener("focus", refreshOnFocus);
+    return () => window.removeEventListener("focus", refreshOnFocus);
+  }, [refresh, running, workspace]);
+
+  useEffect(() => {
     if (!workspace || !selectedPath) {
       setFileContents(null);
       setDirty(false);
