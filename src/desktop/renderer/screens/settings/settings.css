@@ -299,19 +299,22 @@
 }
 
 .subagent-advanced,
-.provider-advanced {
+.provider-advanced,
+.editor-advanced {
   border-top: 1px solid var(--border-default);
 }
 
 .subagent-advanced > summary,
-.provider-advanced > summary {
+.provider-advanced > summary,
+.editor-advanced > summary {
   padding: 16px 0;
   color: var(--text-primary);
   cursor: pointer;
 }
 
 .subagent-advanced .setting-field,
-.provider-advanced .setting-field {
+.provider-advanced .setting-field,
+.editor-advanced .setting-field {
   border-top: 1px solid var(--border-default);
 }
 
@@ -1141,6 +1144,16 @@
 }
 
 .editor-actions.provider-actions {
+  padding-top: 16px;
+}
+
+.web-connection-status > strong {
+  color: var(--text-strong);
+  text-align: right;
+}
+
+.web-actions {
+  gap: 12px;
   padding-top: 16px;
 }
 

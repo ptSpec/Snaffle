@@ -79,7 +79,9 @@ export function ModelSettings({
                     <strong>{tool.name}</strong>
                     <small>{tool.available
                       ? tool.enabled ? "Available to models" : "Disabled on this page"
-                      : "Unavailable — enable or configure its feature first"}</small>
+                      : tool.name === "delegate_task"
+                        ? "Unavailable — enable and configure Subagent in Agent settings first"
+                        : "Unavailable — enable or configure its feature first"}</small>
                   </span>
                   <input
                     className="selection-checkbox"

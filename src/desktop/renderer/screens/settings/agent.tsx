@@ -205,8 +205,8 @@ export function AgentSettings({
           <div className="agent-settings-reveal"><div className="agent-settings-body">
             <label className="setting-field">
               <span>
-                <strong>Enabled</strong>
-                <small>Interpret attached images only when the main model cannot read them.</small>
+                <strong>Use fallback helper</strong>
+                <small>When enabled, images are automatically routed here only when the main model is text-only.</small>
               </span>
               <input
                 className="selection-checkbox"
