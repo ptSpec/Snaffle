@@ -38,43 +38,45 @@ export function EditorSettings({
           <button type="button" disabled={!command} onClick={() => onChange("", "")}>Use system default</button>
         </div>
 
-        <label className="setting-field text-setting">
-          <span>
-            <strong>Command (advanced)</strong>
-            <small>Optionally enter an executable path or CLI command manually.</small>
-          </span>
-          <input
-            value={commandInput}
-            onChange={(event) => setCommandInput(event.target.value)}
-            onBlur={save}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
-              if (event.key === "Escape") setCommandInput(command);
-            }}
-            placeholder="code-insiders"
-          />
-        </label>
-        <label className="setting-field text-setting">
-          <span>
-            <strong>Arguments (advanced)</strong>
-            <small>Leave blank to pass the file. Use {"{path}"} for the file or {"{folder}"} for its folder.</small>
-          </span>
-          <input
-            value={argumentsInput}
-            onChange={(event) => setArgumentsInput(event.target.value)}
-            onBlur={save}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
-              if (event.key === "Escape") setArgumentsInput(argumentsTemplate);
-            }}
-            placeholder="--goto {path}"
-          />
-        </label>
+        <details className="editor-advanced">
+          <summary>Advanced</summary>
+          <label className="setting-field text-setting">
+            <span>
+              <strong>Command</strong>
+              <small>Optionally enter an executable path or CLI command manually.</small>
+            </span>
+            <input
+              value={commandInput}
+              onChange={(event) => setCommandInput(event.target.value)}
+              onBlur={save}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+                if (event.key === "Escape") setCommandInput(command);
+              }}
+              placeholder="code-insiders"
+            />
+          </label>
+          <label className="setting-field text-setting">
+            <span>
+              <strong>Arguments</strong>
+              <small>Leave blank to pass the file. Use {"{path}"} for the file or {"{folder}"} for its folder.</small>
+            </span>
+            <input
+              value={argumentsInput}
+              onChange={(event) => setArgumentsInput(event.target.value)}
+              onBlur={save}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+                if (event.key === "Escape") setArgumentsInput(argumentsTemplate);
+              }}
+              placeholder="--goto {path}"
+            />
+          </label>
+        </details>
 
         {error ? <p className="settings-error">{error}</p> : null}
       </div>
     </section>
   );
 }
-
 
