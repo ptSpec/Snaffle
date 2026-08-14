@@ -413,7 +413,7 @@ export function Sidebar({
               type="button"
               onClick={() => onSettingsPage("model")}
             >
-              <span>Model</span>
+              <span>Model surface</span>
             </button>
             <button
               className={settingsPage === "context" ? "sidebar-action active" : "sidebar-action"}

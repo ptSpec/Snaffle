@@ -76,6 +76,7 @@ const initialState: DesktopState = {
   skills: [],
   savedMessages: [],
   providerConnections: [],
+  mcpEnabled: true,
   mcpServers: [],
   openRouterAvailable: false,
   ketchAvailable: false,
@@ -1111,6 +1112,15 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setMcpEnabled(enabled: boolean): Promise<void> {
+    setError(null);
+    try {
+      setDesktopState(withoutConversation(await window.desktop.setMcpEnabled(enabled)));
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   async function removeMcpServer(id: string): Promise<void> {
     setError(null);
     try {
@@ -1513,6 +1523,7 @@ export function App(): JSX.Element {
             webSearchBackend={desktopState.webSearchBackend}
             webSearchKeyBackends={desktopState.webSearchKeyBackends}
             providerConnections={desktopState.providerConnections}
+            mcpEnabled={desktopState.mcpEnabled}
             mcpServers={desktopState.mcpServers}
             modelTools={desktopState.modelTools}
             systemPrompt={desktopState.systemPrompt}
@@ -1540,6 +1551,7 @@ export function App(): JSX.Element {
             onSaveProvider={saveProviderConnection}
             onRemoveProvider={removeProviderConnection}
             onTestProvider={(id) => window.desktop.getProviderStatus(id)}
+            onMcpEnabled={(enabled) => void setMcpEnabled(enabled)}
             onSaveMcpServer={saveMcpServer}
             onRemoveMcpServer={removeMcpServer}
             onTestMcpServer={(server): Promise<McpServerStatus> => window.desktop.testMcpServer(server)}
