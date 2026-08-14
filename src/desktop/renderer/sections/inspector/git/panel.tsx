@@ -209,7 +209,12 @@ export function GitPanel({
       {selectedFile ? (
         <div className="change-detail">
           <div className="change-detail-heading">
-            <button className="change-back" type="button" onClick={() => setSelectedPath(null)} aria-label="Back to changed files">‹</button>
+            <button className="change-back" type="button" onClick={() => setSelectedPath(null)} aria-label="Back to changed files">
+              <svg className="change-back-icon" aria-hidden="true" viewBox="0 0 10 16">
+                <path d="M8 1 1 8l7 7" />
+              </svg>
+              <span>Back</span>
+            </button>
             <SearchPicker
               className="change-file-picker"
               value={selectedFile.path}

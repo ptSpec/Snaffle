@@ -15,6 +15,39 @@
   flex-direction: column;
 }
 
+.sidebar-context-menu {
+  position: fixed;
+  z-index: 100;
+  display: grid;
+  width: 210px;
+  padding: 5px;
+  background: var(--panel);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 30%);
+}
+
+.sidebar-context-menu button {
+  padding: 7px 9px;
+  color: var(--text-primary);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+}
+
+.sidebar-context-menu button:hover:not(:disabled) {
+  background: var(--hover-background);
+}
+
+.sidebar-context-menu button.danger {
+  color: var(--status-danger-text);
+}
+
+.sidebar-context-menu button:disabled {
+  opacity: 0.42;
+}
+
 .settings-navigation {
   display: flex;
   flex-direction: column;
