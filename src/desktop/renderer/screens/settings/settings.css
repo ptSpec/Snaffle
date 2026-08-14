@@ -134,6 +134,38 @@
   gap: 10px;
 }
 
+.model-tool-section {
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+}
+
+.model-tool-section > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  cursor: pointer;
+}
+
+.model-tool-section > summary small {
+  color: var(--text-muted);
+}
+
+.model-tool-section > .model-tool-list {
+  padding: 0 10px 10px;
+}
+
+.model-tool-section-title {
+  margin: 22px 0 10px;
+  color: var(--text-strong);
+  font-size: calc(15px * var(--interface-font-scale));
+}
+
+.model-feature-tools {
+  display: grid;
+  gap: 10px;
+}
+
 .model-tool {
   padding: 13px 14px;
   border: 1px solid var(--border-default);
@@ -530,7 +562,7 @@
 
 .mcp-add-server {
   width: max-content;
-  margin-bottom: 14px;
+  margin-top: 14px;
   padding: 8px 11px;
   color: var(--text-primary);
   background: transparent;

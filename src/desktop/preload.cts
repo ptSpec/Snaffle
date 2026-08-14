@@ -37,6 +37,7 @@ const api: DesktopApi = {
   getProviderStatus: (connectionId: string) => ipcRenderer.invoke("desktop:get-provider-status", connectionId),
   saveProviderConnection: (input: ProviderConnectionInput) => ipcRenderer.invoke("desktop:save-provider-connection", input),
   removeProviderConnection: (connectionId: string) => ipcRenderer.invoke("desktop:remove-provider-connection", connectionId),
+  setMcpEnabled: (enabled: boolean) => ipcRenderer.invoke("desktop:set-mcp-enabled", enabled),
   saveMcpServer: (server: McpServerConfig) => ipcRenderer.invoke("desktop:save-mcp-server", server),
   removeMcpServer: (id: string) => ipcRenderer.invoke("desktop:remove-mcp-server", id),
   testMcpServer: (server: McpServerConfig) => ipcRenderer.invoke("desktop:test-mcp-server", server),

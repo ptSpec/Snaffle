@@ -33,6 +33,7 @@ export type SavedSettings = {
   webSearchEnabled?: unknown;
   webSearchBackend?: unknown;
   webSearchApiKeys?: unknown;
+  mcpEnabled?: unknown;
   mcpServers?: unknown;
   systemPrompt?: unknown;
   disabledTools?: unknown;
@@ -64,6 +65,7 @@ export type SettingsUpdate = {
   webSearchEnabled?: boolean;
   webSearchBackend?: WebSearchBackend;
   webSearchApiKeys?: Partial<Record<KetchSearchBackend, string>>;
+  mcpEnabled?: boolean;
   mcpServers?: McpServerConfig[];
   systemPrompt?: string;
   disabledTools?: string[];

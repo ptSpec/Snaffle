@@ -5,14 +5,18 @@ import type { McpServerConfig, McpServerStatus, McpValue } from "../../../../mcp
 const NEW_SERVER = "new";
 
 export function McpSettings({
+  enabled,
   servers,
   error,
+  onEnabled,
   onSave,
   onRemove,
   onTest,
 }: {
+  enabled: boolean;
   servers: McpServerConfig[];
   error: string | null;
+  onEnabled(enabled: boolean): void;
   onSave(server: McpServerConfig): Promise<void>;
   onRemove(id: string): Promise<void>;
   onTest(server: McpServerConfig): Promise<McpServerStatus>;
@@ -216,6 +220,19 @@ export function McpSettings({
         <p className="eyebrow">Settings</p>
         <h1>MCP</h1>
         <p className="settings-description">Connect external tools without loading every tool into each model request.</p>
+
+        <label className="setting-field">
+          <span>
+            <strong>MCP tools</strong>
+            <small>Expose enabled MCP servers to the model. Turning this off keeps every server configuration saved.</small>
+          </span>
+          <input
+            className="selection-checkbox"
+            type="checkbox"
+            checked={enabled}
+            onChange={(event) => onEnabled(event.target.checked)}
+          />
+        </label>
 
         <button
           className="mcp-add-server"

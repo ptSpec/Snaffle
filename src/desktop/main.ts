@@ -118,6 +118,7 @@ let selectedModel = DEVELOPMENT_MODEL;
 let selectedProviderConnectionId = OPENROUTER_CONNECTION_ID;
 let systemPrompt = SYSTEM_PROMPT;
 let disabledTools: string[] = [];
+let mcpEnabled = true;
 let imageUnderstanding: ImageUnderstandingProfile = imageUnderstandingProfile(undefined);
 
 
@@ -159,6 +160,7 @@ async function start(): Promise<void> {
     legacyFallbacks(settings.subagent, subagent.providerConnectionId),
   );
   configuredMcpServers = loadMcpSecrets(mcpServers(settings.mcpServers));
+  mcpEnabled = settings.mcpEnabled !== false;
   mcpManager.configure(configuredMcpServers);
   if (hasLegacySubagentRouting(settings.subagent)) {
     saveSettings({ providerConnections: providerConnections.serialize(), subagent });
@@ -276,6 +278,11 @@ function registerIpc(): void {
   });
   registerMcpIpc({
     manager: mcpManager,
+    enabled: () => mcpEnabled,
+    setEnabled: (enabled) => {
+      mcpEnabled = enabled;
+      saveSettings({ mcpEnabled });
+    },
     servers: () => configuredMcpServers,
     update: (servers) => {
       configuredMcpServers = servers;
@@ -489,6 +496,7 @@ function registerIpc(): void {
   ): Promise<DesktopState> => {
     if (typeof rawName !== "string" || !MODEL_TOOL_NAMES.has(rawName)) throw new Error("Unknown tool");
     if (typeof rawEnabled !== "boolean") throw new Error("Tool state must be true or false");
+    if (!MODEL_TOGGLEABLE_TOOL_NAMES.has(rawName)) throw new Error("This tool is controlled by its feature settings");
     disabledTools = rawEnabled
       ? disabledTools.filter((name) => name !== rawName)
       : [...new Set([...disabledTools, rawName])];
@@ -555,6 +563,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     skills: skillsFor(workspace?.path).summaries(),
     savedMessages: await store.savedMessages.summaries(),
     providerConnections: providerConnections.list(),
+    mcpEnabled,
     mcpServers: publicMcpServers(configuredMcpServers),
     openRouterAvailable: providerConnections.list().find(
       (connection) => connection.id === OPENROUTER_CONNECTION_ID,
@@ -642,7 +651,7 @@ function configuredTools(workspacePath?: string): ActiveTool[] {
   if (skills.summaries().length) {
     tools.push({ source: { type: "built-in" }, tool: skillTool(skills) });
   }
-  if (mcpManager.enabled().length) {
+  if (mcpEnabled && mcpManager.enabled().length) {
     tools.push({ source: { type: "mcp", serverId: "broker" }, tool: mcpTool(mcpManager) });
   }
   return tools;
@@ -665,9 +674,12 @@ const MODEL_TOOL_NAMES = new Set([
   "web_search", "web_fetch", "youtube_transcript", "use_skill", "mcp", "delegate_task",
 ]);
 
+const MODEL_TOGGLEABLE_TOOL_NAMES = new Set(["use_skill"]);
+
 function validDisabledTools(value: unknown): string[] {
   return Array.isArray(value)
-    ? [...new Set(value.filter((name): name is string => typeof name === "string" && MODEL_TOOL_NAMES.has(name)))]
+    ? [...new Set(value.filter((name): name is string =>
+        typeof name === "string" && MODEL_TOGGLEABLE_TOOL_NAMES.has(name)))]
     : [];
 }
 
