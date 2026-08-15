@@ -61,6 +61,8 @@
 
 .inspector-content {
   box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-inline: 10px;
 }
 

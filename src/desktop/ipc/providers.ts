@@ -35,8 +35,22 @@ export function registerProviderIpc(options: {
       }));
   });
 
-  ipcMain.handle("desktop:get-provider-status", async (_event, rawId: unknown) => {
-    return providerStatus(options.connections.resolve(parseId(rawId, "Provider connection")));
+  ipcMain.handle("desktop:get-provider-status", async (_event, rawInput: unknown) => {
+    const input = parseProviderConnection(rawInput);
+    const stored = options.connections.resolve(parseId(input.id, "Provider connection"));
+    const apiKey = input.apiKey?.trim() || stored.apiKey;
+    return providerStatus({
+      ...stored,
+      name: input.name.trim() || stored.name,
+      baseUrl: (input.baseUrl.trim() || stored.baseUrl).replace(/\/$/, ""),
+      enabled: input.enabled,
+      requestLimit: input.requestLimit,
+      fallbackProviderConnectionId: input.fallbackProviderConnectionId,
+      fallbackModel: input.fallbackModel,
+      manualModels: input.manualModels,
+      hasApiKey: Boolean(apiKey),
+      ...(apiKey ? { apiKey } : {}),
+    });
   });
 
   ipcMain.handle("desktop:save-provider-connection", async (

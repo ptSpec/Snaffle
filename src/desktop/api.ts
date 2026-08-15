@@ -172,7 +172,7 @@ export interface DesktopApi {
   removeWorkspace(workspaceId: string): Promise<DesktopState>;
   searchConversations(query: string): Promise<DesktopSearchResult[]>;
   listProviderModels(): Promise<ProviderCatalog[]>;
-  getProviderStatus(connectionId: string): Promise<ProviderStatus>;
+  getProviderStatus(input: ProviderConnectionInput): Promise<ProviderStatus>;
   saveProviderConnection(input: ProviderConnectionInput): Promise<DesktopState>;
   removeProviderConnection(connectionId: string): Promise<DesktopState>;
   setMcpEnabled(enabled: boolean): Promise<DesktopState>;
