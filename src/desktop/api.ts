@@ -88,6 +88,15 @@ export type SavedMessageSource = {
   entryId: string;
 };
 
+export type KeptAsideMessage = {
+  entryId: string;
+  sequence: number;
+  text: string;
+  createdAt: number;
+};
+
+export const MAX_KEPT_ASIDE_MESSAGES = 3;
+
 export type DesktopState = {
   workspace: DesktopWorkspace | null;
   workspaces: DesktopWorkspace[];
@@ -102,6 +111,7 @@ export type DesktopState = {
   disabledTools: string[];
   skills: SkillSummary[];
   savedMessages: SavedMessageSummary[];
+  keptAside: KeptAsideMessage[];
   providerConnections: ProviderConnection[];
   mcpEnabled: boolean;
   mcpServers: McpServerConfig[];
@@ -216,6 +226,8 @@ export interface DesktopApi {
   deleteSavedMessage(id: string): Promise<SavedMessageSummary[]>;
   listSavedMessages(): Promise<SavedMessage[]>;
   openSavedMessage(id: string): Promise<SavedMessageSource | null>;
+  keepAside(threadId: string, entryId: string): Promise<KeptAsideMessage[]>;
+  removeAside(threadId: string, entryId: string): Promise<KeptAsideMessage[]>;
   getGitChanges(workspaceId: string): Promise<GitChanges>;
   getGitFile(workspaceId: string, path: string): Promise<GitFileContents>;
   getGitDiffPreview(workspaceId: string, path: string): Promise<GitDiffPreview>;

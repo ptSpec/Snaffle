@@ -54,6 +54,8 @@ export type TimelineItem =
       presentation?: ToolPresentation;
     };
 
+export type KeepableTimelineItem = Extract<TimelineItem, { kind: "assistant" }>;
+
 let itemNumber = 0;
 
 export function addRunEvent(
@@ -297,6 +299,16 @@ export function addRunEvent(
 
   if (event.type === "run.completed") {
     setTimeline((items) => collapseCompletedRuns(stopActivity(items)));
+    return;
+  }
+
+  if (event.type === "run.persisted") {
+    const entryIds = new Map(event.entries.map((entry) => [entry.sequence, entry.entryId]));
+    setTimeline((items) => items.map((item) => {
+      if ((item.kind !== "user" && item.kind !== "assistant") || item.sequence === undefined) return item;
+      const entryId = entryIds.get(item.sequence);
+      return entryId ? { ...item, entryId } : item;
+    }));
     return;
   }
 

@@ -7,6 +7,7 @@ import type { Message } from "../protocol.js";
 import type { ThreadSubagentMode } from "../agent/subagents/profile.js";
 import { ContextStore } from "../context/store.js";
 import type { DesktopEntry, DesktopSearchResult, DesktopThread, DesktopWorkspace } from "./api.js";
+import { AsideStore } from "./aside-store.js";
 import { SavedMessageStore } from "./saved-messages-store.js";
 
 export type StoreState = {
@@ -24,10 +25,12 @@ export async function openStore(filename: string): Promise<DesktopStore> {
 }
 
 export class DesktopStore {
+  readonly asides: AsideStore;
   readonly savedMessages: SavedMessageStore;
   readonly context: ContextStore;
 
   constructor(private readonly database: Client) {
+    this.asides = new AsideStore(database);
     this.savedMessages = new SavedMessageStore(database);
     this.context = new ContextStore(database);
   }
@@ -125,6 +128,7 @@ export class DesktopStore {
       );
     }
     await this.database.execute("PRAGMA foreign_keys = ON");
+    await this.asides.initialize();
     const searchVersion = await this.database.execute({
       sql: "SELECT value FROM app_state WHERE key = ?",
       args: ["search_index_version"],

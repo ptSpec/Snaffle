@@ -148,5 +148,5 @@ export type RunEvent =
       presentation?: ToolPresentation;
     }
   | { type: "run.completed"; text: string; steps: number }
-  | { type: "run.persisted" }
+  | { type: "run.persisted"; entries: Array<{ sequence: number; entryId: string }> }
   | { type: "run.failed"; message: string };

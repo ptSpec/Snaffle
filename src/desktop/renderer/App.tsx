@@ -13,7 +13,15 @@ import {
 import type { AttachmentPreview, AttachmentRef } from "../../attachments/types.js";
 import type { ImageUnderstandingProfile } from "../../attachments/vision.js";
 import type { CommandApprovalDecision } from "../../protocol.js";
-import type { DesktopApi, DesktopRunEvent, DesktopSearchResult, DesktopState, DesktopThread, SavedMessage } from "../api.js";
+import {
+  MAX_KEPT_ASIDE_MESSAGES,
+  type DesktopApi,
+  type DesktopRunEvent,
+  type DesktopSearchResult,
+  type DesktopState,
+  type DesktopThread,
+  type SavedMessage,
+} from "../api.js";
 import type { ProviderCatalog, ProviderConnectionInput, ProviderStatus } from "../../providers/provider.js";
 import type { CompactionMode } from "../../context/budget.js";
 import type { SubagentProfile, ThreadSubagentMode } from "../../agent/subagents/profile.js";
@@ -42,6 +50,7 @@ import { Sidebar, type AppView, type SettingsPage } from "./sections/sidebar/sid
 import { InspectorPanel, type InspectorTab } from "./sections/inspector/panel.js";
 import type { OrbMotion } from "./components/thinking-orb.js";
 import { Composer } from "./sections/conversation/composer.js";
+import { AsideShelf } from "./sections/conversation/aside-shelf.js";
 import { CommandPalette, type AppCommand } from "./commands/palette.js";
 import {
   TimelineEntry,
@@ -75,6 +84,7 @@ const initialState: DesktopState = {
   disabledTools: [],
   skills: [],
   savedMessages: [],
+  keptAside: [],
   providerConnections: [],
   mcpEnabled: true,
   mcpServers: [],
@@ -923,6 +933,30 @@ export function App(): JSX.Element {
     }
   }
 
+  function isKeptAside(item: TimelineItem): boolean {
+    if (item.kind !== "assistant") return false;
+    return Boolean(item.entryId && desktopState.keptAside.some((message) => message.entryId === item.entryId));
+  }
+
+  async function updateKeptAside(entryId: string, keep: boolean): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId) return;
+    try {
+      const keptAside = keep
+        ? await window.desktop.keepAside(threadId, entryId)
+        : await window.desktop.removeAside(threadId, entryId);
+      setDesktopState((state) => ({ ...state, keptAside }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  function toggleKeptAside(item: Extract<TimelineItem, { kind: "assistant" }>): void {
+    if (!item.entryId) return;
+    void updateKeptAside(item.entryId, !isKeptAside(item));
+  }
+
   async function openSavedMessage(message: SavedMessage): Promise<void> {
     if (!message.sourceAvailable) return;
     try {
@@ -1610,6 +1644,9 @@ export function App(): JSX.Element {
                       : undefined
                   }
                   onToggleSaved={(message, savedId) => void toggleSavedMessage(message, savedId)}
+                  keptAside={isKeptAside(item)}
+                  canKeepAside={desktopState.keptAside.length < MAX_KEPT_ASIDE_MESSAGES}
+                  onToggleKeptAside={toggleKeptAside}
                   {...(!running
                     ? { onToggleAttachmentContext: (message, attachment) => void toggleAttachmentContext(message, attachment) }
                     : {})}
@@ -1626,6 +1663,11 @@ export function App(): JSX.Element {
                 />
               ))}
             </div>
+            <AsideShelf
+              messages={desktopState.keptAside}
+              onOpen={(entryId) => scrollToEntry(entryId, "Kept aside message no longer exists")}
+              onRemove={(entryId) => void updateKeptAside(entryId, false)}
+            />
             {showJumpToLatest ? (
               <button
                 type="button"
