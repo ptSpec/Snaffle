@@ -861,6 +861,7 @@ function compactRunEvent(event: RunEvent): RunEvent {
 }
 
 function loadDevelopmentEnvironment(): void {
+  if (app.isPackaged) return;
   const projectRoot = path.resolve(desktopDirectory, "../../..");
   const environmentPath = path.join(projectRoot, ".env");
   if (existsSync(environmentPath)) loadEnvFile(environmentPath);

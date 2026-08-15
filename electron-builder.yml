@@ -1,0 +1,37 @@
+appId: dev.snaffle.desktop
+productName: Snaffle
+
+asar: true
+
+directories:
+  output: release
+
+files:
+  - dist/**/*
+  - package.json
+
+extraResources:
+  - from: resources/bin
+    to: bin
+  - from: assets/logo.png
+    to: assets/logo.png
+
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+
+mac:
+  icon: assets/logo.icns
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+
+win:
+  icon: assets/logo.ico
+  target:
+    - nsis
+
+linux:
+  icon: assets/logo.png
+  category: Development
+  target:
+    - AppImage

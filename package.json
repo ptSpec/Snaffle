@@ -16,6 +16,8 @@
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json --noEmit && vite build",
     "prepare:ketch": "node scripts/install-ketch.mjs",
     "desktop": "npm run prepare:ketch && npm run build && node scripts/run-desktop.mjs",
+    "package": "npm run prepare:ketch && npm run build && electron-builder --publish never",
+    "package:dir": "npm run prepare:ketch && npm run build && electron-builder --dir",
     "demo:inspector": "node scripts/seed-inspector-demo.mjs",
     "start": "node dist/src/cli.js",
     "benchmark:edit": "npm run build && node --env-file-if-exists=.env benchmark/edit-protocol.mjs",
@@ -63,7 +65,11 @@
     "@types/turndown": "^5.0.6",
     "@vitejs/plugin-react": "^6.0.5",
     "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
     "typescript": "^5.0.0",
     "vite": "^8.2.0"
+  },
+  "overrides": {
+    "nanoid": "^3.3.18"
   }
 }
