@@ -91,7 +91,7 @@ function RouteMark(): JSX.Element {
 function OpenRouterMark(): JSX.Element {
   return (
     <svg viewBox="0 0 512 512" aria-hidden="true" className="openrouter-mark">
-      <rect width="512" height="512" rx="104" className="openrouter-mark-background" />
+      <rect width="512" height="512" className="openrouter-mark-background" />
       <path d="M198 120h163c50 0 83 34 83 83 0 45-30 76-82 80l82 83c10 10 3 26-11 26H198c-74 0-134-60-134-136s60-136 134-136Zm0 55c-45 0-80 36-80 81s35 82 80 82c46 0 83-36 83-82s-37-81-83-81Z" />
     </svg>
   );
@@ -109,7 +109,7 @@ function LlamaCppMark(): JSX.Element {
 function OmlxMark(): JSX.Element {
   return (
     <svg viewBox="0 0 32 32" aria-hidden="true" className="local-provider-mark omlx-mark">
-      <rect width="32" height="32" rx="8" />
+      <rect width="32" height="32" />
       <path d="M8 22c1.4-8.5 4.9-13 10.4-13 2.8 0 4.7 1.1 6.1 2.7M13 22c1-4.9 2.8-7.4 5.4-7.4 1.4 0 2.4.5 3.2 1.4" />
       <circle cx="20.7" cy="10.2" r="1.2" />
     </svg>
@@ -119,7 +119,7 @@ function OmlxMark(): JSX.Element {
 function MlxMark(): JSX.Element {
   return (
     <svg viewBox="0 0 32 32" aria-hidden="true" className="local-provider-mark mlx-mark">
-      <rect width="32" height="32" rx="8" />
+      <rect width="32" height="32" />
       <path d="M5 22V10l5 8 5-8v12M18 10v12h5M24 10l5 12M29 10l-5 12" />
     </svg>
   );
@@ -128,7 +128,7 @@ function MlxMark(): JSX.Element {
 function UnslothMark(): JSX.Element {
   return (
     <svg viewBox="0 0 32 32" aria-hidden="true" className="local-provider-mark unsloth-mark">
-      <rect width="32" height="32" rx="8" />
+      <rect width="32" height="32" />
       <circle cx="16" cy="16" r="10" />
       <path d="M10.5 14.5c1.6-2 3.4-2 5.5 0 2.1-2 3.9-2 5.5 0M12 19c2.7 2.1 5.3 2.1 8 0" />
       <circle cx="12.7" cy="15.2" r="1" />
