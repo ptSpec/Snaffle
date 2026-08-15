@@ -16,6 +16,10 @@ type ExecutionTurn = {
   cacheAvailable: boolean;
 };
 
+type ModelCallItem =
+  | Extract<TimelineItem, { kind: "assistant" }>
+  | Extract<TimelineItem, { kind: "image-understanding" }>;
+
 export function ExecutionOverview({
   timeline,
   running,
@@ -111,10 +115,16 @@ function TurnOverview({
 }): JSX.Element {
   const [open, setOpen] = useState(latest);
   const [modelCallsOpen, setModelCallsOpen] = useState(latest);
+  const [imageCacheOpen, setImageCacheOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const items = flatten(turn.items);
   const tools = items.filter((item): item is Extract<TimelineItem, { kind: "tool" }> => item.kind === "tool");
   const responses = items.filter((item): item is Extract<TimelineItem, { kind: "assistant" }> => item.kind === "assistant");
+  const imageActivities = items.filter((item): item is Extract<TimelineItem, { kind: "image-understanding" }> =>
+    item.kind === "image-understanding");
+  const modelCalls = items.filter((item): item is ModelCallItem =>
+    item.kind === "assistant" || (item.kind === "image-understanding" && !item.cached));
+  const cachedImageActivities = imageActivities.filter((item) => item.cached);
   const agents = tools.flatMap((tool) => tool.details?.runs ?? []);
   const failed = items.some((item) => item.kind === "error") ||
     tools.some((tool) => tool.isError) ||
@@ -153,35 +163,59 @@ function TurnOverview({
         <div className="execution-turn-body">
           <ExecutionGroup
             label="Model calls"
-            count={responses.length}
+            count={modelCalls.length}
             open={modelCallsOpen}
             onToggle={() => setModelCallsOpen((value) => !value)}
           >
-            {responses.length ? responses.map((response, index) => {
-              const responseModel = response.model || model || "Model pending";
-              const responseConnection = response.providerConnectionId || connectionId;
+            {modelCalls.length ? modelCalls.map((call, index) => {
+              const responseModel = call.model || model || "Model pending";
+              const responseConnection = call.providerConnectionId || connectionId;
               const provider = responseConnection
                 ? providerNames[responseConnection] ?? responseConnection
                 : "Provider pending";
-              const previous = responses[index - 1];
+              const previous = modelCalls[index - 1];
               const contextChanged = !previous ||
-                previous.model !== response.model ||
-                previous.providerConnectionId !== response.providerConnectionId;
+                previous.model !== call.model ||
+                previous.providerConnectionId !== call.providerConnectionId;
+              const label = call.kind === "image-understanding"
+                ? call.activity === "description" ? "Image description" : "Image inspection"
+                : `Call ${index + 1}`;
               return (
-                <div key={response.id}>
+                <div key={call.id}>
                   {contextChanged ? (
                     <p className="execution-call-context">{responseModel} · {provider}</p>
                   ) : null}
-                  <button className="execution-call" type="button" onClick={() => onSelect(response.id)}>
+                  <button className="execution-call" type="button" onClick={() => onSelect(call.id)}>
                     <span className="execution-node-marker" aria-hidden="true" />
-                    <strong>Call {index + 1}</strong>
-                    <small>{response.usage ? compactUsage(response.usage) : "Usage unavailable"}</small>
-                    <time>{response.durationMs ? formatDuration(response.durationMs) : "—"}</time>
+                    <strong>{label}</strong>
+                    <small>{call.usage ? compactUsage(call.usage) : "Usage unavailable"}</small>
+                    <time>{call.durationMs ? formatDuration(call.durationMs) : "—"}</time>
                   </button>
                 </div>
               );
             }) : <p className="execution-empty">Waiting for the first model call.</p>}
           </ExecutionGroup>
+
+          {cachedImageActivities.length ? (
+            <ExecutionGroup
+              label="Image cache"
+              count={cachedImageActivities.length}
+              open={imageCacheOpen}
+              onToggle={() => setImageCacheOpen((value) => !value)}
+            >
+              <div className="execution-tree">
+                {cachedImageActivities.map((activity) => (
+                  <ExecutionNode
+                    key={activity.id}
+                    label={activity.activity === "description" ? "Image description" : "Image inspection"}
+                    detail={`${activity.imageName} · local cache reuse`}
+                    status="completed"
+                    onClick={() => onSelect(activity.id)}
+                  />
+                ))}
+              </div>
+            </ExecutionGroup>
+          ) : null}
 
           {tools.length ? (
             <ExecutionGroup
@@ -305,8 +339,11 @@ function usagesForItems(items: TimelineItem[]): Usage[] {
   const agents = flattened
     .filter((item): item is Extract<TimelineItem, { kind: "tool" }> => item.kind === "tool")
     .flatMap((tool) => tool.details?.runs ?? []);
+  const imageCalls = flattened.filter((item): item is Extract<TimelineItem, { kind: "image-understanding" }> =>
+    item.kind === "image-understanding" && !item.cached);
   return [
     ...responses.map((response) => response.usage),
+    ...imageCalls.map((activity) => activity.usage),
     ...agents.flatMap((agent) => agent.steps.map((step) => step.usage)),
   ].filter((usage): usage is Usage => Boolean(usage));
 }

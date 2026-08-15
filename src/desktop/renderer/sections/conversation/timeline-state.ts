@@ -13,7 +13,20 @@ export type TimelineItem =
   | { id: string; kind: "tool-preparing"; step: number; index: number; name: string; argumentChars: number; startedAt: number }
   | { id: string; kind: "retry"; step: number; attempt: number; maxRetries: number; text: string }
   | { id: string; kind: "provider-fallback"; text: string }
-  | { id: string; kind: "image-understanding"; text: string }
+  | {
+      id: string;
+      kind: "image-understanding";
+      text: string;
+      imageName: string;
+      activity: "description" | "inspection";
+      cached: boolean;
+      model: string;
+      providerId: string;
+      providerConnectionId: string;
+      usage?: Usage;
+      durationMs?: number;
+      question?: string;
+    }
   | {
       id: string;
       kind: "context";
@@ -47,13 +60,25 @@ export function addRunEvent(
   event: RunEvent,
   setTimeline: (update: (items: TimelineItem[]) => TimelineItem[]) => void,
 ): void {
-  if (event.type === "image.interpreted") {
+  if (event.type === "image.understanding.completed") {
+    const action = event.kind === "description" ? "Image description" : "Focused image inspection";
     setTimeline((items) => [
       ...items,
       {
         id: newTimelineId(),
         kind: "image-understanding",
-        text: `${event.count} ${event.count === 1 ? "image" : "images"} interpreted by ${event.model} via ${event.connectionName}`,
+        text: event.cached
+          ? `${action} reused from local cache for ${event.imageName}`
+          : `${action} completed for ${event.imageName} by ${event.model}`,
+        imageName: event.imageName,
+        activity: event.kind,
+        cached: event.cached,
+        model: event.model,
+        providerId: event.providerId,
+        providerConnectionId: event.providerConnectionId,
+        ...(event.usage ? { usage: event.usage } : {}),
+        ...(event.durationMs === undefined ? {} : { durationMs: event.durationMs }),
+        ...(event.question ? { question: event.question } : {}),
       },
     ]);
     return;
@@ -549,6 +574,7 @@ export function labelFor(kind: Exclude<TimelineItem["kind"], "tool">): string {
   if (kind === "tool-preparing") return "Tool call";
   if (kind === "retry") return "Model retry";
   if (kind === "provider-fallback") return "Provider fallback";
+  if (kind === "image-understanding") return "Image understanding";
   if (kind === "activity-group") return "Work details";
   if (kind === "context") return "Context";
   return "Run failed";

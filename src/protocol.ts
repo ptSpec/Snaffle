@@ -107,10 +107,16 @@ export type RunEvent =
       model: string;
     }
   | {
-      type: "image.interpreted";
-      count: number;
+      type: "image.understanding.completed";
+      imageName: string;
+      kind: "description" | "inspection";
+      cached: boolean;
       model: string;
-      connectionName: string;
+      providerId: string;
+      providerConnectionId: string;
+      usage?: Usage;
+      durationMs?: number;
+      question?: string;
     }
   | {
       type: "context.applied";

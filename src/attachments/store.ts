@@ -21,6 +21,13 @@ const DOCUMENT_EXTENSIONS = new Set([
   ".xlsb", ".xlsm", ".xlsx",
 ]);
 
+type ImageVisionCache = {
+  connectionId?: unknown;
+  model?: unknown;
+  description?: unknown;
+  analyses?: Array<{ question?: unknown; description?: unknown }>;
+};
+
 export class AttachmentStore {
   constructor(private readonly root: string) {}
 
@@ -67,11 +74,7 @@ export class AttachmentStore {
 
   async imageDescription(id: string, connectionId: string, model: string): Promise<string | null> {
     try {
-      const value = JSON.parse(await readFile(path.join(this.folder(safeId(id)), "vision.json"), "utf8")) as {
-        connectionId?: unknown;
-        model?: unknown;
-        description?: unknown;
-      };
+      const value = await this.imageVisionCache(id);
       return value.connectionId === connectionId && value.model === model && typeof value.description === "string"
         ? value.description
         : null;
@@ -81,11 +84,63 @@ export class AttachmentStore {
   }
 
   async saveImageDescription(id: string, connectionId: string, model: string, description: string): Promise<void> {
+    const current = await this.imageVisionCache(id).catch((): ImageVisionCache => ({}));
+    const analyses = current.connectionId === connectionId && current.model === model && Array.isArray(current.analyses)
+      ? current.analyses
+      : [];
     await writeFile(
       path.join(this.folder(safeId(id)), "vision.json"),
-      JSON.stringify({ connectionId, model, description }),
+      JSON.stringify({ connectionId, model, description, analyses }),
       "utf8",
     );
+  }
+
+  async imageInspection(
+    id: string,
+    connectionId: string,
+    model: string,
+    normalizedQuestion: string,
+  ): Promise<string | null> {
+    try {
+      const value = await this.imageVisionCache(id);
+      if (value.connectionId !== connectionId || value.model !== model || !Array.isArray(value.analyses)) return null;
+      const match = value.analyses.find((analysis) =>
+        analysis && analysis.question === normalizedQuestion && typeof analysis.description === "string",
+      );
+      return typeof match?.description === "string" ? match.description : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async saveImageInspection(
+    id: string,
+    connectionId: string,
+    model: string,
+    normalizedQuestion: string,
+    description: string,
+  ): Promise<void> {
+    const current = await this.imageVisionCache(id).catch((): ImageVisionCache => ({}));
+    const analyses = current.connectionId === connectionId && current.model === model && Array.isArray(current.analyses)
+      ? current.analyses.filter((analysis) => analysis.question !== normalizedQuestion)
+      : [];
+    analyses.push({ question: normalizedQuestion, description });
+    await writeFile(
+      path.join(this.folder(safeId(id)), "vision.json"),
+      JSON.stringify({
+        connectionId,
+        model,
+        ...(typeof current.description === "string" ? { description: current.description } : {}),
+        analyses,
+      }),
+      "utf8",
+    );
+  }
+
+  private async imageVisionCache(id: string): Promise<ImageVisionCache> {
+    const value = JSON.parse(await readFile(path.join(this.folder(safeId(id)), "vision.json"), "utf8"));
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    return value as ImageVisionCache;
   }
 
   private async importFile(filePath: string): Promise<AttachmentPreview> {

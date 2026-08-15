@@ -76,7 +76,13 @@ export function TimelineEntry({
   }
 
   if (item.kind === "image-understanding") {
-    return <div className="activity-row provider-fallback-row">◉ {item.text}</div>;
+    return (
+      <button
+        className={item.id === selectedId ? "activity-row image-understanding-row selected" : "activity-row image-understanding-row"}
+        type="button"
+        onClick={() => onSelect(item.id)}
+      >◉ {item.text}</button>
+    );
   }
 
   if (item.kind === "tool-preparing") {

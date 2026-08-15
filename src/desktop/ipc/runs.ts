@@ -10,6 +10,7 @@ import type { AttachmentStore } from "../../attachments/store.js";
 import { MAX_ATTACHMENTS } from "../../attachments/store.js";
 import type { AttachmentRef } from "../../attachments/types.js";
 import { describeImages, type ImageUnderstandingProfile } from "../../attachments/vision.js";
+import { imageInspectionTool } from "./image-inspection.js";
 import { activeCapabilities, type ActiveCapabilities } from "../../capabilities/active.js";
 import { compactionThreshold, type CompactionMode } from "../../context/budget.js";
 import { compactionBoundary, type ContextCompactor } from "../../context/compaction.js";
@@ -140,7 +141,7 @@ export function registerRunIpc(options: {
     active.set(threadId, run);
     const baseCapabilities = options.capabilities(selectedWorkspace.path);
     const subagent = threadSubagent(settings.subagent, selectedThread.subagentMode);
-    const capabilities = subagent && !settings.disabledTools.includes("delegate_task")
+    let capabilities = subagent && !settings.disabledTools.includes("delegate_task")
       ? activeCapabilities([
           ...baseCapabilities.tools,
           {
@@ -176,7 +177,7 @@ export function registerRunIpc(options: {
           },
         ])
       : baseCapabilities;
-    const toolSpecs = capabilities.tools.map(({ tool }) => ({
+    let toolSpecs = capabilities.tools.map(({ tool }) => ({
       name: tool.name,
       description: tool.description,
       inputSchema: tool.inputSchema,
@@ -263,25 +264,62 @@ export function registerRunIpc(options: {
           content: input.task,
           ...(input.attachments?.length ? { attachments: input.attachments } : {}),
         };
-        const imageCount = contextImageCount([...conversation, currentUser]);
+        const contextImages = contextImageAttachments([...conversation, currentUser]);
         const projected = await describeImages({
           messages: [...conversation, currentUser],
           profile,
           attachments: options.attachments,
           provider,
           signal: controller.signal,
+          onActivity: (activity) => options.sendEvent(threadId, {
+            type: "image.understanding.completed",
+            imageName: activity.attachment.name,
+            kind: activity.kind,
+            cached: activity.cached,
+            model: activity.model,
+            providerId: activity.providerId,
+            providerConnectionId: activity.providerConnectionId,
+            ...(activity.usage ? { usage: activity.usage } : {}),
+            ...(activity.durationMs === undefined ? {} : { durationMs: activity.durationMs }),
+            ...(activity.question ? { question: activity.question } : {}),
+          }),
         });
         const projectedUser = projected.at(-1)!;
         if (projectedUser.role !== "user") throw new Error("Image interpretation lost the current user message");
         conversation = projected.slice(0, -1);
         modelTask = projectedUser.content;
         modelAttachments = projectedUser.attachments;
-        options.sendEvent(threadId, {
-          type: "image.interpreted",
-          count: imageCount,
-          model: profile.model,
-          connectionName: connection.name,
-        });
+        capabilities = activeCapabilities([
+          ...capabilities.tools,
+          {
+            source: { type: "built-in" },
+            tool: imageInspectionTool({
+              attachments: contextImages,
+              profile,
+              attachmentStore: options.attachments,
+              provider,
+              signal: controller.signal,
+              onActivity: (activity) => options.sendEvent(threadId, {
+                type: "image.understanding.completed",
+                imageName: activity.attachment.name,
+                kind: activity.kind,
+                cached: activity.cached,
+                model: activity.model,
+                providerId: activity.providerId,
+                providerConnectionId: activity.providerConnectionId,
+                ...(activity.usage ? { usage: activity.usage } : {}),
+                ...(activity.durationMs === undefined ? {} : { durationMs: activity.durationMs }),
+                ...(activity.question ? { question: activity.question } : {}),
+              }),
+            }),
+          },
+        ]);
+        toolSpecs = capabilities.tools.map(({ tool }) => ({
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+        }));
+        compactionInput.tools = toolSpecs;
       } catch (error) {
         active.delete(threadId);
         throw error;
@@ -506,12 +544,17 @@ function hasContextImages(history: Message[], attachments?: AttachmentRef[]): bo
     .some((attachment) => attachment.kind === "image" && attachment.includeInContext !== false);
 }
 
-function contextImageCount(messages: Message[]): number {
-  return new Set(messages.flatMap((message) => message.role === "user"
-    ? (message.attachments ?? [])
-      .filter((attachment) => attachment.kind === "image" && attachment.includeInContext !== false)
-      .map((attachment) => attachment.id)
-    : [])).size;
+function contextImageAttachments(messages: Message[]): AttachmentRef[] {
+  const attachments = new Map<string, AttachmentRef>();
+  for (const message of messages) {
+    if (message.role !== "user") continue;
+    for (const attachment of message.attachments ?? []) {
+      if (attachment.kind === "image" && attachment.includeInContext !== false) {
+        attachments.set(attachment.id, attachment);
+      }
+    }
+  }
+  return [...attachments.values()];
 }
 
 function parseAttachment(input: unknown): AttachmentRef {

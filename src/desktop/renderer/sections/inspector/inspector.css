@@ -238,15 +238,15 @@
 }
 
 .usage-dither-legend .cached {
-  color: var(--accent);
+  color: var(--usage-cached);
 }
 
 .usage-dither-legend .uncached {
-  color: var(--text-faint);
+  color: var(--usage-uncached);
 }
 
 .usage-dither-legend .output {
-  color: var(--text-strong);
+  color: var(--usage-output);
 }
 
 @media (max-width: 920px) {

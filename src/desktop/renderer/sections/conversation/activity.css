@@ -82,6 +82,22 @@
   color: var(--text-muted);
 }
 
+.image-understanding-row {
+  width: fit-content;
+  padding: 2px 3px;
+  color: var(--text-muted);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+}
+
+.image-understanding-row:hover,
+.image-understanding-row.selected {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
 .approval-card {
   width: min(620px, 100%);
   margin: 4px 0 12px;
