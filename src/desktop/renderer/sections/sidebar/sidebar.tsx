@@ -4,14 +4,20 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
 import { PROJECT } from "../../../../identity.js";
-import type { DesktopState, DesktopThread } from "../../../api.js";
+import type { DesktopState, DesktopThread, DesktopWorkspace } from "../../../api.js";
 import type { BookmarksPage } from "../../screens/bookmarks/bookmarks.js";
 import { ThinkingOrb } from "../../components/thinking-orb.js";
+import { SidebarContextMenu, type SidebarContextMenuItem } from "./context-menu.js";
 
 export type AppView = "conversation" | "saved" | "search" | "settings";
 export type SettingsPage = "appearance" | "providers" | "editor" | "agent" | "model" | "context" | "web" | "mcp";
+
+type SidebarMenu =
+  | { kind: "thread"; top: number; left: number; thread: DesktopThread; workspaceId: string }
+  | { kind: "workspace"; top: number; left: number; workspace: DesktopWorkspace };
 
 export function Sidebar({
   state,
@@ -56,6 +62,7 @@ export function Sidebar({
     previousId: string | null;
     distance: number;
   } | null>(null);
+  const [menu, setMenu] = useState<SidebarMenu | null>(null);
   const sidebarRoot = useRef<HTMLElement>(null);
   const threadList = useRef<HTMLDivElement>(null);
   const promotedWorkspaceId = useRef(state.workspace?.id);
@@ -134,9 +141,13 @@ export function Sidebar({
 
   async function newThread(): Promise<void> {
     if (!state.workspace) return;
+    await newThreadIn(state.workspace.id);
+  }
+
+  async function newThreadIn(workspaceId: string): Promise<void> {
     try {
       await beforeNavigate();
-      onNavigate(await window.desktop.createThread(state.workspace.id));
+      onNavigate(await window.desktop.createThread(workspaceId));
     } catch (cause) {
       onError(errorMessage(cause));
     }
@@ -201,6 +212,58 @@ export function Sidebar({
       onError(errorMessage(cause));
     }
   }
+
+  async function revealWorkspace(workspaceId: string): Promise<void> {
+    try {
+      await window.desktop.revealWorkspaceFile(workspaceId, ".");
+    } catch (cause) {
+      onError(errorMessage(cause));
+    }
+  }
+
+  function openThreadMenu(event: ReactMouseEvent, thread: DesktopThread): void {
+    if (!state.workspace) return;
+    event.preventDefault();
+    setMenu({ kind: "thread", thread, workspaceId: state.workspace.id, ...menuPosition(event) });
+  }
+
+  function openWorkspaceMenu(event: ReactMouseEvent, workspace: DesktopWorkspace): void {
+    event.preventDefault();
+    setMenu({ kind: "workspace", workspace, ...menuPosition(event) });
+  }
+
+  const menuItems: SidebarContextMenuItem[] = menu?.kind === "thread"
+    ? [
+        { label: "Open thread", action: () => void selectThread(menu.thread.id) },
+        {
+          label: menu.thread.bookmarked ? "Remove bookmark" : "Bookmark thread",
+          action: () => void toggleBookmark(menu.thread.id, !menu.thread.bookmarked),
+        },
+        { label: revealWorkspaceLabel(), action: () => void revealWorkspace(menu.workspaceId) },
+        {
+          label: "Delete thread",
+          danger: true,
+          disabled: isRunning(menu.thread.id),
+          action: () => void deleteThread(menu.thread),
+        },
+      ]
+    : menu?.kind === "workspace"
+      ? [
+          {
+            label: "Open workspace",
+            disabled: menu.workspace.id === state.workspace?.id,
+            action: () => void selectWorkspace(menu.workspace.id),
+          },
+          { label: "New chat thread", action: () => void newThreadIn(menu.workspace.id) },
+          { label: revealWorkspaceLabel(), action: () => void revealWorkspace(menu.workspace.id) },
+          {
+            label: "Remove workspace",
+            danger: true,
+            disabled: menu.workspace.threads.some((thread) => isRunning(thread.id)),
+            action: () => void removeWorkspace(menu.workspace.id, menu.workspace.name),
+          },
+        ]
+      : [];
 
   function handleThreadKeys(event: ReactKeyboardEvent<HTMLDivElement>): void {
     if (!selecting) return;
@@ -350,7 +413,7 @@ export function Sidebar({
               type="button"
               onClick={() => onSettingsPage("model")}
             >
-              <span>Model</span>
+              <span>Model surface</span>
             </button>
             <button
               className={settingsPage === "context" ? "sidebar-action active" : "sidebar-action"}
@@ -423,7 +486,10 @@ export function Sidebar({
 
             {state.workspace ? (
               <>
-                <div className="sidebar-row workspace-row active">
+                <div
+                  className="sidebar-row workspace-row active"
+                  onContextMenu={(event) => openWorkspaceMenu(event, state.workspace!)}
+                >
                   <div className="workspace-item" title={state.workspace.path}>
                     <WorkspaceIcon open />
                     <span>{state.workspace.name}</span>
@@ -493,6 +559,7 @@ export function Sidebar({
                         }}
                         onToggleBookmark={() => void toggleBookmark(thread.id, !thread.bookmarked)}
                         onDelete={() => void deleteThread(thread)}
+                        onContextMenu={(event) => openThreadMenu(event, thread)}
                       />
                     ))}
                     {selecting ? (
@@ -534,7 +601,11 @@ export function Sidebar({
                       <h2>Other workspaces</h2>
                     </div>
                     {inactiveWorkspaces.map((workspace) => (
-                      <div className="sidebar-row workspace-row" key={workspace.id}>
+                      <div
+                        className="sidebar-row workspace-row"
+                        key={workspace.id}
+                        onContextMenu={(event) => openWorkspaceMenu(event, workspace)}
+                      >
                         <button
                           className="workspace-item"
                           type="button"
@@ -553,6 +624,15 @@ export function Sidebar({
           </div>
         )}
       </nav>
+
+      {menu ? (
+        <SidebarContextMenu
+          top={menu.top}
+          left={menu.left}
+          items={menuItems}
+          onClose={() => setMenu(null)}
+        />
+      ) : null}
 
       <footer className="sidebar-footer">
         {view !== "conversation" ? (
@@ -608,6 +688,7 @@ function ThreadRow({
   onToggleSelected,
   onToggleBookmark,
   onDelete,
+  onContextMenu,
 }: {
   thread: DesktopThread;
   sourceTitle: string | undefined;
@@ -625,6 +706,7 @@ function ThreadRow({
   onToggleSelected: () => void;
   onToggleBookmark: () => void;
   onDelete: () => void;
+  onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
 }): JSX.Element {
   let className = "sidebar-row thread-row";
   if (active) className += " active";
@@ -640,6 +722,7 @@ function ThreadRow({
     <div
       className={className}
       style={motionDistance ? { "--thread-rise-distance": `${motionDistance}px` } as CSSProperties : undefined}
+      onContextMenu={onContextMenu}
     >
       {selecting ? (
         <input
@@ -792,4 +875,17 @@ function WorkspaceIcon({ open = false }: { open?: boolean }): JSX.Element {
 
 function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
+}
+
+function menuPosition(event: ReactMouseEvent): { top: number; left: number } {
+  return {
+    top: Math.max(8, Math.min(event.clientY, window.innerHeight - 190)),
+    left: Math.max(8, Math.min(event.clientX, window.innerWidth - 218)),
+  };
+}
+
+function revealWorkspaceLabel(): string {
+  if (window.desktop.platform === "darwin") return "Reveal workspace in Finder";
+  if (window.desktop.platform === "win32") return "Reveal workspace in Explorer";
+  return "Reveal workspace in file manager";
 }

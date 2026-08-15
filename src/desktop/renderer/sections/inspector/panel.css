@@ -9,8 +9,12 @@
 
 .inspector-tabs {
   display: flex;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
+  padding: 2px;
+  background: var(--input-background);
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
   -webkit-app-region: no-drag;
 }
 
@@ -26,10 +30,11 @@
 }
 
 .inspector-tabs button {
-  padding: 4px 6px;
-  border-bottom: 1px solid transparent;
-  border-radius: 0;
-  font-size: calc(15px * var(--interface-font-scale));
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: calc(14px * var(--interface-font-scale));
+  line-height: 1.1;
+  transition: color 140ms ease, background-color 140ms ease;
 }
 
 .inspector-tabs button:hover,
@@ -47,9 +52,8 @@
 }
 
 .inspector-tabs button.active {
-  color: var(--text-strong);
-  background: transparent;
-  border-bottom-color: var(--text-muted);
+  color: var(--accent-contrast);
+  background: var(--accent);
 }
 
 .inspector-content,
@@ -61,6 +65,8 @@
 
 .inspector-content {
   box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-inline: 10px;
 }
 
@@ -70,6 +76,10 @@
   color: var(--text-muted);
   font-size: calc(14px * var(--interface-font-scale));
   line-height: 1.45;
+}
+
+.git-state {
+  margin-inline: 12px;
 }
 
 .git-state p {
@@ -554,15 +564,45 @@ html[data-appearance="light"] .change-detail-heading .change-back:hover {
 }
 
 .change-detail-heading .change-back {
-  width: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
   height: 28px;
-  margin-left: 4px;
-  padding: 0;
+  margin-left: 0;
+  padding: 0 5px 0 7px;
   color: var(--text-strong);
   background: transparent;
-  font-size: 26px;
+  border-radius: 0;
+  font-size: calc(14px * var(--interface-font-scale));
   line-height: 1;
-  transform: translateY(-1px);
+  animation: change-back-enter 340ms ease-out;
+}
+
+.change-detail-heading .change-back:hover {
+  background: var(--hover-background);
+}
+
+.change-back-icon {
+  flex: 0 0 auto;
+  width: 7.62px;
+  height: 12.7px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  transform-origin: center;
+  animation: change-back-arrow-enter 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes change-back-enter {
+  from { opacity: 0; }
+}
+
+@keyframes change-back-arrow-enter {
+  from { transform: rotate(90deg); }
+  to { transform: rotate(0); }
 }
 
 .change-detail-heading > .change-counts {
@@ -574,4 +614,11 @@ html[data-appearance="light"] .change-detail-heading .change-back:hover {
   color: var(--status-danger-text);
   font-size: calc(14px * var(--interface-font-scale));
   line-height: 1.4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .change-detail-heading .change-back,
+  .change-back-icon {
+    animation: none;
+  }
 }

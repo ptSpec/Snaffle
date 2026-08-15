@@ -1,22 +1,39 @@
+import hljs from "highlight.js/lib/common";
 import { useState } from "react";
 
 export function JsonInspector({ value }: { value: unknown }): JSX.Element {
-  const [raw, setRaw] = useState(false);
+  const [raw, setRaw] = useState(true);
+  const [copied, setCopied] = useState(false);
   if (!isJsonContainer(value)) return <pre>{formatJson(value)}</pre>;
   const entries = Object.entries(value);
+
+  async function copyJson(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(formatJson(value));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   return (
     <div className="json-inspector">
       <div className="json-inspector-mode">
-        <button className={!raw ? "active" : ""} type="button" onClick={() => setRaw(false)}>
-          Parsed
-        </button>
-        <button className={raw ? "active" : ""} type="button" onClick={() => setRaw(true)}>
-          Raw
+        <div className="json-inspector-tabs">
+          <button className={!raw ? "active" : ""} type="button" onClick={() => setRaw(false)}>
+            Parsed
+          </button>
+          <button className={raw ? "active" : ""} type="button" onClick={() => setRaw(true)}>
+            Raw
+          </button>
+        </div>
+        <button type="button" onClick={() => void copyJson()} title="Copy JSON">
+          {copied ? "Copied" : "Copy"}
         </button>
       </div>
       {raw ? (
-        <pre>{formatJson(value)}</pre>
+        <HighlightedJson value={value} />
       ) : entries.length ? (
         entries.map(([name, field]) => <JsonField key={name} name={name} value={field} />)
       ) : (
@@ -24,6 +41,28 @@ export function JsonInspector({ value }: { value: unknown }): JSX.Element {
       )}
     </div>
   );
+}
+
+function HighlightedJson({ value }: { value: unknown }): JSX.Element {
+  const formatted = formatJson(value);
+
+  try {
+    const highlighted = hljs.highlight(formatted, {
+      language: "json",
+      ignoreIllegals: true,
+    }).value;
+
+    return (
+      <pre className="json-raw">
+        <code
+          className="hljs language-json"
+          dangerouslySetInnerHTML={{ __html: highlighted }}
+        />
+      </pre>
+    );
+  } catch {
+    return <pre className="json-raw">{formatted}</pre>;
+  }
 }
 
 function JsonField({ name, value }: { name: string; value: unknown }): JSX.Element {

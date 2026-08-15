@@ -50,6 +50,7 @@ export function Settings({
   webSearchBackend,
   webSearchKeyBackends,
   providerConnections,
+  mcpEnabled,
   mcpServers,
   modelTools,
   systemPrompt,
@@ -77,6 +78,7 @@ export function Settings({
   onSaveProvider,
   onRemoveProvider,
   onTestProvider,
+  onMcpEnabled,
   onSaveMcpServer,
   onRemoveMcpServer,
   onTestMcpServer,
@@ -108,6 +110,7 @@ export function Settings({
   webSearchBackend: WebSearchBackend;
   webSearchKeyBackends: KetchSearchBackend[];
   providerConnections: ProviderConnection[];
+  mcpEnabled: boolean;
   mcpServers: McpServerConfig[];
   modelTools: ModelToolSetting[];
   systemPrompt: string;
@@ -134,7 +137,8 @@ export function Settings({
   onWebSearchApiKey: (backend: KetchSearchBackend, apiKey: string) => void;
   onSaveProvider(input: ProviderConnectionInput): Promise<void>;
   onRemoveProvider(id: string): Promise<void>;
-  onTestProvider(id: string): Promise<ProviderStatus>;
+  onTestProvider(input: ProviderConnectionInput): Promise<ProviderStatus>;
+  onMcpEnabled(enabled: boolean): void;
   onSaveMcpServer(server: McpServerConfig): Promise<void>;
   onRemoveMcpServer(id: string): Promise<void>;
   onTestMcpServer(server: McpServerConfig): Promise<McpServerStatus>;
@@ -198,8 +202,10 @@ export function Settings({
   if (page === "mcp") {
     return (
       <McpSettings
+        enabled={mcpEnabled}
         servers={mcpServers}
         error={error}
+        onEnabled={onMcpEnabled}
         onSave={onSaveMcpServer}
         onRemove={onRemoveMcpServer}
         onTest={onTestMcpServer}

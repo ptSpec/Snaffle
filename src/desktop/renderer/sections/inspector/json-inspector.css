@@ -6,10 +6,16 @@
 
 .json-inspector-mode {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   gap: 2px;
   padding: 4px 6px;
   border-bottom: 1px solid var(--border-default);
+}
+
+.json-inspector-tabs {
+  display: flex;
+  gap: 2px;
 }
 
 .json-inspector-mode button {
@@ -31,6 +37,13 @@
   max-height: 520px;
   border: 0;
   border-radius: 0;
+}
+
+.json-raw code {
+  display: block;
+  color: var(--code-text);
+  font: inherit;
+  white-space: pre;
 }
 
 .json-empty {
