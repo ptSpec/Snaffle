@@ -9,6 +9,10 @@ import { hostEnvironmentDescription, runRestrictedCommand } from "./native/sandb
 import type { CommandApprovalDecision } from "../protocol.js";
 
 const execAsync = promisify(exec);
+const ripgrepExecutable = rgPath.replace(
+  /([\\/])app\.asar([\\/])/,
+  "$1app.asar.unpacked$2",
+);
 
 export type SearchOptions = {
   path?: string;
@@ -39,7 +43,7 @@ export interface Workspace {
   read(path: string): Promise<string>;
   write(path: string, content: string): Promise<void>;
   search(query: string, options: SearchOptions): Promise<string[]>;
-  run(command: string, cwd: string | undefined, timeoutMs: number): Promise<CommandResult>;
+  run(command: string, cwd: string | undefined, timeoutMs: number, network?: boolean): Promise<CommandResult>;
 }
 
 export type CommandExecution = "disabled" | "restricted" | "unsafe";
@@ -93,7 +97,7 @@ export class LocalWorkspace implements Workspace {
     args.push(query, searchPath || ".");
 
     return new Promise((resolve, reject) => {
-      const child = spawn(rgPath, args, { cwd: this.root });
+      const child = spawn(ripgrepExecutable, args, { cwd: this.root });
       const matches: string[] = [];
       let pending = "";
       let errorOutput = "";
@@ -127,6 +131,7 @@ export class LocalWorkspace implements Workspace {
     command: string,
     cwd: string | undefined,
     timeoutMs: number,
+    network = false,
   ): Promise<CommandResult> {
     if (this.commandExecution === "disabled") {
       throw new Error("Host command execution is disabled");
@@ -135,7 +140,14 @@ export class LocalWorkspace implements Workspace {
     const commandCwd = await this.resolveExisting(cwd ?? ".");
 
     if (this.commandExecution === "restricted") {
-      const result = await runRestrictedCommand(command, this.root, commandCwd, timeoutMs);
+      const result = network
+        ? {
+            exitCode: null,
+            stdout: "",
+            stderr: "This command requests network access, which is unavailable in restricted execution.",
+            permissionDenied: true,
+          }
+        : await runRestrictedCommand(command, this.root, commandCwd, timeoutMs);
       if (!result.permissionDenied || !this.approveCommand) return result;
 
       const decision = await this.approveCommand({

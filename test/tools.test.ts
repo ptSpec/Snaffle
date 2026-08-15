@@ -477,6 +477,22 @@ test("restricted commands can be approved once or for the thread", async (t) => 
   assert.equal(await readFile(path.join(root, ".git/after"), "utf8"), "after");
 });
 
+test("network commands request approval before restricted execution", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "network-approval-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  let reason = "";
+  const workspace = new LocalWorkspace(root, "restricted", async (request) => {
+    reason = request.reason;
+    return "once";
+  });
+
+  const result = await workspace.run("printf approved", undefined, 5000, true);
+
+  assert.equal(result.stdout, "approved");
+  assert.equal(result.approval, "once");
+  assert.match(reason, /requests network access/);
+});
+
 test("commands require explicit host permission", async (t) => {
   const { root } = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));

@@ -50,10 +50,12 @@ import {
 import type { DesktopState } from "./api.js";
 import { openStore, type DesktopStore } from "./store.js";
 import { registerAttachmentIpc } from "./ipc/attachments.js";
+import { registerAsideIpc } from "./ipc/asides.js";
 import { registerGitIpc } from "./ipc/git.js";
 import { registerSavedMessageIpc } from "./ipc/saved-messages.js";
 import { registerSearchIpc } from "./ipc/search.js";
 import { registerWorkspaceIpc } from "./ipc/workspaces.js";
+import { registerTerminalIpc } from "./ipc/terminal.js";
 import { registerRunIpc, type RunIpc } from "./ipc/runs.js";
 import { registerProviderIpc } from "./ipc/providers.js";
 import { registerMcpIpc } from "./ipc/mcp.js";
@@ -76,6 +78,7 @@ import {
   type FontId,
 } from "./typography.js";
 import { applicationIcon, createDesktopWindow } from "./window.js";
+import { installDesktopMenu } from "./menu.js";
 import { configureDesktopIdentity, migrateLegacyUserData } from "./identity-migration.js";
 import { ProviderConnections } from "./provider-connections.js";
 import { SkillRegistry, skillTool } from "../extensions/skills/index.js";
@@ -91,6 +94,7 @@ let attachments: AttachmentStore;
 let runs: RunIpc;
 let contextCompactor: ContextCompactor;
 let providerConnections: ProviderConnections;
+let terminals: ReturnType<typeof registerTerminalIpc>;
 const mcpManager = new McpManager();
 let configuredMcpServers: McpServerConfig[] = [];
 let activeTheme: Theme = DEFAULT_THEME;
@@ -125,6 +129,7 @@ let imageUnderstanding: ImageUnderstandingProfile = imageUnderstandingProfile(un
 async function start(): Promise<void> {
   loadDevelopmentEnvironment();
   migrateLegacyUserData(userDataMigration);
+  installDesktopMenu();
   const settings = loadSettings(settingsPath());
   activeTheme =
     typeof settings.themeId === "string"
@@ -290,6 +295,7 @@ function registerIpc(): void {
     },
     state: desktopState,
   });
+  terminals = registerTerminalIpc({ store, mainWindow: () => mainWindow });
   registerWorkspaceIpc({
     store,
     state: desktopState,
@@ -297,9 +303,11 @@ function registerIpc(): void {
     runningThread: runs.isThreadRunning,
     runningWorkspace: runs.isWorkspaceRunning,
     threadsDeleted: runs.forgetThreads,
+    workspaceRemoved: terminals.close,
     defaultModel: () => selectedModel,
     defaultProviderConnectionId: () => selectedProviderConnectionId,
   });
+  registerAsideIpc(store);
   registerSavedMessageIpc(store, desktopState);
   registerSearchIpc(store);
   ipcMain.handle("desktop:get-state", (): Promise<DesktopState> => desktopState());
@@ -562,6 +570,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     disabledTools,
     skills: skillsFor(workspace?.path).summaries(),
     savedMessages: await store.savedMessages.summaries(),
+    keptAside: await store.asides.list(state.activeThreadId),
     providerConnections: providerConnections.list(),
     mcpEnabled,
     mcpServers: publicMcpServers(configuredMcpServers),
@@ -875,6 +884,7 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   runs?.stopAll();
+  terminals?.closeAll();
   void mcpManager.close();
   store?.close();
 });

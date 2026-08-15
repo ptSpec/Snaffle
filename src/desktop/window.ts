@@ -48,6 +48,9 @@ export function createDesktopWindow(
   });
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("did-finish-load", () => {
+    window.webContents.setZoomLevel(0);
+  });
   void window.loadFile(rendererPath, {
     query: {
       theme: appearance.theme.id,

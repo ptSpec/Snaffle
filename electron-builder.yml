@@ -15,6 +15,11 @@ extraResources:
     to: bin
   - from: assets/logo.png
     to: assets/logo.png
+  - from: src/desktop/renderer/assets/fonts/meslo-nerd
+    to: licenses/meslo-nerd
+    filter:
+      - "*.txt"
+      - "*.md"
 
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 

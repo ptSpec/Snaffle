@@ -88,6 +88,15 @@ export type SavedMessageSource = {
   entryId: string;
 };
 
+export type KeptAsideMessage = {
+  entryId: string;
+  sequence: number;
+  text: string;
+  createdAt: number;
+};
+
+export const MAX_KEPT_ASIDE_MESSAGES = 3;
+
 export type DesktopState = {
   workspace: DesktopWorkspace | null;
   workspaces: DesktopWorkspace[];
@@ -102,6 +111,7 @@ export type DesktopState = {
   disabledTools: string[];
   skills: SkillSummary[];
   savedMessages: SavedMessageSummary[];
+  keptAside: KeptAsideMessage[];
   providerConnections: ProviderConnection[];
   mcpEnabled: boolean;
   mcpServers: McpServerConfig[];
@@ -156,6 +166,16 @@ export type DesktopRunEvent = {
   event: RunEvent;
 };
 
+export type DesktopTerminalDataEvent = {
+  workspaceId: string;
+  data: string;
+};
+
+export type DesktopTerminalExitEvent = {
+  workspaceId: string;
+  exitCode: number;
+};
+
 export interface DesktopApi {
   platform: string;
   getState(): Promise<DesktopState>;
@@ -183,6 +203,7 @@ export interface DesktopApi {
   chooseAttachments(): Promise<AttachmentPreview[]>;
   importDroppedFiles(files: File[]): Promise<AttachmentPreview[]>;
   importClipboardImage(): Promise<AttachmentPreview>;
+  importTerminalOutput(workspaceId: string, output: string): Promise<AttachmentPreview>;
   readClipboardText(): Promise<string>;
   readClipboardHtml(): Promise<string>;
   removeAttachment(id: string): Promise<void>;
@@ -216,6 +237,8 @@ export interface DesktopApi {
   deleteSavedMessage(id: string): Promise<SavedMessageSummary[]>;
   listSavedMessages(): Promise<SavedMessage[]>;
   openSavedMessage(id: string): Promise<SavedMessageSource | null>;
+  keepAside(threadId: string, entryId: string): Promise<KeptAsideMessage[]>;
+  removeAside(threadId: string, entryId: string): Promise<KeptAsideMessage[]>;
   getGitChanges(workspaceId: string): Promise<GitChanges>;
   getGitFile(workspaceId: string, path: string): Promise<GitFileContents>;
   getGitDiffPreview(workspaceId: string, path: string): Promise<GitDiffPreview>;
@@ -225,5 +248,11 @@ export interface DesktopApi {
   revealWorkspaceFile(workspaceId: string, path: string): Promise<void>;
   initializeGitRepository(workspaceId: string): Promise<GitChanges>;
   openExternal(url: string): Promise<void>;
+  openTerminal(workspaceId: string, columns: number, rows: number): Promise<void>;
+  writeTerminal(workspaceId: string, data: string): Promise<void>;
+  resizeTerminal(workspaceId: string, columns: number, rows: number): Promise<void>;
+  closeTerminal(workspaceId: string): Promise<void>;
   onRunEvent(listener: (event: DesktopRunEvent) => void): () => void;
+  onTerminalData(listener: (event: DesktopTerminalDataEvent) => void): () => void;
+  onTerminalExit(listener: (event: DesktopTerminalExitEvent) => void): () => void;
 }

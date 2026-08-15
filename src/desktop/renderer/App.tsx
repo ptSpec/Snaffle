@@ -13,7 +13,15 @@ import {
 import type { AttachmentPreview, AttachmentRef } from "../../attachments/types.js";
 import type { ImageUnderstandingProfile } from "../../attachments/vision.js";
 import type { CommandApprovalDecision } from "../../protocol.js";
-import type { DesktopApi, DesktopRunEvent, DesktopSearchResult, DesktopState, DesktopThread, SavedMessage } from "../api.js";
+import {
+  MAX_KEPT_ASIDE_MESSAGES,
+  type DesktopApi,
+  type DesktopRunEvent,
+  type DesktopSearchResult,
+  type DesktopState,
+  type DesktopThread,
+  type SavedMessage,
+} from "../api.js";
 import type { ProviderCatalog, ProviderConnectionInput, ProviderStatus } from "../../providers/provider.js";
 import type { CompactionMode } from "../../context/budget.js";
 import type { SubagentProfile, ThreadSubagentMode } from "../../agent/subagents/profile.js";
@@ -42,7 +50,9 @@ import { Sidebar, type AppView, type SettingsPage } from "./sections/sidebar/sid
 import { InspectorPanel, type InspectorTab } from "./sections/inspector/panel.js";
 import type { OrbMotion } from "./components/thinking-orb.js";
 import { Composer } from "./sections/conversation/composer.js";
+import { AsideShelf } from "./sections/conversation/aside-shelf.js";
 import { CommandPalette, type AppCommand } from "./commands/palette.js";
+import { TerminalPanel } from "./sections/terminal/terminal.js";
 import {
   TimelineEntry,
 } from "./sections/conversation/timeline.js";
@@ -75,6 +85,7 @@ const initialState: DesktopState = {
   disabledTools: [],
   skills: [],
   savedMessages: [],
+  keptAside: [],
   providerConnections: [],
   mcpEnabled: true,
   mcpServers: [],
@@ -139,6 +150,8 @@ export function App(): JSX.Element {
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("inspect");
   const [view, setView] = useState<AppView>("conversation");
   const [commandMode, setCommandMode] = useState<"all" | "slash" | null>(null);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalMounted, setTerminalMounted] = useState(false);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("appearance");
   const [bookmarksPage, setBookmarksPage] = useState<BookmarksPage>("threads");
   const [sendOrbMotion, setSendOrbMotion] = useState<OrbMotion>("stopped");
@@ -150,6 +163,29 @@ export function App(): JSX.Element {
   const executionMode = useRef<HTMLDetailsElement>(null);
   const composerAdd = useRef<HTMLDetailsElement>(null);
   const searchOpenedAt = useRef(0);
+  const terminalUnmountTimer = useRef<number | undefined>(undefined);
+
+  function showTerminal(): void {
+    if (!desktopState.workspace) return;
+    if (terminalUnmountTimer.current) window.clearTimeout(terminalUnmountTimer.current);
+    setTerminalMounted(true);
+    window.requestAnimationFrame(() => setTerminalOpen(true));
+  }
+
+  function hideTerminal(): void {
+    setTerminalOpen(false);
+    if (terminalUnmountTimer.current) window.clearTimeout(terminalUnmountTimer.current);
+    terminalUnmountTimer.current = window.setTimeout(() => setTerminalMounted(false), 180);
+  }
+
+  function toggleTerminal(): void {
+    if (view === "conversation" && terminalOpen) {
+      hideTerminal();
+      return;
+    }
+    setView("conversation");
+    showTerminal();
+  }
 
   useEffect(() => {
     function toggleSearch(event: KeyboardEvent): void {
@@ -177,6 +213,22 @@ export function App(): JSX.Element {
 
     window.addEventListener("keydown", toggleCommands);
     return () => window.removeEventListener("keydown", toggleCommands);
+  }, []);
+
+  useEffect(() => {
+    function handleTerminalShortcut(event: KeyboardEvent): void {
+      if (!event.ctrlKey || event.code !== "Backquote") return;
+      event.preventDefault();
+      if (!desktopState.workspace) return;
+      toggleTerminal();
+    }
+
+    window.addEventListener("keydown", handleTerminalShortcut);
+    return () => window.removeEventListener("keydown", handleTerminalShortcut);
+  }, [desktopState.workspace, terminalOpen, view]);
+
+  useEffect(() => () => {
+    if (terminalUnmountTimer.current) window.clearTimeout(terminalUnmountTimer.current);
   }, []);
   const followTimeline = useRef(true);
   const leftAutoCollapsed = useRef(false);
@@ -433,6 +485,7 @@ export function App(): JSX.Element {
   const previousAssistantModels = useMemo(() => modelTransitions(timeline), [timeline]);
   const visibleLeftWidth = leftCollapsed ? 0 : leftWidth;
   const visibleRightWidth = view !== "conversation" || rightCollapsed ? 0 : rightWidth;
+  const terminalVisible = view === "conversation" && terminalOpen && Boolean(desktopState.workspace);
   const activeThread = desktopState.workspace?.threads.find(
     (thread) => thread.id === desktopState.activeThreadId,
   );
@@ -654,6 +707,21 @@ export function App(): JSX.Element {
     setError(null);
     try {
       await addAttachments(await window.desktop.chooseAttachments());
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function attachTerminalOutput(output: string): Promise<void> {
+    const workspace = desktopState.workspace;
+    if (!workspace) return;
+    if (pendingAttachments.length >= 8) {
+      setError("Attach at most 8 files to one message");
+      return;
+    }
+    try {
+      await addAttachments([await window.desktop.importTerminalOutput(workspace.id, output)]);
+      window.requestAnimationFrame(() => taskInput.current?.focus());
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -921,6 +989,30 @@ export function App(): JSX.Element {
     } catch (cause) {
       setError(errorMessage(cause));
     }
+  }
+
+  function isKeptAside(item: TimelineItem): boolean {
+    if (item.kind !== "assistant") return false;
+    return Boolean(item.entryId && desktopState.keptAside.some((message) => message.entryId === item.entryId));
+  }
+
+  async function updateKeptAside(entryId: string, keep: boolean): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId) return;
+    try {
+      const keptAside = keep
+        ? await window.desktop.keepAside(threadId, entryId)
+        : await window.desktop.removeAside(threadId, entryId);
+      setDesktopState((state) => ({ ...state, keptAside }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  function toggleKeptAside(item: Extract<TimelineItem, { kind: "assistant" }>): void {
+    if (!item.entryId) return;
+    void updateKeptAside(item.entryId, !isKeptAside(item));
   }
 
   async function openSavedMessage(message: SavedMessage): Promise<void> {
@@ -1436,6 +1528,15 @@ export function App(): JSX.Element {
       disabled: view !== "conversation",
       run: () => setRightCollapsed((value) => !value),
     },
+    {
+      id: "terminal-toggle",
+      label: terminalOpen ? "Hide terminal" : "Show terminal",
+      detail: desktopState.workspace ? `Open in ${desktopState.workspace.name}` : "Open a workspace first",
+      keywords: "shell console command line",
+      shortcut: window.desktop.platform === "darwin" ? "⌃`" : "Ctrl+`",
+      disabled: !desktopState.workspace,
+      run: toggleTerminal,
+    },
     ...desktopState.skills.map((skill): AppCommand => ({
       id: `skill:${skill.name}`,
       label: `/${skill.name}`,
@@ -1468,9 +1569,12 @@ export function App(): JSX.Element {
   return (
     <main className={`app-shell platform-${window.desktop.platform}`}>
       <section
-        className="workspace-shell"
+        className={terminalVisible ? "workspace-shell terminal-open" : "workspace-shell"}
         style={{
           gridTemplateColumns: `${visibleLeftWidth}px minmax(360px, 1fr) ${visibleRightWidth}px`,
+          gridTemplateRows: terminalVisible
+            ? "minmax(0, 1fr) var(--terminal-height)"
+            : "minmax(0, 1fr) 0px",
         }}
       >
         <Sidebar
@@ -1494,6 +1598,8 @@ export function App(): JSX.Element {
             setError(null);
           }}
           onOpenThreadSource={(thread) => void openThreadSource(thread)}
+          terminalOpen={terminalOpen}
+          onTerminal={toggleTerminal}
           onCollapse={() => {
             leftAutoCollapsed.current = false;
             setLeftCollapsed(true);
@@ -1610,6 +1716,9 @@ export function App(): JSX.Element {
                       : undefined
                   }
                   onToggleSaved={(message, savedId) => void toggleSavedMessage(message, savedId)}
+                  keptAside={isKeptAside(item)}
+                  canKeepAside={desktopState.keptAside.length < MAX_KEPT_ASIDE_MESSAGES}
+                  onToggleKeptAside={toggleKeptAside}
                   {...(!running
                     ? { onToggleAttachmentContext: (message, attachment) => void toggleAttachmentContext(message, attachment) }
                     : {})}
@@ -1626,6 +1735,11 @@ export function App(): JSX.Element {
                 />
               ))}
             </div>
+            <AsideShelf
+              messages={desktopState.keptAside}
+              onOpen={(entryId) => scrollToEntry(entryId, "Kept aside message no longer exists")}
+              onRemove={(entryId) => void updateKeptAside(entryId, false)}
+            />
             {showJumpToLatest ? (
               <button
                 type="button"
@@ -1723,6 +1837,17 @@ export function App(): JSX.Element {
             />
           ) : null}
         </aside>
+
+        {terminalMounted && desktopState.workspace ? (
+          <TerminalPanel
+            workspaceId={desktopState.workspace.id}
+            workspaceName={desktopState.workspace.name}
+            themeId={desktopState.themeId}
+            onAttachOutput={(output) => void attachTerminalOutput(output)}
+            onClose={hideTerminal}
+            onError={setError}
+          />
+        ) : null}
 
         {leftCollapsed ? (
           <button
