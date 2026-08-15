@@ -35,6 +35,7 @@
 }
 
 .message.user .message-body {
+  position: relative;
   padding: 12px 14px;
   background: var(--hover-background);
   border-radius: 16px;
@@ -42,10 +43,88 @@
   font-size: calc(16px * var(--conversation-font-scale));
 }
 
-.message-body.collapsed {
-  max-height: 220px;
+.message.user .message-body.collapsible {
+  max-height: var(--message-expanded-height, 256px);
+  padding-bottom: 12px;
+  overflow: clip;
+  transition: max-height 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.message.user .message-body.collapsible.collapsed {
+  max-height: 256px;
+  padding-bottom: 48px;
   overflow: hidden;
-  mask-image: linear-gradient(to bottom, black calc(100% - 52px), transparent);
+}
+
+.message.user .message-body.collapsible:not(.collapsed) {
+  padding-bottom: 12px;
+}
+
+.message-body.collapsible::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 84px;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(to bottom, transparent, var(--hover-background) 58%);
+  border-radius: 0 0 16px 16px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.message-body.collapsed::after {
+  opacity: 1;
+}
+
+.message-collapse-toggle {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  min-height: 28px;
+  margin: -32px 10px 8px auto;
+  padding: 4px 9px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--text) 8%, var(--hover-background));
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  font-family: var(--font-interface);
+  font-size: calc(11px * var(--interface-font-scale));
+}
+
+.message-collapse-toggle:hover {
+  color: var(--text-strong);
+  border-color: var(--border-focus);
+}
+
+.message-collapse-toggle svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+  transition: transform 140ms ease;
+}
+
+.message-collapse-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.message-collapse-toggle[aria-expanded="true"] {
+  margin-top: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message.user .message-body.collapsible,
+  .message-body.collapsible::after,
+  .message-collapse-toggle svg {
+    transition: none;
+  }
 }
 
 .message.assistant {
@@ -183,11 +262,6 @@
   height: 22px;
   padding: 0;
   justify-content: center;
-}
-
-.message-actions.compact .message-expand {
-  width: auto;
-  padding: 0 4px;
 }
 
 .message-actions.compact .action-label {

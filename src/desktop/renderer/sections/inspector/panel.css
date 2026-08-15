@@ -9,8 +9,12 @@
 
 .inspector-tabs {
   display: flex;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
+  padding: 2px;
+  background: var(--input-background);
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
   -webkit-app-region: no-drag;
 }
 
@@ -26,10 +30,11 @@
 }
 
 .inspector-tabs button {
-  padding: 4px 6px;
-  border-bottom: 1px solid transparent;
-  border-radius: 0;
-  font-size: calc(15px * var(--interface-font-scale));
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: calc(14px * var(--interface-font-scale));
+  line-height: 1.1;
+  transition: color 140ms ease, background-color 140ms ease;
 }
 
 .inspector-tabs button:hover,
@@ -47,9 +52,8 @@
 }
 
 .inspector-tabs button.active {
-  color: var(--text-strong);
-  background: transparent;
-  border-bottom-color: var(--text-muted);
+  color: var(--accent-contrast);
+  background: var(--accent);
 }
 
 .inspector-content,
@@ -72,6 +76,10 @@
   color: var(--text-muted);
   font-size: calc(14px * var(--interface-font-scale));
   line-height: 1.45;
+}
+
+.git-state {
+  margin-inline: 12px;
 }
 
 .git-state p {
