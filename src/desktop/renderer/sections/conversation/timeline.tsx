@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AttachmentRef } from "../../../../attachments/types.js";
 import type { CommandApprovalDecision } from "../../../../protocol.js";
+import { MAX_KEPT_ASIDE_MESSAGES } from "../../../api.js";
 import { CopyIcon, MarkdownContent } from "./markdown.js";
 import {
   toolGeneratingLabel,
   toolStatus,
+  type KeepableTimelineItem,
   type SaveableTimelineItem,
   type TimelineItem,
 } from "./timeline-state.js";
@@ -19,6 +21,9 @@ export function TimelineEntry({
   onResolveApproval,
   savedId,
   onToggleSaved,
+  keptAside = false,
+  canKeepAside = true,
+  onToggleKeptAside,
   onToggleAttachmentContext,
   onRestore,
   onFork,
@@ -31,6 +36,9 @@ export function TimelineEntry({
   onResolveApproval?: (id: string, decision: CommandApprovalDecision) => void;
   savedId?: string | undefined;
   onToggleSaved?: (item: SaveableTimelineItem, savedId?: string) => void;
+  keptAside?: boolean;
+  canKeepAside?: boolean;
+  onToggleKeptAside?: (item: KeepableTimelineItem) => void;
   onToggleAttachmentContext?: (
     item: Extract<TimelineItem, { kind: "user" }>,
     attachment: AttachmentRef,
@@ -132,10 +140,13 @@ export function TimelineEntry({
               text={item.text}
               metadata={modelMetadata(item)}
               saved={Boolean(savedId)}
+              keptAside={keptAside}
+              canKeepAside={canKeepAside}
               {...(onFork && item.sequence !== undefined
                 ? { onFork: () => onFork(item.sequence!) }
                 : {})}
               {...(onToggleSaved ? { onSave: () => onToggleSaved(item, savedId) } : {})}
+              {...(onToggleKeptAside && item.entryId ? { onToggleKeptAside: () => onToggleKeptAside(item) } : {})}
             />
           ) : null}
         </article>
@@ -231,8 +242,8 @@ function ApprovalEntry({
       <strong>Command needs extra access</strong>
       <code>{item.command}</code>
       <p>
-        Restricted execution blocked this command in <code>{item.cwd}</code>. Approval reruns it
-        outside the sandbox with your user access.
+        This command needs access unavailable in restricted execution in <code>{item.cwd}</code>.
+        Approval runs it outside the sandbox with your user access.
       </p>
       <div className="approval-actions">
         <button type="button" onClick={() => onResolve?.(item.id, "deny")}>Deny</button>
@@ -336,6 +347,9 @@ function MessageFooter({
   onFork,
   saved = false,
   onSave,
+  keptAside = false,
+  canKeepAside = true,
+  onToggleKeptAside,
 }: {
   text: string;
   metadata?: string;
@@ -345,6 +359,9 @@ function MessageFooter({
   onFork?: () => void;
   saved?: boolean;
   onSave?: () => void;
+  keptAside?: boolean;
+  canKeepAside?: boolean;
+  onToggleKeptAside?: () => void;
 }): JSX.Element {
   const [copied, setCopied] = useState(false);
 
@@ -373,6 +390,19 @@ function MessageFooter({
           >
             <BookmarkIcon filled={saved} />
             <span className="action-label">{saved ? "Saved" : "Save"}</span>
+          </button>
+        ) : null}
+        {onToggleKeptAside ? (
+          <button
+            className={keptAside ? "message-aside kept-aside" : "message-aside"}
+            type="button"
+            disabled={!keptAside && !canKeepAside}
+            onClick={onToggleKeptAside}
+            title={keptAside ? "Remove from kept aside" : canKeepAside ? "Keep aside" : `You can keep up to ${MAX_KEPT_ASIDE_MESSAGES} messages aside`}
+            aria-label={keptAside ? "Remove from kept aside" : "Keep aside"}
+          >
+            <AsideIcon />
+            <span className="action-label">{keptAside ? "Kept aside" : "Keep aside"}</span>
           </button>
         ) : null}
         {onFork ? (
@@ -533,6 +563,15 @@ function BookmarkIcon({ filled }: { filled: boolean }): JSX.Element {
   return (
     <svg viewBox="0 0 16 16" fill={filled ? "currentColor" : "none"} aria-hidden="true">
       <path d="M4 2.5h8v11l-4-2.5-4 2.5z" />
+    </svg>
+  );
+}
+
+function AsideIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M3 2.5h8.5v11H3zM5.5 5.5h3.5M5.5 8h3.5" />
+      <path d="M13 4.5v7" />
     </svg>
   );
 }

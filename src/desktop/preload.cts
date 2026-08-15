@@ -98,6 +98,8 @@ const api: DesktopApi = {
   deleteSavedMessage: (id: string) => ipcRenderer.invoke("desktop:delete-saved-message", id),
   listSavedMessages: () => ipcRenderer.invoke("desktop:list-saved-messages"),
   openSavedMessage: (id: string) => ipcRenderer.invoke("desktop:open-saved-message", id),
+  keepAside: (threadId: string, entryId: string) => ipcRenderer.invoke("desktop:keep-aside", threadId, entryId),
+  removeAside: (threadId: string, entryId: string) => ipcRenderer.invoke("desktop:remove-aside", threadId, entryId),
   getGitChanges: (workspaceId: string) =>
     ipcRenderer.invoke("desktop:get-git-changes", workspaceId),
   getGitFile: (workspaceId: string, path: string) =>

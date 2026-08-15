@@ -50,6 +50,7 @@ import {
 import type { DesktopState } from "./api.js";
 import { openStore, type DesktopStore } from "./store.js";
 import { registerAttachmentIpc } from "./ipc/attachments.js";
+import { registerAsideIpc } from "./ipc/asides.js";
 import { registerGitIpc } from "./ipc/git.js";
 import { registerSavedMessageIpc } from "./ipc/saved-messages.js";
 import { registerSearchIpc } from "./ipc/search.js";
@@ -302,6 +303,7 @@ function registerIpc(): void {
     defaultModel: () => selectedModel,
     defaultProviderConnectionId: () => selectedProviderConnectionId,
   });
+  registerAsideIpc(store);
   registerSavedMessageIpc(store, desktopState);
   registerSearchIpc(store);
   ipcMain.handle("desktop:get-state", (): Promise<DesktopState> => desktopState());
@@ -564,6 +566,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     disabledTools,
     skills: skillsFor(workspace?.path).summaries(),
     savedMessages: await store.savedMessages.summaries(),
+    keptAside: await store.asides.list(state.activeThreadId),
     providerConnections: providerConnections.list(),
     mcpEnabled,
     mcpServers: publicMcpServers(configuredMcpServers),

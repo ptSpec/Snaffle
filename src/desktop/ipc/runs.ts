@@ -373,7 +373,11 @@ export function registerRunIpc(options: {
         options.sendEvent(threadId, event);
       },
     }).then(async () => {
-      options.sendEvent(threadId, { type: "run.persisted" });
+      const entries = await options.store.entries(threadId);
+      options.sendEvent(threadId, {
+        type: "run.persisted",
+        entries: entries.map((entry) => ({ sequence: entry.sequence, entryId: entry.id })),
+      });
       options.compactor.schedule(compactionInput);
     }).catch(() => undefined).finally(() => {
       mainRoute.release();

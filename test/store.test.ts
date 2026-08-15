@@ -46,6 +46,51 @@ test("chat entry ids stay stable and saved messages survive source deletion", as
   assert.equal(saved[0]?.sourceAvailable, false);
 });
 
+test("a thread keeps at most three assistant messages aside", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "harness-asides-store-"));
+  const store = await openStore(path.join(root, "store.db"));
+  t.after(async () => {
+    store.close();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  await store.addWorkspace(root, "example");
+  const threadId = (await store.state()).activeThreadId!;
+  await store.saveMessages(threadId, [
+    { role: "system", content: "system" },
+    { role: "user", content: "first instruction" },
+    { role: "assistant", content: "first answer" },
+    { role: "user", content: "second instruction" },
+    { role: "assistant", content: "second answer" },
+    { role: "user", content: "third instruction" },
+    { role: "assistant", content: "third answer" },
+    { role: "user", content: "fourth instruction" },
+    { role: "assistant", content: "fourth answer" },
+  ]);
+  const entries = await store.entries(threadId);
+
+  for (const entry of [entries[2]!, entries[4]!, entries[6]!]) {
+    await store.asides.keep(threadId, entry.id);
+  }
+  const asides = await store.asides.list(threadId);
+  assert.deepEqual(asides.map((aside) => aside.text), [
+    "first answer",
+    "second answer",
+    "third answer",
+  ]);
+  await assert.rejects(
+    () => store.asides.keep(threadId, entries[8]!.id),
+    /up to 3 messages aside/,
+  );
+  await assert.rejects(
+    () => store.asides.keep(threadId, entries[1]!.id),
+    /Only assistant messages/,
+  );
+
+  await store.restoreThread(threadId, 5);
+  assert.equal((await store.asides.list(threadId)).length, 2);
+});
+
 test("sent attachments can leave and rejoin model context", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "harness-store-"));
   const store = await openStore(path.join(root, "store.db"));
