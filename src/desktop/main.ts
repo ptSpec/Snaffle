@@ -76,6 +76,7 @@ import {
   type FontId,
 } from "./typography.js";
 import { applicationIcon, createDesktopWindow } from "./window.js";
+import { installDesktopMenu } from "./menu.js";
 import { configureDesktopIdentity, migrateLegacyUserData } from "./identity-migration.js";
 import { ProviderConnections } from "./provider-connections.js";
 import { SkillRegistry, skillTool } from "../extensions/skills/index.js";
@@ -125,6 +126,7 @@ let imageUnderstanding: ImageUnderstandingProfile = imageUnderstandingProfile(un
 async function start(): Promise<void> {
   loadDevelopmentEnvironment();
   migrateLegacyUserData(userDataMigration);
+  installDesktopMenu();
   const settings = loadSettings(settingsPath());
   activeTheme =
     typeof settings.themeId === "string"

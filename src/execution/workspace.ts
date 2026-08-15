@@ -9,6 +9,10 @@ import { hostEnvironmentDescription, runRestrictedCommand } from "./native/sandb
 import type { CommandApprovalDecision } from "../protocol.js";
 
 const execAsync = promisify(exec);
+const ripgrepExecutable = rgPath.replace(
+  /([\\/])app\.asar([\\/])/,
+  "$1app.asar.unpacked$2",
+);
 
 export type SearchOptions = {
   path?: string;
@@ -93,7 +97,7 @@ export class LocalWorkspace implements Workspace {
     args.push(query, searchPath || ".");
 
     return new Promise((resolve, reject) => {
-      const child = spawn(rgPath, args, { cwd: this.root });
+      const child = spawn(ripgrepExecutable, args, { cwd: this.root });
       const matches: string[] = [];
       let pending = "";
       let errorOutput = "";
