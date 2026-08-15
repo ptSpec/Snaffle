@@ -52,6 +52,7 @@ import type { OrbMotion } from "./components/thinking-orb.js";
 import { Composer } from "./sections/conversation/composer.js";
 import { AsideShelf } from "./sections/conversation/aside-shelf.js";
 import { CommandPalette, type AppCommand } from "./commands/palette.js";
+import { TerminalPanel } from "./sections/terminal/terminal.js";
 import {
   TimelineEntry,
 } from "./sections/conversation/timeline.js";
@@ -149,6 +150,7 @@ export function App(): JSX.Element {
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("inspect");
   const [view, setView] = useState<AppView>("conversation");
   const [commandMode, setCommandMode] = useState<"all" | "slash" | null>(null);
+  const [terminalOpen, setTerminalOpen] = useState(false);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("appearance");
   const [bookmarksPage, setBookmarksPage] = useState<BookmarksPage>("threads");
   const [sendOrbMotion, setSendOrbMotion] = useState<OrbMotion>("stopped");
@@ -188,6 +190,19 @@ export function App(): JSX.Element {
     window.addEventListener("keydown", toggleCommands);
     return () => window.removeEventListener("keydown", toggleCommands);
   }, []);
+
+  useEffect(() => {
+    function toggleTerminal(event: KeyboardEvent): void {
+      if (!event.ctrlKey || event.code !== "Backquote") return;
+      event.preventDefault();
+      if (!desktopState.workspace) return;
+      setView("conversation");
+      setTerminalOpen((open) => !open);
+    }
+
+    window.addEventListener("keydown", toggleTerminal);
+    return () => window.removeEventListener("keydown", toggleTerminal);
+  }, [desktopState.workspace]);
   const followTimeline = useRef(true);
   const leftAutoCollapsed = useRef(false);
   const fileEditorExpanded = useRef(false);
@@ -443,6 +458,7 @@ export function App(): JSX.Element {
   const previousAssistantModels = useMemo(() => modelTransitions(timeline), [timeline]);
   const visibleLeftWidth = leftCollapsed ? 0 : leftWidth;
   const visibleRightWidth = view !== "conversation" || rightCollapsed ? 0 : rightWidth;
+  const terminalVisible = view === "conversation" && terminalOpen && Boolean(desktopState.workspace);
   const activeThread = desktopState.workspace?.threads.find(
     (thread) => thread.id === desktopState.activeThreadId,
   );
@@ -1470,6 +1486,18 @@ export function App(): JSX.Element {
       disabled: view !== "conversation",
       run: () => setRightCollapsed((value) => !value),
     },
+    {
+      id: "terminal-toggle",
+      label: terminalOpen ? "Hide terminal" : "Show terminal",
+      detail: desktopState.workspace ? `Open in ${desktopState.workspace.name}` : "Open a workspace first",
+      keywords: "shell console command line",
+      shortcut: window.desktop.platform === "darwin" ? "⌃`" : "Ctrl+`",
+      disabled: !desktopState.workspace,
+      run: () => {
+        setView("conversation");
+        setTerminalOpen((open) => !open);
+      },
+    },
     ...desktopState.skills.map((skill): AppCommand => ({
       id: `skill:${skill.name}`,
       label: `/${skill.name}`,
@@ -1502,9 +1530,12 @@ export function App(): JSX.Element {
   return (
     <main className={`app-shell platform-${window.desktop.platform}`}>
       <section
-        className="workspace-shell"
+        className={terminalVisible ? "workspace-shell terminal-open" : "workspace-shell"}
         style={{
           gridTemplateColumns: `${visibleLeftWidth}px minmax(360px, 1fr) ${visibleRightWidth}px`,
+          gridTemplateRows: terminalVisible
+            ? "minmax(0, 1fr) var(--terminal-height)"
+            : "minmax(0, 1fr)",
         }}
       >
         <Sidebar
@@ -1528,6 +1559,8 @@ export function App(): JSX.Element {
             setError(null);
           }}
           onOpenThreadSource={(thread) => void openThreadSource(thread)}
+          terminalOpen={terminalOpen}
+          onTerminal={() => setTerminalOpen((open) => !open)}
           onCollapse={() => {
             leftAutoCollapsed.current = false;
             setLeftCollapsed(true);
@@ -1765,6 +1798,16 @@ export function App(): JSX.Element {
             />
           ) : null}
         </aside>
+
+        {terminalVisible && desktopState.workspace ? (
+          <TerminalPanel
+            workspaceId={desktopState.workspace.id}
+            workspaceName={desktopState.workspace.name}
+            themeId={desktopState.themeId}
+            onClose={() => setTerminalOpen(false)}
+            onError={setError}
+          />
+        ) : null}
 
         {leftCollapsed ? (
           <button

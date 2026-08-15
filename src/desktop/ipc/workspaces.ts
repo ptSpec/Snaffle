@@ -12,6 +12,7 @@ export function registerWorkspaceIpc(options: {
   runningThread: (threadId: string) => boolean;
   runningWorkspace: (workspaceId: string) => boolean;
   threadsDeleted: (threadIds: string[]) => void;
+  workspaceRemoved: (workspaceId: string) => void;
   defaultModel: () => string;
   defaultProviderConnectionId: () => string;
 }): void {
@@ -107,6 +108,7 @@ export function registerWorkspaceIpc(options: {
     if (options.runningWorkspace(workspaceId)) {
       throw new Error("A workspace with a running thread cannot be removed");
     }
+    options.workspaceRemoved(workspaceId);
     await store.removeWorkspace(workspaceId);
     return state();
   });

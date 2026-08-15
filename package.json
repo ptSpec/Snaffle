@@ -47,8 +47,11 @@
     "@mozilla/readability": "^0.6.0",
     "@typopro/web-junicode": "^3.7.5",
     "@vscode/ripgrep": "^1.18.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "highlight.js": "^11.11.1",
     "linkedom": "^0.18.13",
+    "node-pty": "^1.2.0-beta.15",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
@@ -71,5 +74,8 @@
   },
   "overrides": {
     "nanoid": "^3.3.18"
+  },
+  "allowScripts": {
+    "node-pty@1.2.0-beta.15": true
   }
 }

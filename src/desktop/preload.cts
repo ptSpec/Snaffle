@@ -1,7 +1,15 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { CommandApprovalDecision } from "../protocol.js";
 import type { ProviderConnectionInput } from "../providers/provider.js";
-import type { DesktopApi, DesktopRunEvent, GitFileContents, SaveMessageInput, StartRunInput } from "./api.js";
+import type {
+  DesktopApi,
+  DesktopRunEvent,
+  DesktopTerminalDataEvent,
+  DesktopTerminalExitEvent,
+  GitFileContents,
+  SaveMessageInput,
+  StartRunInput,
+} from "./api.js";
 import type { FontId } from "./typography.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js";
 import type { SubagentProfile, ThreadSubagentMode } from "../agent/subagents/profile.js";
@@ -117,10 +125,28 @@ const api: DesktopApi = {
   initializeGitRepository: (workspaceId: string) =>
     ipcRenderer.invoke("desktop:initialize-git-repository", workspaceId),
   openExternal: (url: string) => ipcRenderer.invoke("desktop:open-external", url),
+  openTerminal: (workspaceId: string, columns: number, rows: number) =>
+    ipcRenderer.invoke("desktop:terminal-open", workspaceId, columns, rows),
+  writeTerminal: (workspaceId: string, data: string) =>
+    ipcRenderer.invoke("desktop:terminal-write", workspaceId, data),
+  resizeTerminal: (workspaceId: string, columns: number, rows: number) =>
+    ipcRenderer.invoke("desktop:terminal-resize", workspaceId, columns, rows),
+  closeTerminal: (workspaceId: string) =>
+    ipcRenderer.invoke("desktop:terminal-close", workspaceId),
   onRunEvent(listener: (event: DesktopRunEvent) => void): () => void {
     const receiveEvent = (_event: Electron.IpcRendererEvent, event: DesktopRunEvent) => listener(event);
     ipcRenderer.on("desktop:run-event", receiveEvent);
     return () => ipcRenderer.removeListener("desktop:run-event", receiveEvent);
+  },
+  onTerminalData(listener: (event: DesktopTerminalDataEvent) => void): () => void {
+    const receiveEvent = (_event: Electron.IpcRendererEvent, event: DesktopTerminalDataEvent) => listener(event);
+    ipcRenderer.on("desktop:terminal-data", receiveEvent);
+    return () => ipcRenderer.removeListener("desktop:terminal-data", receiveEvent);
+  },
+  onTerminalExit(listener: (event: DesktopTerminalExitEvent) => void): () => void {
+    const receiveEvent = (_event: Electron.IpcRendererEvent, event: DesktopTerminalExitEvent) => listener(event);
+    ipcRenderer.on("desktop:terminal-exit", receiveEvent);
+    return () => ipcRenderer.removeListener("desktop:terminal-exit", receiveEvent);
   },
 };
 

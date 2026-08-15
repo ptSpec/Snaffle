@@ -55,6 +55,7 @@ import { registerGitIpc } from "./ipc/git.js";
 import { registerSavedMessageIpc } from "./ipc/saved-messages.js";
 import { registerSearchIpc } from "./ipc/search.js";
 import { registerWorkspaceIpc } from "./ipc/workspaces.js";
+import { registerTerminalIpc } from "./ipc/terminal.js";
 import { registerRunIpc, type RunIpc } from "./ipc/runs.js";
 import { registerProviderIpc } from "./ipc/providers.js";
 import { registerMcpIpc } from "./ipc/mcp.js";
@@ -93,6 +94,7 @@ let attachments: AttachmentStore;
 let runs: RunIpc;
 let contextCompactor: ContextCompactor;
 let providerConnections: ProviderConnections;
+let terminals: ReturnType<typeof registerTerminalIpc>;
 const mcpManager = new McpManager();
 let configuredMcpServers: McpServerConfig[] = [];
 let activeTheme: Theme = DEFAULT_THEME;
@@ -293,6 +295,7 @@ function registerIpc(): void {
     },
     state: desktopState,
   });
+  terminals = registerTerminalIpc({ store, mainWindow: () => mainWindow });
   registerWorkspaceIpc({
     store,
     state: desktopState,
@@ -300,6 +303,7 @@ function registerIpc(): void {
     runningThread: runs.isThreadRunning,
     runningWorkspace: runs.isWorkspaceRunning,
     threadsDeleted: runs.forgetThreads,
+    workspaceRemoved: terminals.close,
     defaultModel: () => selectedModel,
     defaultProviderConnectionId: () => selectedProviderConnectionId,
   });
@@ -880,6 +884,7 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   runs?.stopAll();
+  terminals?.closeAll();
   void mcpManager.close();
   store?.close();
 });

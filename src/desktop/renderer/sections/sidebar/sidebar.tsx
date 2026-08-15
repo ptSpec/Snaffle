@@ -34,6 +34,8 @@ export function Sidebar({
   onSettingsPage,
   onBookmarksPage,
   onOpenThreadSource,
+  terminalOpen,
+  onTerminal,
   onCollapse,
 }: {
   state: DesktopState;
@@ -50,6 +52,8 @@ export function Sidebar({
   onSettingsPage: (page: SettingsPage) => void;
   onBookmarksPage: (page: BookmarksPage) => void;
   onOpenThreadSource: (thread: DesktopThread) => void;
+  terminalOpen: boolean;
+  onTerminal: () => void;
   onCollapse: () => void;
 }): JSX.Element {
   const [selecting, setSelecting] = useState(false);
@@ -643,6 +647,15 @@ export function Sidebar({
         ) : (
           <>
             <button
+              className={terminalOpen ? "sidebar-action active" : "sidebar-action"}
+              type="button"
+              onClick={onTerminal}
+              aria-pressed={terminalOpen}
+            >
+              <TerminalSidebarIcon />
+              <span>Terminal</span>
+            </button>
+            <button
               className="sidebar-action"
               type="button"
               onClick={() => {
@@ -833,6 +846,14 @@ function SearchSidebarIcon(): JSX.Element {
     <svg className="sidebar-action-icon search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle cx="10.75" cy="10.75" r="6.25" />
       <path d="m15.4 15.4 4.6 4.6" />
+    </svg>
+  );
+}
+
+function TerminalSidebarIcon(): JSX.Element {
+  return (
+    <svg className="sidebar-action-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="m4 5 4 4-4 4m6 0h6" />
     </svg>
   );
 }

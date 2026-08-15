@@ -230,10 +230,17 @@ textarea:disabled {
 }
 
 .workspace-shell {
+  --terminal-height: min(32vh, 300px);
+
   position: relative;
   display: grid;
   background: var(--app-background);
   transition: grid-template-columns 180ms ease;
+}
+
+.workspace-shell > .left-sidebar {
+  grid-row: 1 / -1;
+  grid-column: 1;
 }
 
 .workspace-shell::before {
@@ -302,10 +309,21 @@ body.resizing-columns .workspace-shell {
 .workspace-shell > .settings,
 .workspace-shell > .bookmarks,
 .workspace-shell > .search-screen {
+  grid-row: 1;
+  grid-column: 2;
   position: relative;
   z-index: 1;
   overflow: hidden;
   border-radius: 14px 0 0 14px;
+}
+
+.workspace-shell > .inspector {
+  grid-row: 1;
+  grid-column: 3;
+}
+
+.workspace-shell.terminal-open .right-resizer {
+  bottom: var(--terminal-height);
 }
 
 .workspace-shell > .settings {

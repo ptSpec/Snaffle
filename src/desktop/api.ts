@@ -166,6 +166,16 @@ export type DesktopRunEvent = {
   event: RunEvent;
 };
 
+export type DesktopTerminalDataEvent = {
+  workspaceId: string;
+  data: string;
+};
+
+export type DesktopTerminalExitEvent = {
+  workspaceId: string;
+  exitCode: number;
+};
+
 export interface DesktopApi {
   platform: string;
   getState(): Promise<DesktopState>;
@@ -237,5 +247,11 @@ export interface DesktopApi {
   revealWorkspaceFile(workspaceId: string, path: string): Promise<void>;
   initializeGitRepository(workspaceId: string): Promise<GitChanges>;
   openExternal(url: string): Promise<void>;
+  openTerminal(workspaceId: string, columns: number, rows: number): Promise<void>;
+  writeTerminal(workspaceId: string, data: string): Promise<void>;
+  resizeTerminal(workspaceId: string, columns: number, rows: number): Promise<void>;
+  closeTerminal(workspaceId: string): Promise<void>;
   onRunEvent(listener: (event: DesktopRunEvent) => void): () => void;
+  onTerminalData(listener: (event: DesktopTerminalDataEvent) => void): () => void;
+  onTerminalExit(listener: (event: DesktopTerminalExitEvent) => void): () => void;
 }
