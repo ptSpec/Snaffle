@@ -57,6 +57,25 @@ export class AttachmentStore {
     };
   }
 
+  async importText(name: string, text: string): Promise<AttachmentPreview> {
+    const id = randomUUID();
+    const folder = this.folder(id);
+    const bytes = Buffer.from(text);
+    await mkdir(folder, { recursive: true });
+    await writeFile(path.join(folder, "original"), bytes);
+    await writeFile(path.join(folder, "context.md"), text, "utf8");
+    return {
+      id,
+      fingerprint: fingerprint(bytes),
+      name,
+      mediaType: "text/plain",
+      size: bytes.length,
+      kind: "document",
+      delivery: "markdown",
+      estimatedTokens: Math.max(1, Math.ceil(text.length / 4)),
+    };
+  }
+
   async remove(id: string): Promise<void> {
     await rm(this.folder(safeId(id)), { recursive: true, force: true });
   }

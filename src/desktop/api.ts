@@ -203,6 +203,7 @@ export interface DesktopApi {
   chooseAttachments(): Promise<AttachmentPreview[]>;
   importDroppedFiles(files: File[]): Promise<AttachmentPreview[]>;
   importClipboardImage(): Promise<AttachmentPreview>;
+  importTerminalOutput(workspaceId: string, output: string): Promise<AttachmentPreview>;
   readClipboardText(): Promise<string>;
   readClipboardHtml(): Promise<string>;
   removeAttachment(id: string): Promise<void>;

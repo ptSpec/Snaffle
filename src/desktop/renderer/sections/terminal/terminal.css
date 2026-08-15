@@ -12,12 +12,26 @@
   grid-row: 2;
   grid-column: 2 / -1;
   grid-template-rows: 38px minmax(0, 1fr);
+  align-self: end;
+  height: var(--terminal-height);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
   color: var(--text-primary);
   background: var(--code-background);
   border-top: 1px solid var(--border-default);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(100%);
+  transition:
+    opacity 140ms ease,
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.workspace-shell.terminal-open .terminal-panel {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 .terminal-header {
@@ -84,13 +98,24 @@
   background: var(--hover-background);
 }
 
+.terminal-header .terminal-attach-output {
+  gap: 6px;
+  padding: 0 9px;
+}
+
 .terminal-view {
   min-width: 0;
   min-height: 0;
-  padding: 8px 10px;
+  padding: 2px 8px 6px;
 }
 
 .terminal-view .xterm,
 .terminal-view .xterm-viewport {
   height: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-panel {
+    transition: none;
+  }
 }

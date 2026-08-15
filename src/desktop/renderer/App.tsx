@@ -151,6 +151,7 @@ export function App(): JSX.Element {
   const [view, setView] = useState<AppView>("conversation");
   const [commandMode, setCommandMode] = useState<"all" | "slash" | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalMounted, setTerminalMounted] = useState(false);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("appearance");
   const [bookmarksPage, setBookmarksPage] = useState<BookmarksPage>("threads");
   const [sendOrbMotion, setSendOrbMotion] = useState<OrbMotion>("stopped");
@@ -162,6 +163,29 @@ export function App(): JSX.Element {
   const executionMode = useRef<HTMLDetailsElement>(null);
   const composerAdd = useRef<HTMLDetailsElement>(null);
   const searchOpenedAt = useRef(0);
+  const terminalUnmountTimer = useRef<number | undefined>(undefined);
+
+  function showTerminal(): void {
+    if (!desktopState.workspace) return;
+    if (terminalUnmountTimer.current) window.clearTimeout(terminalUnmountTimer.current);
+    setTerminalMounted(true);
+    window.requestAnimationFrame(() => setTerminalOpen(true));
+  }
+
+  function hideTerminal(): void {
+    setTerminalOpen(false);
+    if (terminalUnmountTimer.current) window.clearTimeout(terminalUnmountTimer.current);
+    terminalUnmountTimer.current = window.setTimeout(() => setTerminalMounted(false), 180);
+  }
+
+  function toggleTerminal(): void {
+    if (view === "conversation" && terminalOpen) {
+      hideTerminal();
+      return;
+    }
+    setView("conversation");
+    showTerminal();
+  }
 
   useEffect(() => {
     function toggleSearch(event: KeyboardEvent): void {
@@ -192,17 +216,20 @@ export function App(): JSX.Element {
   }, []);
 
   useEffect(() => {
-    function toggleTerminal(event: KeyboardEvent): void {
+    function handleTerminalShortcut(event: KeyboardEvent): void {
       if (!event.ctrlKey || event.code !== "Backquote") return;
       event.preventDefault();
       if (!desktopState.workspace) return;
-      setView("conversation");
-      setTerminalOpen((open) => !open);
+      toggleTerminal();
     }
 
-    window.addEventListener("keydown", toggleTerminal);
-    return () => window.removeEventListener("keydown", toggleTerminal);
-  }, [desktopState.workspace]);
+    window.addEventListener("keydown", handleTerminalShortcut);
+    return () => window.removeEventListener("keydown", handleTerminalShortcut);
+  }, [desktopState.workspace, terminalOpen, view]);
+
+  useEffect(() => () => {
+    if (terminalUnmountTimer.current) window.clearTimeout(terminalUnmountTimer.current);
+  }, []);
   const followTimeline = useRef(true);
   const leftAutoCollapsed = useRef(false);
   const fileEditorExpanded = useRef(false);
@@ -680,6 +707,21 @@ export function App(): JSX.Element {
     setError(null);
     try {
       await addAttachments(await window.desktop.chooseAttachments());
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function attachTerminalOutput(output: string): Promise<void> {
+    const workspace = desktopState.workspace;
+    if (!workspace) return;
+    if (pendingAttachments.length >= 8) {
+      setError("Attach at most 8 files to one message");
+      return;
+    }
+    try {
+      await addAttachments([await window.desktop.importTerminalOutput(workspace.id, output)]);
+      window.requestAnimationFrame(() => taskInput.current?.focus());
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -1493,10 +1535,7 @@ export function App(): JSX.Element {
       keywords: "shell console command line",
       shortcut: window.desktop.platform === "darwin" ? "⌃`" : "Ctrl+`",
       disabled: !desktopState.workspace,
-      run: () => {
-        setView("conversation");
-        setTerminalOpen((open) => !open);
-      },
+      run: toggleTerminal,
     },
     ...desktopState.skills.map((skill): AppCommand => ({
       id: `skill:${skill.name}`,
@@ -1535,7 +1574,7 @@ export function App(): JSX.Element {
           gridTemplateColumns: `${visibleLeftWidth}px minmax(360px, 1fr) ${visibleRightWidth}px`,
           gridTemplateRows: terminalVisible
             ? "minmax(0, 1fr) var(--terminal-height)"
-            : "minmax(0, 1fr)",
+            : "minmax(0, 1fr) 0px",
         }}
       >
         <Sidebar
@@ -1560,7 +1599,7 @@ export function App(): JSX.Element {
           }}
           onOpenThreadSource={(thread) => void openThreadSource(thread)}
           terminalOpen={terminalOpen}
-          onTerminal={() => setTerminalOpen((open) => !open)}
+          onTerminal={toggleTerminal}
           onCollapse={() => {
             leftAutoCollapsed.current = false;
             setLeftCollapsed(true);
@@ -1799,12 +1838,13 @@ export function App(): JSX.Element {
           ) : null}
         </aside>
 
-        {terminalVisible && desktopState.workspace ? (
+        {terminalMounted && desktopState.workspace ? (
           <TerminalPanel
             workspaceId={desktopState.workspace.id}
             workspaceName={desktopState.workspace.name}
             themeId={desktopState.themeId}
-            onClose={() => setTerminalOpen(false)}
+            onAttachOutput={(output) => void attachTerminalOutput(output)}
+            onClose={hideTerminal}
             onError={setError}
           />
         ) : null}

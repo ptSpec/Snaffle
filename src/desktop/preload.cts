@@ -55,6 +55,8 @@ const api: DesktopApi = {
   importDroppedFiles: (files: File[]) =>
     ipcRenderer.invoke("desktop:import-dropped-files", files.map((file) => webUtils.getPathForFile(file))),
   importClipboardImage: () => ipcRenderer.invoke("desktop:import-clipboard-image"),
+  importTerminalOutput: (workspaceId: string, output: string) =>
+    ipcRenderer.invoke("desktop:import-terminal-output", workspaceId, output),
   readClipboardText: () => ipcRenderer.invoke("desktop:read-clipboard-text"),
   readClipboardHtml: () => ipcRenderer.invoke("desktop:read-clipboard-html"),
   removeAttachment: (id: string) => ipcRenderer.invoke("desktop:remove-attachment", id),

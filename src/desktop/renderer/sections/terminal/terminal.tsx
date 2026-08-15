@@ -9,18 +9,21 @@ export function TerminalPanel({
   workspaceId,
   workspaceName,
   themeId,
+  onAttachOutput,
   onClose,
   onError,
 }: {
   workspaceId: string;
   workspaceName: string;
   themeId: string;
+  onAttachOutput: (output: string) => void;
   onClose: () => void;
   onError: (message: string) => void;
 }): JSX.Element {
   const container = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal>();
   const fitRef = useRef<FitAddon>();
+  const captureOutputRef = useRef<() => string>(() => "");
 
   useEffect(() => {
     const element = container.current;
@@ -31,14 +34,14 @@ export function TerminalPanel({
     void mount(element);
 
     async function mount(terminalElement: HTMLDivElement): Promise<void> {
-      await document.fonts.load(`13px ${TERMINAL_FONT}`);
+      await document.fonts.load(`12px ${TERMINAL_FONT}`);
       if (disposed) return;
 
       const styles = getComputedStyle(document.documentElement);
       const terminal = new Terminal({
         cursorBlink: true,
         fontFamily: TERMINAL_FONT,
-        fontSize: 13,
+        fontSize: 12,
         lineHeight: 1.25,
         scrollback: 5_000,
         theme: {
@@ -53,6 +56,8 @@ export function TerminalPanel({
       terminal.open(terminalElement);
       terminalRef.current = terminal;
       fitRef.current = fit;
+      const commandLines: number[] = [];
+      captureOutputRef.current = () => capturedOutput(terminal, commandLines);
 
       const removeDataListener = window.desktop.onTerminalData((event) => {
         if (event.workspaceId === workspaceId) terminal.write(event.data);
@@ -62,19 +67,29 @@ export function TerminalPanel({
         terminal.write(`\r\n\x1b[90mProcess exited with code ${event.exitCode}\x1b[0m\r\n`);
       });
       const input = terminal.onData((data) => {
+        if (data.includes("\r")) {
+          const buffer = terminal.buffer.active;
+          commandLines.push(buffer.baseY + buffer.cursorY);
+          if (commandLines.length > 3) commandLines.shift();
+        }
         void window.desktop.writeTerminal(workspaceId, data).catch((cause) => {
           onError(errorMessage(cause));
         });
       });
       const resize = new ResizeObserver(() => {
         fit.fit();
+        if (terminal.cols < 2 || terminal.rows < 2) return;
         void window.desktop.resizeTerminal(workspaceId, terminal.cols, terminal.rows);
       });
       resize.observe(terminalElement);
 
       const frame = window.requestAnimationFrame(() => {
         fit.fit();
-        void window.desktop.openTerminal(workspaceId, terminal.cols, terminal.rows).then(
+        void window.desktop.openTerminal(
+          workspaceId,
+          Math.max(2, terminal.cols),
+          Math.max(2, terminal.rows),
+        ).then(
           () => terminal.focus(),
           (cause: unknown) => onError(errorMessage(cause)),
         );
@@ -89,6 +104,7 @@ export function TerminalPanel({
         terminal.dispose();
         terminalRef.current = undefined;
         fitRef.current = undefined;
+        captureOutputRef.current = () => "";
       };
     }
 
@@ -121,6 +137,16 @@ export function TerminalPanel({
           <span>{workspaceName}</span>
         </span>
         <span className="terminal-actions">
+          <button
+            className="terminal-attach-output"
+            type="button"
+            onClick={() => onAttachOutput(captureOutputRef.current())}
+            aria-label="Attach terminal output to message"
+            title="Attach selection or recent terminal output to chat"
+          >
+            <AttachOutputIcon />
+            <span>Attach terminal output to chat</span>
+          </button>
           <button
             type="button"
             onClick={() => void restart()}
@@ -168,6 +194,32 @@ function RestartIcon(): JSX.Element {
   );
 }
 
+function AttachOutputIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M4 5.5h12v8H9l-3.5 2v-2H4zM10 8v3M8.5 9.5h3" />
+    </svg>
+  );
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function capturedOutput(terminal: Terminal, commandLines: number[]): string {
+  const selection = terminal.getSelection().trim();
+  if (selection) return selection;
+
+  const buffer = terminal.buffer.active;
+  const end = Math.max(0, buffer.length - 1);
+  const start = Math.max(0, Math.min(commandLines[0] ?? end - 200, end));
+  const lines: string[] = [];
+  for (let index = start; index <= end; index += 1) {
+    const line = buffer.getLine(index);
+    if (!line) continue;
+    const text = line.translateToString(true);
+    if (line.isWrapped && lines.length) lines[lines.length - 1] += text;
+    else lines.push(text);
+  }
+  return lines.join("\n").trim();
 }

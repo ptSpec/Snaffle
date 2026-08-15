@@ -3,6 +3,9 @@ import type { OpenDialogOptions } from "electron";
 import type { AttachmentStore } from "../../attachments/store.js";
 import { MAX_ATTACHMENTS } from "../../attachments/store.js";
 import type { DesktopStore } from "../store.js";
+import { DEFAULT_TOOL_OUTPUT_CHARS, truncateMiddle } from "../../tools/output.js";
+
+const MAX_TERMINAL_CAPTURE_CHARS = 200_000;
 
 export function registerAttachmentIpc(
   store: DesktopStore,
@@ -27,6 +30,24 @@ export function registerAttachmentIpc(
     const image = clipboard.readImage();
     if (image.isEmpty()) throw new Error("The clipboard does not contain an image");
     return attachments.importClipboardImage(image.toPNG());
+  });
+
+  ipcMain.handle("desktop:import-terminal-output", async (
+    _event,
+    workspaceValue: unknown,
+    outputValue: unknown,
+  ) => {
+    const workspaceId = id(workspaceValue, "Workspace");
+    const workspace = (await store.state()).workspaces.find((item) => item.id === workspaceId);
+    if (!workspace) throw new Error("Workspace no longer exists");
+    if (typeof outputValue !== "string" || outputValue.length > MAX_TERMINAL_CAPTURE_CHARS) {
+      throw new Error("Terminal output must be text no longer than 200,000 characters");
+    }
+    const output = outputValue.trim();
+    if (!output) throw new Error("The terminal has no output to attach");
+    const heading = `Terminal output from ${workspace.name}:\n\n`;
+    const text = `${heading}${truncateMiddle(output, DEFAULT_TOOL_OUTPUT_CHARS - heading.length)}`;
+    return attachments.importText("Terminal output.txt", text);
   });
 
   ipcMain.handle("desktop:import-dropped-files", (_event, value: unknown) => {
