@@ -18,6 +18,31 @@ export function Inspector({
   if (item.kind === "assistant") {
     return <ModelCallInspector item={item} timeline={timeline} instructions={instructions} tools={tools} />;
   }
+  if (item.kind === "image-understanding") {
+    return (
+      <div className="inspector-card">
+        <p className="eyebrow">Image understanding</p>
+        <h3>{item.activity === "description" ? "Image description" : "Focused image inspection"}</h3>
+        <p className="muted">
+          {item.cached
+            ? "Reused from local image cache"
+            : [item.model, item.providerConnectionId, item.durationMs ? formatDuration(item.durationMs) : null]
+              .filter(Boolean).join(" · ")}
+        </p>
+        <JsonInspector value={{
+          image: item.imageName,
+          activity: item.activity,
+          cached: item.cached,
+          ...(item.question ? { question: item.question } : {}),
+          model: item.model,
+          provider: item.providerId,
+          connection: item.providerConnectionId,
+          durationMs: item.durationMs,
+          usage: item.usage,
+        }} />
+      </div>
+    );
+  }
   if (item.kind === "activity-group") {
     return <div className="inspector-card">Work details</div>;
   }

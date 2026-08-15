@@ -1,12 +1,36 @@
-import type { Message } from "../protocol.js";
+import type { Message, Usage } from "../protocol.js";
 import type { ModelProvider } from "../providers/provider.js";
-import type { AttachmentStore } from "./store.js";
 import type { AttachmentRef } from "./types.js";
 
 export type ImageUnderstandingProfile = {
   enabled: boolean;
   providerConnectionId: string;
   model: string;
+};
+
+export type ImageDescriptionStore = {
+  imageDescription(id: string, connectionId: string, model: string): Promise<string | null>;
+  saveImageDescription(id: string, connectionId: string, model: string, description: string): Promise<void>;
+  imageInspection(id: string, connectionId: string, model: string, normalizedQuestion: string): Promise<string | null>;
+  saveImageInspection(
+    id: string,
+    connectionId: string,
+    model: string,
+    normalizedQuestion: string,
+    description: string,
+  ): Promise<void>;
+};
+
+export type ImageUnderstandingActivity = {
+  attachment: AttachmentRef;
+  kind: "description" | "inspection";
+  cached: boolean;
+  model: string;
+  providerId: string;
+  providerConnectionId: string;
+  usage?: Usage;
+  durationMs?: number;
+  question?: string;
 };
 
 export function imageUnderstandingProfile(value: unknown): ImageUnderstandingProfile {
@@ -23,9 +47,10 @@ export function imageUnderstandingProfile(value: unknown): ImageUnderstandingPro
 export async function describeImages(options: {
   messages: Message[];
   profile: ImageUnderstandingProfile;
-  attachments: AttachmentStore;
+  attachments: ImageDescriptionStore;
   provider: ModelProvider;
   signal: AbortSignal;
+  onActivity?: (activity: ImageUnderstandingActivity) => void;
 }): Promise<Message[]> {
   const descriptions = new Map<string, string>();
   for (const message of options.messages) {
@@ -39,7 +64,12 @@ export async function describeImages(options: {
         options.profile.providerConnectionId,
         options.profile.model,
       );
-      descriptions.set(attachment.id, cached ?? await describeImage(options, attachment));
+      const result = cached
+        ? imageUnderstandingActivity(options, attachment, { description: cached, cached: true })
+        : await describeImage(options, attachment);
+      descriptions.set(attachment.id, result.description);
+      const { description: _description, ...activity } = result;
+      options.onActivity?.(activity);
     }
   }
 
@@ -48,7 +78,7 @@ export async function describeImages(options: {
     const interpreted = message.attachments.flatMap((attachment) => {
       const description = descriptions.get(attachment.id);
       return description
-        ? [`<image name=${JSON.stringify(attachment.name)} interpreted_by=${JSON.stringify(options.profile.model)}>\n${description}\n</image>`]
+        ? [`<image id=${JSON.stringify(attachment.id)} name=${JSON.stringify(attachment.name)} interpreted_by=${JSON.stringify(options.profile.model)} inspection_available="true">\n${description}\n</image>`]
         : [];
     });
     const attachments = message.attachments.filter((attachment) => !descriptions.has(attachment.id));
@@ -62,7 +92,8 @@ export async function describeImages(options: {
 async function describeImage(
   options: Parameters<typeof describeImages>[0],
   attachment: AttachmentRef,
-): Promise<string> {
+): Promise<ImageUnderstandingActivity & { description: string }> {
+  const startedAt = Date.now();
   const response = await options.provider.complete([
     {
       role: "user",
@@ -82,5 +113,28 @@ async function describeImage(
     options.profile.model,
     description,
   );
-  return description;
+  return imageUnderstandingActivity(options, attachment, {
+    description,
+    cached: false,
+    ...(response.usage ? { usage: response.usage } : {}),
+    durationMs: Date.now() - startedAt,
+  });
+}
+
+function imageUnderstandingActivity(
+  options: Parameters<typeof describeImages>[0],
+  attachment: AttachmentRef,
+  details: { description: string; cached: boolean; usage?: Usage; durationMs?: number },
+): ImageUnderstandingActivity & { description: string } {
+  return {
+    attachment,
+    kind: "description",
+    cached: details.cached,
+    model: options.profile.model,
+    providerId: options.provider.providerId,
+    providerConnectionId: options.provider.connectionId,
+    ...(details.usage ? { usage: details.usage } : {}),
+    ...(details.durationMs === undefined ? {} : { durationMs: details.durationMs }),
+    description: details.description,
+  };
 }

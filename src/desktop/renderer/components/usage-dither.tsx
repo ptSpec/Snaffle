@@ -60,9 +60,9 @@ export function UsageDither({
 
     const style = getComputedStyle(document.documentElement);
     drawUsage(context, points, chartWidth, CHART_HEIGHT, maxTokens, {
-      cached: style.getPropertyValue("--primary").trim(),
-      uncached: style.getPropertyValue("--muted-text").trim(),
-      output: style.getPropertyValue("--text").trim(),
+      cached: style.getPropertyValue("--usage-cached").trim(),
+      uncached: style.getPropertyValue("--usage-uncached").trim(),
+      output: style.getPropertyValue("--usage-output").trim(),
     });
   }, [chartWidth, maxTokens, points]);
 
