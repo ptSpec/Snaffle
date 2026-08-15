@@ -137,7 +137,7 @@ export function Settings({
   onWebSearchApiKey: (backend: KetchSearchBackend, apiKey: string) => void;
   onSaveProvider(input: ProviderConnectionInput): Promise<void>;
   onRemoveProvider(id: string): Promise<void>;
-  onTestProvider(id: string): Promise<ProviderStatus>;
+  onTestProvider(input: ProviderConnectionInput): Promise<ProviderStatus>;
   onMcpEnabled(enabled: boolean): void;
   onSaveMcpServer(server: McpServerConfig): Promise<void>;
   onRemoveMcpServer(id: string): Promise<void>;

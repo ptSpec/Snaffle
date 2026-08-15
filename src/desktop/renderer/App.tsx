@@ -1550,7 +1550,7 @@ export function App(): JSX.Element {
             onWebSearchApiKey={(backend, apiKey) => void setWebSearchApiKey(backend, apiKey)}
             onSaveProvider={saveProviderConnection}
             onRemoveProvider={removeProviderConnection}
-            onTestProvider={(id) => window.desktop.getProviderStatus(id)}
+            onTestProvider={(input) => window.desktop.getProviderStatus(input)}
             onMcpEnabled={(enabled) => void setMcpEnabled(enabled)}
             onSaveMcpServer={saveMcpServer}
             onRemoveMcpServer={removeMcpServer}

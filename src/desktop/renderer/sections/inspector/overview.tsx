@@ -5,6 +5,7 @@ import type {
   SubagentRunActivity,
 } from "../../../../agent/subagents/activity.js";
 import type { Usage } from "../../../../protocol.js";
+import { UsageDither, type UsageDitherPoint } from "../../components/usage-dither.js";
 import type { TimelineItem } from "../conversation/timeline-state.js";
 
 type ExecutionTurn = {
@@ -12,6 +13,7 @@ type ExecutionTurn = {
   title: string;
   items: TimelineItem[];
   usage: Usage;
+  cacheAvailable: boolean;
 };
 
 export function ExecutionOverview({
@@ -33,6 +35,7 @@ export function ExecutionOverview({
 }): JSX.Element {
   const turns = executionTurns(timeline);
   const threadUsage = sumUsage(turns.map((turn) => turn.usage));
+  const completeCacheData = turns.every((turn) => !(turn.usage.inputTokens ?? 0) || turn.cacheAvailable);
 
   return (
     <div className="execution-overview">
@@ -41,11 +44,27 @@ export function ExecutionOverview({
           <p className="eyebrow">Execution overview</p>
           <h3>Whole thread</h3>
         </div>
-        <span className="execution-turn-count">
-          <span>{turns.length} turn{turns.length === 1 ? "" : "s"}</span>
-          {threadUsage.totalTokens ? <strong>{compactNumber(threadUsage.totalTokens)} tokens processed</strong> : null}
-          {threadUsage.costUsd ? <strong>{formatCost(threadUsage.costUsd)}</strong> : null}
-        </span>
+        {turns.length ? (
+          <div className="execution-usage-overview">
+            <UsageDither
+              points={turns.map<UsageDitherPoint>((turn, index) => ({
+                id: turn.id,
+                label: `Turn ${index + 1}: ${turn.title}`,
+                usage: turn.usage,
+                cacheAvailable: turn.cacheAvailable,
+              }))}
+              onSelect={onNavigateTurn}
+            />
+            <span className="execution-turn-count">
+              <span>{turns.length} turn{turns.length === 1 ? "" : "s"}</span>
+              {threadUsage.totalTokens ? <strong>{compactNumber(threadUsage.totalTokens)} tokens processed</strong> : null}
+              {completeCacheData && threadUsage.inputTokens ? (
+                <strong>{Math.round(((threadUsage.cachedInputTokens ?? 0) / threadUsage.inputTokens) * 100)}% cached</strong>
+              ) : null}
+              {threadUsage.costUsd ? <strong>{formatCost(threadUsage.costUsd)}</strong> : null}
+            </span>
+          </div>
+        ) : null}
       </div>
 
       {turns.length ? (
@@ -258,7 +277,7 @@ function ExecutionNode({
 }
 
 function executionTurns(timeline: TimelineItem[]): ExecutionTurn[] {
-  const turns: Array<Omit<ExecutionTurn, "usage">> = [];
+  const turns: Array<Omit<ExecutionTurn, "usage" | "cacheAvailable">> = [];
   for (const item of timeline) {
     if (item.kind === "user") {
       turns.push({ id: item.id, title: oneLine(item.text), items: [] });
@@ -266,31 +285,30 @@ function executionTurns(timeline: TimelineItem[]): ExecutionTurn[] {
       turns.at(-1)?.items.push(item);
     }
   }
-  return turns.map((turn) => ({ ...turn, usage: usageForItems(turn.items) }));
+  return turns.map((turn) => {
+    const usages = usagesForItems(turn.items);
+    return {
+      ...turn,
+      usage: sumUsage(usages),
+      cacheAvailable: usages.some((usage) => usage.cachedInputTokens !== undefined),
+    };
+  });
 }
 
 function flatten(items: TimelineItem[]): TimelineItem[] {
   return items.flatMap((item) => item.kind === "activity-group" ? flatten(item.items) : [item]);
 }
 
-function usageForItems(items: TimelineItem[]): Usage {
+function usagesForItems(items: TimelineItem[]): Usage[] {
   const flattened = flatten(items);
   const responses = flattened.filter((item): item is Extract<TimelineItem, { kind: "assistant" }> => item.kind === "assistant");
   const agents = flattened
     .filter((item): item is Extract<TimelineItem, { kind: "tool" }> => item.kind === "tool")
     .flatMap((tool) => tool.details?.runs ?? []);
-  return totalUsage(responses, agents);
-}
-
-function totalUsage(
-  responses: Array<Extract<TimelineItem, { kind: "assistant" }>>,
-  agents: SubagentRunActivity[],
-): Usage {
-  const usages = [
+  return [
     ...responses.map((response) => response.usage),
     ...agents.flatMap((agent) => agent.steps.map((step) => step.usage)),
   ].filter((usage): usage is Usage => Boolean(usage));
-  return sumUsage(usages);
 }
 
 function sumUsage(usages: Usage[]): Usage {
@@ -318,7 +336,7 @@ function turnMetadata(toolCount: number, agentCount: number, usage: Usage): stri
 function compactUsage(usage: Usage): string {
   const input = compactNumber(usage.inputTokens ?? 0);
   const output = compactNumber(usage.outputTokens ?? 0);
-  const cached = usage.cachedInputTokens
+  const cached = usage.cachedInputTokens !== undefined
     ? ` (${compactNumber(usage.cachedInputTokens)} cached)`
     : "";
   const cost = usage.costUsd ? ` · ${formatCost(usage.costUsd)}` : "";

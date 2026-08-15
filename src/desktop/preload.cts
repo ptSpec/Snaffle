@@ -34,7 +34,7 @@ const api: DesktopApi = {
   searchConversations: (query: string) =>
     ipcRenderer.invoke("desktop:search-conversations", query),
   listProviderModels: () => ipcRenderer.invoke("desktop:list-provider-models"),
-  getProviderStatus: (connectionId: string) => ipcRenderer.invoke("desktop:get-provider-status", connectionId),
+  getProviderStatus: (input: ProviderConnectionInput) => ipcRenderer.invoke("desktop:get-provider-status", input),
   saveProviderConnection: (input: ProviderConnectionInput) => ipcRenderer.invoke("desktop:save-provider-connection", input),
   removeProviderConnection: (connectionId: string) => ipcRenderer.invoke("desktop:remove-provider-connection", connectionId),
   setMcpEnabled: (enabled: boolean) => ipcRenderer.invoke("desktop:set-mcp-enabled", enabled),

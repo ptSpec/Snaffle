@@ -25,7 +25,7 @@ export function ProviderSettings({
   error: string | null;
   onSave(input: ProviderConnectionInput): Promise<void>;
   onRemove(id: string): Promise<void>;
-  onTest(id: string): Promise<ProviderStatus>;
+  onTest(input: ProviderConnectionInput): Promise<ProviderStatus>;
 }): JSX.Element {
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState(() => connectionDraft());
@@ -134,7 +134,7 @@ export function ProviderSettings({
     setBusy(true);
     setStatus(null);
     try {
-      setStatus(await onTest(selectedId));
+      setStatus(await onTest(connectionInput()));
     } catch (cause) {
       setStatus({ message: errorMessage(cause) });
     } finally {
