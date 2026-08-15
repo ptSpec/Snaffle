@@ -130,6 +130,7 @@ export function App(): JSX.Element {
   const [loadingModels, setLoadingModels] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [leftWidth, setLeftWidth] = useState(270);
   const [rightWidth, setRightWidth] = useState(320);
@@ -233,7 +234,10 @@ export function App(): JSX.Element {
 
   useLayoutEffect(() => {
     const view = timelineView.current;
-    if (view && followTimeline.current) view.scrollTop = view.scrollHeight;
+    if (view && followTimeline.current) {
+      view.scrollTop = view.scrollHeight;
+      setShowJumpToLatest(false);
+    }
   }, [timeline]);
 
   useEffect(() => {
@@ -1576,48 +1580,72 @@ export function App(): JSX.Element {
           />
         ) : (
           <section className="conversation view-enter" aria-label="Conversation">
-          <div
-            ref={timelineView}
-            className="timeline"
-            aria-live="polite"
-            onScroll={(event) => {
-              const view = event.currentTarget;
-              followTimeline.current = view.scrollHeight - view.scrollTop - view.clientHeight < 80;
-            }}
-          >
-            {timeline.map((item) => (
-              <TimelineEntry
-                key={item.id}
-                item={item}
-                previousModel={previousAssistantModels.get(item.id)}
-                selectedId={selectedItemId}
-                onSelect={(id) => {
-                  setSelectedItemId(id);
-                  setInspectorTab("inspect");
-                  setRightCollapsed(false);
+          <div className="timeline-shell">
+            <div
+              ref={timelineView}
+              className="timeline"
+              aria-live="polite"
+              onScroll={(event) => {
+                const view = event.currentTarget;
+                const distanceFromBottom = view.scrollHeight - view.scrollTop - view.clientHeight;
+                followTimeline.current = distanceFromBottom < 80;
+                setShowJumpToLatest(distanceFromBottom > 240);
+              }}
+            >
+              {timeline.map((item) => (
+                <TimelineEntry
+                  key={item.id}
+                  item={item}
+                  previousModel={previousAssistantModels.get(item.id)}
+                  selectedId={selectedItemId}
+                  onSelect={(id) => {
+                    setSelectedItemId(id);
+                    setInspectorTab("inspect");
+                    setRightCollapsed(false);
+                  }}
+                  onResolveApproval={(id, decision) => void resolveCommandApproval(id, decision)}
+                  savedId={
+                    item.kind === "assistant"
+                      ? savedIdFor(item)
+                      : undefined
+                  }
+                  onToggleSaved={(message, savedId) => void toggleSavedMessage(message, savedId)}
+                  {...(!running
+                    ? { onToggleAttachmentContext: (message, attachment) => void toggleAttachmentContext(message, attachment) }
+                    : {})}
+                  onEditUser={(text) => {
+                    setTask(text);
+                    window.requestAnimationFrame(() => {
+                      const input = taskInput.current;
+                      input?.focus();
+                      input?.setSelectionRange(text.length, text.length);
+                    });
+                  }}
+                  {...(!running ? { onRestore: (sequence) => void restoreThread(sequence) } : {})}
+                  {...(!running ? { onFork: (sequence) => void forkThread(sequence) } : {})}
+                />
+              ))}
+            </div>
+            {showJumpToLatest ? (
+              <button
+                type="button"
+                className="jump-to-latest"
+                aria-label="Scroll to latest message"
+                title="Scroll to latest"
+                onClick={() => {
+                  const view = timelineView.current;
+                  if (!view) return;
+                  followTimeline.current = true;
+                  setShowJumpToLatest(false);
+                  view.scrollTo({ top: view.scrollHeight, behavior: "smooth" });
                 }}
-                onResolveApproval={(id, decision) => void resolveCommandApproval(id, decision)}
-                savedId={
-                  item.kind === "assistant"
-                    ? savedIdFor(item)
-                    : undefined
-                }
-                onToggleSaved={(message, savedId) => void toggleSavedMessage(message, savedId)}
-                {...(!running
-                  ? { onToggleAttachmentContext: (message, attachment) => void toggleAttachmentContext(message, attachment) }
-                  : {})}
-                onEditUser={(text) => {
-                  setTask(text);
-                  window.requestAnimationFrame(() => {
-                    const input = taskInput.current;
-                    input?.focus();
-                    input?.setSelectionRange(text.length, text.length);
-                  });
-                }}
-                {...(!running ? { onRestore: (sequence) => void restoreThread(sequence) } : {})}
-                {...(!running ? { onFork: (sequence) => void forkThread(sequence) } : {})}
-              />
-            ))}
+              >
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <path d="M4.5 7.5 10 13l5.5-5.5" />
+                </svg>
+                Latest
+              </button>
+            ) : null}
           </div>
 
           <AttachmentTray

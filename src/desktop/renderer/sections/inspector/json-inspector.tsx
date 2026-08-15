@@ -43,6 +43,35 @@ export function JsonInspector({ value }: { value: unknown }): JSX.Element {
   );
 }
 
+export function CopyableOutput({
+  children,
+  className = "",
+}: {
+  children: string;
+  className?: string;
+}): JSX.Element {
+  const [copied, setCopied] = useState(false);
+
+  async function copyOutput(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(children);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div className={`copyable-output${className ? ` ${className}` : ""}`}>
+      <button type="button" onClick={() => void copyOutput()} title="Copy output">
+        {copied ? "Copied" : "Copy"}
+      </button>
+      <pre>{children}</pre>
+    </div>
+  );
+}
+
 function HighlightedJson({ value }: { value: unknown }): JSX.Element {
   const formatted = formatJson(value);
 

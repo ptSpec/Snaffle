@@ -14,13 +14,17 @@ export function currentEnvironmentContent(workspaceRoot: string | undefined, now
     : process.platform === "win32"
       ? "Windows"
       : "Linux";
-  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const resolvedLocale = Intl.DateTimeFormat().resolvedOptions();
+  const zone = resolvedLocale.timeZone;
+  const locale = resolvedLocale.locale;
+  const language = new Intl.DisplayNames(["en"], { type: "language" }).of(locale) ?? locale;
   const shellPath = process.env.SHELL ?? process.env.COMSPEC;
   const shell = shellPath ? path.basename(shellPath.replaceAll("\\", "/")) : "unknown";
 
   return `Current environment:
 - Current date: ${localDate(now)}
 - Time zone: ${zone} (${utcOffset(now)})
+- Preferred language: ${language} (${locale}); use it unless the user asks for another language
 - Platform: ${platform} ${process.arch}
 - Workspace: ${workspaceRoot ?? "unknown"}
 - Shell: ${shell}`;

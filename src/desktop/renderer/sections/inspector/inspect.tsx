@@ -1,4 +1,4 @@
-import { JsonInspector } from "./json-inspector.js";
+import { CopyableOutput, JsonInspector } from "./json-inspector.js";
 import { labelFor, toolGeneratingLabel, toolStatus, type TimelineItem } from "../conversation/timeline-state.js";
 import { SubagentInspector } from "./subagent.js";
 import { ModelCallInspector } from "./model.js";
@@ -89,9 +89,9 @@ export function Inspector({
       {item.phase === "completed" ? (
         <>
           <h4>Output</h4>
-          <pre className={item.isError ? "inspector-tool-output failed" : "inspector-tool-output"}>
+          <CopyableOutput className={item.isError ? "inspector-tool-output failed" : "inspector-tool-output"}>
             {item.content || "No output"}
-          </pre>
+          </CopyableOutput>
         </>
       ) : (
         <p className="muted">Waiting for the tool result.</p>
@@ -129,9 +129,9 @@ function McpToolInspector({ item }: { item: Extract<TimelineItem, { kind: "tool"
       {item.phase === "completed" ? (
         <>
           <h4>{item.isError ? "Error" : "Output"}</h4>
-          <pre className={item.isError ? "inspector-tool-output failed" : "inspector-tool-output"}>
+          <CopyableOutput className={item.isError ? "inspector-tool-output failed" : "inspector-tool-output"}>
             {item.content || "No output"}
-          </pre>
+          </CopyableOutput>
         </>
       ) : (
         <p className="muted">Waiting for the MCP server.</p>
