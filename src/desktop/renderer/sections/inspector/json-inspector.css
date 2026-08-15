@@ -4,6 +4,33 @@
   border-radius: 6px;
 }
 
+.copyable-output {
+  position: relative;
+  min-width: 0;
+}
+
+.copyable-output > button {
+  position: absolute;
+  z-index: 1;
+  top: 6px;
+  right: 7px;
+  padding: 3px 6px;
+  color: var(--text-faint);
+  background: var(--code-background);
+  border: 0;
+  border-radius: 4px;
+  font-size: calc(12px * var(--interface-font-scale));
+}
+
+.copyable-output > button:hover {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
+.copyable-output > pre {
+  padding-top: 32px;
+}
+
 .json-inspector-mode {
   display: flex;
   align-items: center;

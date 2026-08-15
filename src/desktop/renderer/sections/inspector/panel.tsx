@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from "react";
 import type { DesktopWorkspace } from "../../../api.js";
 import type { TimelineItem } from "../conversation/timeline-state.js";
 import { ExecutionOverview } from "./overview.js";
@@ -40,6 +41,18 @@ export function InspectorPanel({
   onEditorOpen(open: boolean): void;
   onCollapse(): void;
 }): JSX.Element {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const overviewScrollTop = useRef(0);
+
+  useLayoutEffect(() => {
+    if (!selectedItem && contentRef.current) contentRef.current.scrollTop = overviewScrollTop.current;
+  }, [selectedItem]);
+
+  const selectFromOverview = (id: string): void => {
+    overviewScrollTop.current = contentRef.current?.scrollTop ?? 0;
+    onSelect(id);
+  };
+
   return (
     <>
       <div className="section-heading inspector-heading">
@@ -53,27 +66,34 @@ export function InspectorPanel({
       </div>
 
       {tab === "inspect" ? (
-        <div className="inspector-content">
+        <div className="inspector-content" ref={contentRef}>
           {selectedItem ? (
-            <>
-              <button className="execution-back" type="button" onClick={() => onSelect(null)}>‹ Overview</button>
+            <div className="inspector-view inspector-view-detail">
+              <button className="execution-back" type="button" onClick={() => onSelect(null)}>
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="m9.75 3.5-4.5 4.5 4.5 4.5" />
+                </svg>
+                <span>Back</span>
+              </button>
               <Inspector
                 item={selectedItem}
                 timeline={timeline}
                 instructions={modelInstructions}
                 tools={toolSpecs}
               />
-            </>
+            </div>
           ) : (
-            <ExecutionOverview
-              timeline={timeline}
-              running={running}
-              selectedModel={selectedModel}
-              selectedProviderConnectionId={selectedProviderConnectionId}
-              providerNames={providerNames}
-              onSelect={onSelect}
-              onNavigateTurn={onNavigateTurn}
-            />
+            <div className="inspector-view inspector-view-overview">
+              <ExecutionOverview
+                timeline={timeline}
+                running={running}
+                selectedModel={selectedModel}
+                selectedProviderConnectionId={selectedProviderConnectionId}
+                providerNames={providerNames}
+                onSelect={selectFromOverview}
+                onNavigateTurn={onNavigateTurn}
+              />
+            </div>
           )}
         </div>
       ) : (

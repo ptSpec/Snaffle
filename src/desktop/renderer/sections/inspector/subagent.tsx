@@ -4,7 +4,7 @@ import type {
   SubagentRunActivity,
   SubagentStep,
 } from "../../../../agent/subagents/activity.js";
-import { JsonInspector } from "./json-inspector.js";
+import { CopyableOutput, JsonInspector } from "./json-inspector.js";
 
 export function SubagentInspector({ activity }: { activity: SubagentActivity }): JSX.Element {
   const runs = activityRuns(activity);
@@ -47,7 +47,7 @@ export function SubagentInspector({ activity }: { activity: SubagentActivity }):
                 <SubagentTurn current={run.steps.at(-1)?.step === step.step} key={step.step} run={run} step={step} />
               ))}
 
-              {run.result ? <><h4>Result</h4><pre>{run.result}</pre></> : null}
+              {run.result ? <><h4>Result</h4><CopyableOutput>{run.result}</CopyableOutput></> : null}
               {run.error ? <p className="settings-error">{run.error}</p> : null}
             </div>
           </details>
@@ -57,7 +57,7 @@ export function SubagentInspector({ activity }: { activity: SubagentActivity }):
       {activity.result ? (
         <details className="subagent-return">
           <summary>Returned to parent</summary>
-          <pre>{activity.result}</pre>
+          <CopyableOutput>{activity.result}</CopyableOutput>
         </details>
       ) : null}
       {activity.error ? <p className="settings-error">{activity.error}</p> : null}
@@ -91,10 +91,10 @@ function SubagentTurn({
           <summary>{tool.call.name} · {tool.content === undefined ? "running" : tool.isError ? "failed" : "completed"}</summary>
           <h4>Input</h4>
           <JsonInspector value={tool.call.input} />
-          {tool.content !== undefined ? <><h4>Output</h4><pre>{tool.content}</pre></> : null}
+          {tool.content !== undefined ? <><h4>Output</h4><CopyableOutput>{tool.content}</CopyableOutput></> : null}
         </details>
       ))}
-      {step.response ? <><h4>Response</h4><pre>{step.response}</pre></> : null}
+      {step.response ? <><h4>Response</h4><CopyableOutput>{step.response}</CopyableOutput></> : null}
     </section>
   );
 }

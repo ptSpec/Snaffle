@@ -1,6 +1,6 @@
 import type { ToolSpec } from "../../../../protocol.js";
 import type { TimelineItem } from "../conversation/timeline-state.js";
-import { JsonInspector } from "./json-inspector.js";
+import { CopyableOutput, JsonInspector } from "./json-inspector.js";
 
 type AssistantItem = Extract<TimelineItem, { kind: "assistant" }>;
 
@@ -45,9 +45,9 @@ export function ModelCallInspector({
 
       <details className="inspector-section" open>
         <summary>Output</summary>
-        {item.reasoning ? <><h4>Reasoning</h4><pre>{item.reasoning}</pre></> : null}
+        {item.reasoning ? <><h4>Reasoning</h4><CopyableOutput>{item.reasoning}</CopyableOutput></> : null}
         <h4>Response</h4>
-        <pre>{item.text || "No text response"}</pre>
+        <CopyableOutput>{item.text || "No text response"}</CopyableOutput>
         {item.toolCalls?.length ? <><h4>Tool calls</h4><JsonInspector value={item.toolCalls} /></> : null}
       </details>
 

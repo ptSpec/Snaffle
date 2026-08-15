@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import type {
   SubagentActivity,
   SubagentProfileName,
@@ -19,6 +19,11 @@ type ExecutionTurn = {
 type ModelCallItem =
   | Extract<TimelineItem, { kind: "assistant" }>
   | Extract<TimelineItem, { kind: "image-understanding" }>;
+
+type ExecutionEvent =
+  | { type: "model"; item: ModelCallItem }
+  | { type: "image-cache"; item: Extract<TimelineItem, { kind: "image-understanding" }> }
+  | { type: "tool"; item: Extract<TimelineItem, { kind: "tool" }> };
 
 export function ExecutionOverview({
   timeline,
@@ -77,13 +82,12 @@ export function ExecutionOverview({
             <TurnOverview
               key={turn.id}
               turn={turn}
-              latest={index === turns.length - 1}
               running={running && index === turns.length - 1}
               selectedModel={selectedModel}
               selectedProviderConnectionId={selectedProviderConnectionId}
               providerNames={providerNames}
               onSelect={onSelect}
-              onNavigateTurn={onNavigateTurn}
+              onNavigate={onNavigateTurn}
             />
           ))}
         </div>
@@ -96,35 +100,26 @@ export function ExecutionOverview({
 
 function TurnOverview({
   turn,
-  latest,
   running,
   selectedModel,
   selectedProviderConnectionId,
   providerNames,
   onSelect,
-  onNavigateTurn,
+  onNavigate,
 }: {
   turn: ExecutionTurn;
-  latest: boolean;
   running: boolean;
   selectedModel: string;
   selectedProviderConnectionId: string;
   providerNames: Record<string, string>;
   onSelect(id: string): void;
-  onNavigateTurn(id: string): void;
+  onNavigate(id: string): void;
 }): JSX.Element {
-  const [open, setOpen] = useState(latest);
-  const [modelCallsOpen, setModelCallsOpen] = useState(latest);
-  const [imageCacheOpen, setImageCacheOpen] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(false);
+  const [open, setOpen] = useState(running);
   const items = flatten(turn.items);
-  const tools = items.filter((item): item is Extract<TimelineItem, { kind: "tool" }> => item.kind === "tool");
-  const responses = items.filter((item): item is Extract<TimelineItem, { kind: "assistant" }> => item.kind === "assistant");
-  const imageActivities = items.filter((item): item is Extract<TimelineItem, { kind: "image-understanding" }> =>
-    item.kind === "image-understanding");
-  const modelCalls = items.filter((item): item is ModelCallItem =>
-    item.kind === "assistant" || (item.kind === "image-understanding" && !item.cached));
-  const cachedImageActivities = imageActivities.filter((item) => item.cached);
+  const events = executionEvents(items);
+  const tools = events.flatMap((event) => event.type === "tool" ? [event.item] : []);
+  const responses = events.flatMap((event) => event.type === "model" && event.item.kind === "assistant" ? [event.item] : []);
   const agents = tools.flatMap((tool) => tool.details?.runs ?? []);
   const failed = items.some((item) => item.kind === "error") ||
     tools.some((tool) => tool.isError) ||
@@ -135,179 +130,160 @@ function TurnOverview({
   const connectionId = latestResponse?.providerConnectionId ?? selectedProviderConnectionId;
   const usage = turn.usage;
 
+  useEffect(() => {
+    if (running) setOpen(true);
+  }, [running]);
+
+  function toggleOpen(): void {
+    if (!running) setOpen((current) => !current);
+    onNavigate(turn.id);
+  }
+
   return (
     <section className={`execution-turn ${status}`}>
-      <div className="execution-turn-heading">
-        <button
-          className={open ? "execution-caret open" : "execution-caret"}
-          type="button"
-          aria-expanded={open}
-          aria-label={open ? "Collapse turn details" : "Expand turn details"}
-          onClick={() => setOpen((value) => !value)}
-        >›</button>
-        <button
-          className="execution-turn-copy"
-          type="button"
-          onClick={() => {
-            setOpen(true);
-            onNavigateTurn(turn.id);
-          }}
-        >
-          <strong>{turn.title}</strong>
-          <small>{turnMetadata(tools.length, agents.length, usage)}</small>
-        </button>
-        <span className={`execution-status ${status}`}>{status}</span>
-      </div>
-
-      {open ? (
-        <div className="execution-turn-body">
-          <ExecutionGroup
-            label="Model calls"
-            count={modelCalls.length}
-            open={modelCallsOpen}
-            onToggle={() => setModelCallsOpen((value) => !value)}
+      <div className="execution-turn-rail" aria-hidden="true"><span /></div>
+      <div className="execution-turn-content">
+        <div className="execution-turn-heading">
+          <button
+            className="execution-turn-copy"
+            type="button"
+            aria-expanded={open}
+            onClick={toggleOpen}
           >
-            {modelCalls.length ? modelCalls.map((call, index) => {
-              const responseModel = call.model || model || "Model pending";
-              const responseConnection = call.providerConnectionId || connectionId;
-              const provider = responseConnection
-                ? providerNames[responseConnection] ?? responseConnection
-                : "Provider pending";
-              const previous = modelCalls[index - 1];
-              const contextChanged = !previous ||
-                previous.model !== call.model ||
-                previous.providerConnectionId !== call.providerConnectionId;
-              const label = call.kind === "image-understanding"
-                ? call.activity === "description" ? "Image description" : "Image inspection"
-                : `Call ${index + 1}`;
-              return (
-                <div key={call.id}>
-                  {contextChanged ? (
-                    <p className="execution-call-context">{responseModel} · {provider}</p>
-                  ) : null}
-                  <button className="execution-call" type="button" onClick={() => onSelect(call.id)}>
-                    <span className="execution-node-marker" aria-hidden="true" />
-                    <strong>{label}</strong>
-                    <small>{call.usage ? compactUsage(call.usage) : "Usage unavailable"}</small>
-                    <time>{call.durationMs ? formatDuration(call.durationMs) : "—"}</time>
+            <strong>{turn.title}</strong>
+            <small>{turnMetadata(tools.length, agents.length, usage)}</small>
+          </button>
+          <span className={`execution-status ${status}`}>{status}</span>
+        </div>
+
+        <div
+          className={`execution-events-reveal${open ? " open" : ""}`}
+          aria-hidden={!open}
+        >
+          <div className="execution-events">
+            {events.length ? events.map((event, index) => (
+              <ExecutionTimelineEvent
+                key={event.item.id}
+                event={event}
+                model={model}
+                connectionId={connectionId}
+                previousModelCall={previousModelCall(events, index)}
+                providerNames={providerNames}
+                onSelect={onSelect}
+              />
+            )) : <p className="execution-empty">Waiting for the first model call.</p>}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ExecutionTimelineEvent({
+  event,
+  model,
+  connectionId,
+  previousModelCall,
+  providerNames,
+  onSelect,
+}: {
+  event: ExecutionEvent;
+  model: string;
+  connectionId: string;
+  previousModelCall: ModelCallItem | undefined;
+  providerNames: Record<string, string>;
+  onSelect(id: string): void;
+}): JSX.Element {
+  if (event.type === "tool") {
+    const tool = event.item;
+    const status = tool.phase === "running" ? "running" : tool.isError ? "failed" : "completed";
+    const profile = subagentProfile(tool.details);
+    return (
+      <div className={`execution-event tool ${status}`}>
+        <span className="execution-event-marker" aria-hidden="true" />
+        <div className="execution-event-content">
+          <button className="execution-event-copy" type="button" onClick={() => onSelect(tool.id)}>
+            <strong>{tool.call.name}{profile ? <ProfileBadge profile={profile} /> : null}</strong>
+            <small>{status}</small>
+            {tool.durationMs ? <time>{formatDuration(tool.durationMs)}</time> : null}
+          </button>
+          {tool.details?.runs?.length ? (
+            <div className="execution-event-children">
+              {tool.details.runs.map((run) => {
+                const detail = subagentDetail(run, tool.details?.profile, providerNames);
+                return (
+                  <button
+                    key={run.id}
+                    className={`execution-subagent ${run.status}`}
+                    type="button"
+                    title={`${run.task}\n${detail}`}
+                    onClick={() => onSelect(tool.id)}
+                  >
+                    <span aria-hidden="true" />
+                    <strong>{run.task}</strong>
+                    <small>{detail}</small>
                   </button>
-                </div>
-              );
-            }) : <p className="execution-empty">Waiting for the first model call.</p>}
-          </ExecutionGroup>
-
-          {cachedImageActivities.length ? (
-            <ExecutionGroup
-              label="Image cache"
-              count={cachedImageActivities.length}
-              open={imageCacheOpen}
-              onToggle={() => setImageCacheOpen((value) => !value)}
-            >
-              <div className="execution-tree">
-                {cachedImageActivities.map((activity) => (
-                  <ExecutionNode
-                    key={activity.id}
-                    label={activity.activity === "description" ? "Image description" : "Image inspection"}
-                    detail={`${activity.imageName} · local cache reuse`}
-                    status="completed"
-                    onClick={() => onSelect(activity.id)}
-                  />
-                ))}
-              </div>
-            </ExecutionGroup>
-          ) : null}
-
-          {tools.length ? (
-            <ExecutionGroup
-              label="Tool activity"
-              count={tools.length}
-              open={toolsOpen}
-              onToggle={() => setToolsOpen((value) => !value)}
-            >
-              <div className="execution-tree">
-                {tools.map((tool) => (
-                  <div className="execution-branch" key={tool.id}>
-                    <ExecutionNode
-                      label={tool.call.name}
-                      profile={subagentProfile(tool.details)}
-                      detail={tool.phase === "running" ? "running" : tool.isError ? "failed" : "completed"}
-                      status={tool.phase === "running" ? "running" : tool.isError ? "failed" : "completed"}
-                      onClick={() => onSelect(tool.id)}
-                    />
-                    {tool.details?.runs?.length ? (
-                      <div className="execution-children">
-                        {tool.details.runs.map((run) => (
-                          <ExecutionNode
-                            key={run.id}
-                            label={run.task}
-                            detail={subagentDetail(run, tool.details?.profile, providerNames)}
-                            status={run.status}
-                            onClick={() => onSelect(tool.id)}
-                          />
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </ExecutionGroup>
+                );
+              })}
+            </div>
           ) : null}
         </div>
-      ) : null}
-    </section>
-  );
-}
+      </div>
+    );
+  }
 
-function ExecutionGroup({
-  label,
-  count,
-  open,
-  onToggle,
-  children,
-}: {
-  label: string;
-  count: number;
-  open: boolean;
-  onToggle(): void;
-  children: ReactNode;
-}): JSX.Element {
-  return (
-    <section className="execution-group">
-      <button type="button" className="execution-group-heading" onClick={onToggle} aria-expanded={open}>
-        <span className={open ? "execution-caret open" : "execution-caret"}>›</span>
-        <strong>{label}</strong>
-        <small>{count}</small>
-      </button>
-      {open ? <div className="execution-group-body">{children}</div> : null}
-    </section>
-  );
-}
+  if (event.type === "image-cache") {
+    const activity = event.item;
+    return (
+      <div className="execution-event cache">
+        <span className="execution-event-marker" aria-hidden="true" />
+        <div className="execution-event-content">
+          <button className="execution-event-copy" type="button" onClick={() => onSelect(activity.id)}>
+            <strong>{activity.activity === "description" ? "Image description cache" : "Image inspection cache"}</strong>
+            <small>{activity.imageName} · local cache reuse</small>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-function ExecutionNode({
-  label,
-  detail,
-  profile,
-  status,
-  onClick,
-}: {
-  label: string;
-  detail: string;
-  profile?: SubagentProfileName | undefined;
-  status: string;
-  onClick(): void;
-}): JSX.Element {
+  const call = event.item;
+  const responseModel = call.model || model || "Model pending";
+  const responseConnection = call.providerConnectionId || connectionId;
+  const provider = responseConnection
+    ? providerNames[responseConnection] ?? responseConnection
+    : "Provider pending";
+  const contextChanged = !previousModelCall ||
+    previousModelCall.model !== call.model ||
+    previousModelCall.providerConnectionId !== call.providerConnectionId;
+  const label = call.kind === "image-understanding"
+    ? call.activity === "description" ? "Image description" : "Image inspection"
+    : "Model call";
+  const detail = call.usage ? compactUsage(call.usage) : "Usage unavailable";
+
   return (
-    <button className={`execution-node ${status}`} type="button" onClick={onClick}>
-      <span className="execution-node-marker" aria-hidden="true" />
-      <span className="execution-node-copy">
-        <span className="execution-node-title">
+    <div className="execution-event model">
+      <span className="execution-event-marker" aria-hidden="true" />
+      <div className="execution-event-content">
+        {contextChanged ? (
+          <p className="execution-event-context">{responseModel} · {provider}</p>
+        ) : null}
+        <button className="execution-event-copy" type="button" onClick={() => onSelect(call.id)}>
           <strong>{label}</strong>
-          {profile ? <ProfileBadge profile={profile} /> : null}
-        </span>
-        <small>{detail}</small>
-      </span>
-    </button>
+          <small>{detail}</small>
+          <time>{call.durationMs ? formatDuration(call.durationMs) : "—"}</time>
+        </button>
+      </div>
+    </div>
   );
+}
+
+function previousModelCall(events: ExecutionEvent[], index: number): ModelCallItem | undefined {
+  for (let previous = index - 1; previous >= 0; previous -= 1) {
+    const event = events[previous];
+    if (event?.type === "model") return event.item;
+  }
+  return undefined;
 }
 
 function executionTurns(timeline: TimelineItem[]): ExecutionTurn[] {
@@ -327,6 +303,18 @@ function executionTurns(timeline: TimelineItem[]): ExecutionTurn[] {
       cacheAvailable: usages.some((usage) => usage.cachedInputTokens !== undefined),
     };
   });
+}
+
+function executionEvents(items: TimelineItem[]): ExecutionEvent[] {
+  const events: ExecutionEvent[] = [];
+  for (const item of items) {
+    if (item.kind === "assistant") events.push({ type: "model", item });
+    if (item.kind === "image-understanding") {
+      events.push(item.cached ? { type: "image-cache", item } : { type: "model", item });
+    }
+    if (item.kind === "tool") events.push({ type: "tool", item });
+  }
+  return events;
 }
 
 function flatten(items: TimelineItem[]): TimelineItem[] {
