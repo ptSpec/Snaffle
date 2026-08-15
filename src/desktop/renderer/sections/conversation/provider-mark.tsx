@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import deepSeekLogo from "../../assets/deepseek-logo.svg?url";
+import lmStudioLogo from "../../assets/lm-studio-logo.svg?url";
+import openCodeGoLogo from "../../assets/opencode-go-logo.png?url";
 
 export type ProviderVisual = {
   id: string;
@@ -45,11 +47,15 @@ export function providerVisual(baseUrl: string, providerId?: string): ProviderVi
   return {
     id: provider.id,
     name: provider.name,
-    logo: ["openrouter", "deepseek", "llama-cpp", "omlx", "mlx-lm", "unsloth-studio"].includes(provider.id),
+    logo: ["openrouter", "deepseek", "opencode-go", "lm-studio", "llama-cpp", "omlx", "mlx-lm", "unsloth-studio"].includes(provider.id),
     mark: provider.id === "openrouter"
       ? <OpenRouterMark />
       : provider.id === "deepseek"
         ? <img src={deepSeekLogo} alt="" className="deepseek-mark" />
+      : provider.id === "opencode-go"
+        ? <img src={openCodeGoLogo} alt="" className="opencode-go-mark" />
+      : provider.id === "lm-studio"
+        ? <img src={lmStudioLogo} alt="" className="lm-studio-mark" />
       : provider.id === "llama-cpp"
         ? <LlamaCppMark />
       : provider.id === "omlx"
