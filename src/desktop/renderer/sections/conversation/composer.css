@@ -281,6 +281,12 @@ textarea {
   transform: translateX(1px);
 }
 
+.model-provider-mark.logo .opencode-go-mark,
+.provider-filter-mark.logo .opencode-go-mark {
+  object-fit: contain;
+  border-radius: 0;
+}
+
 .model-provider-mark svg {
   width: 17px;
   height: 17px;

@@ -92,6 +92,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
             })),
             ...(this.sendParallelToolCalls ? { parallel_tool_calls: false } : {}),
             stream: true,
+            stream_options: { include_usage: true },
             ...(this.temperature === undefined ? {} : { temperature: this.temperature }),
             ...(this.seed === undefined ? {} : { seed: this.seed }),
           }),
@@ -144,7 +145,7 @@ export async function listOpenAICompatibleModels(
     headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {},
     ...(signal ? { signal } : {}),
   });
-  if (!response.ok) throw new Error(`Model request failed (${response.status})`);
+  if (!response.ok) throw await responseError("Model request", response);
   const body = await response.json() as { data?: Array<{ id?: unknown; name?: unknown; context_length?: unknown }> };
   if (!Array.isArray(body.data)) throw new Error("The endpoint returned an invalid model list");
   return body.data.flatMap((model) => typeof model.id === "string" ? [{
@@ -177,10 +178,20 @@ export async function testOpenAICompatibleModel(
     }),
     ...(signal ? { signal } : {}),
   });
-  if (!response.ok) {
-    const body = (await response.text()).slice(0, 1000);
-    throw new Error(`Model test failed (${response.status}): ${body}`);
+  if (!response.ok) throw await responseError("Model test", response);
+}
+
+async function responseError(operation: string, response: Response): Promise<Error> {
+  const body = (await response.text()).slice(0, 1000);
+  let detail = body;
+  try {
+    const parsed = JSON.parse(body) as { error?: { message?: unknown }; message?: unknown };
+    if (typeof parsed.error?.message === "string") detail = parsed.error.message;
+    else if (typeof parsed.message === "string") detail = parsed.message;
+  } catch {
+    // Keep non-JSON provider errors as received.
   }
+  return new Error(`${operation} failed (${response.status})${detail ? `: ${detail}` : ""}`);
 }
 
 function requiredBody(response: Response): ReadableStream<Uint8Array> {

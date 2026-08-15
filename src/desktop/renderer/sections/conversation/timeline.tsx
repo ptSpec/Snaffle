@@ -250,6 +250,20 @@ function UserMessage({
 }): JSX.Element {
   const collapsible = item.text.length > 1000 || item.text.split("\n").length > 12;
   const [expanded, setExpanded] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!collapsible || !body) return;
+    const syncHeight = (): void => {
+      const bottomPadding = Number.parseFloat(getComputedStyle(body).paddingBottom) || 0;
+      body.style.setProperty("--message-expanded-height", `${body.scrollHeight + bottomPadding}px`);
+    };
+    syncHeight();
+    const observer = new ResizeObserver(syncHeight);
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, [collapsible, expanded, item.text, item.attachments?.length]);
 
   return (
     <article
@@ -257,7 +271,10 @@ function UserMessage({
       data-timeline-id={item.id}
       {...(item.entryId ? { "data-entry-id": item.entryId } : {})}
     >
-      <div className={collapsible && !expanded ? "message-body collapsed" : "message-body"}>
+      <div
+        ref={bodyRef}
+        className={`message-body${collapsible ? " collapsible" : ""}${collapsible && !expanded ? " collapsed" : ""}`}
+      >
         {item.text ? <p>{item.text}</p> : null}
         {item.attachments?.length ? (
           <div className="message-attachments">
@@ -281,18 +298,25 @@ function UserMessage({
           </div>
         ) : null}
       </div>
+      {collapsible ? (
+        <button
+          className="message-collapse-toggle"
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="m4 6 4 4 4-4" />
+          </svg>
+          {expanded ? "Collapse" : "Show full message"}
+        </button>
+      ) : null}
       <MessageFooter
         text={item.text}
         compact
         {...(onEdit ? { onEdit: () => onEdit(item.text) } : {})}
         {...(onFork ? { onFork: () => onFork(item.sequence) } : {})}
-      >
-        {collapsible ? (
-          <button className="message-expand" type="button" onClick={() => setExpanded((value) => !value)}>
-            {expanded ? "Show less" : "Show more"}
-          </button>
-        ) : null}
-      </MessageFooter>
+      />
     </article>
   );
 }

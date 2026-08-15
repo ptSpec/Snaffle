@@ -78,7 +78,7 @@ const GitEditor = forwardRef<GitEditorHandle, {
               highlightChanges: false,
               mergeControls: false,
               allowInlineDiffs: true,
-              collapseUnchanged: { margin: 3, minSize: 6 },
+              ...(current === original ? {} : { collapseUnchanged: { margin: 3, minSize: 6 } }),
             }),
             EditorView.updateListener.of((update) => {
               if (update.docChanged) handlers.current.onDirty();

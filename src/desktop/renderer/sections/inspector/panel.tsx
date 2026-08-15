@@ -44,8 +44,8 @@ export function InspectorPanel({
     <>
       <div className="section-heading inspector-heading">
         <div className="inspector-tabs" role="tablist" aria-label="Right panel">
-          <button className={tab === "inspect" ? "active" : ""} type="button" onClick={() => onTab("inspect")}>Inspect</button>
-          <button className={tab === "git" ? "active" : ""} type="button" onClick={() => onTab("git")}>Git</button>
+          <button className={tab === "inspect" ? "active" : ""} type="button" role="tab" aria-selected={tab === "inspect"} onClick={() => onTab("inspect")}>Inspect</button>
+          <button className={tab === "git" ? "active" : ""} type="button" role="tab" aria-selected={tab === "git"} onClick={() => onTab("git")}>Git</button>
         </div>
         <button className="panel-toggle" type="button" onClick={onCollapse} aria-label="Hide right panel" title="Hide right panel">
           <span className="pane-icon right" aria-hidden="true" />

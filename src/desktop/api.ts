@@ -103,6 +103,7 @@ export type DesktopState = {
   skills: SkillSummary[];
   savedMessages: SavedMessageSummary[];
   providerConnections: ProviderConnection[];
+  mcpEnabled: boolean;
   mcpServers: McpServerConfig[];
   openRouterAvailable: boolean;
   ketchAvailable: boolean;
@@ -171,9 +172,10 @@ export interface DesktopApi {
   removeWorkspace(workspaceId: string): Promise<DesktopState>;
   searchConversations(query: string): Promise<DesktopSearchResult[]>;
   listProviderModels(): Promise<ProviderCatalog[]>;
-  getProviderStatus(connectionId: string): Promise<ProviderStatus>;
+  getProviderStatus(input: ProviderConnectionInput): Promise<ProviderStatus>;
   saveProviderConnection(input: ProviderConnectionInput): Promise<DesktopState>;
   removeProviderConnection(connectionId: string): Promise<DesktopState>;
+  setMcpEnabled(enabled: boolean): Promise<DesktopState>;
   saveMcpServer(server: McpServerConfig): Promise<DesktopState>;
   removeMcpServer(id: string): Promise<DesktopState>;
   testMcpServer(server: McpServerConfig): Promise<McpServerStatus>;

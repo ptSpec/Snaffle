@@ -6,15 +6,25 @@ import { preserveMcpSecrets } from "../mcp-secrets.js";
 
 export function registerMcpIpc({
   manager,
+  enabled,
+  setEnabled,
   servers,
   update,
   state,
 }: {
   manager: McpManager;
+  enabled: () => boolean;
+  setEnabled: (enabled: boolean) => void;
   servers: () => McpServerConfig[];
   update: (servers: McpServerConfig[]) => void;
   state: (includeConversation?: boolean) => Promise<DesktopState>;
 }): void {
+  ipcMain.handle("desktop:set-mcp-enabled", async (_event, value: unknown) => {
+    if (typeof value !== "boolean") throw new Error("MCP enabled state must be true or false");
+    if (value !== enabled()) setEnabled(value);
+    return state(false);
+  });
+
   ipcMain.handle("desktop:save-mcp-server", async (_event, value: unknown) => {
     const parsed = parseServer(value);
     const server = preserveMcpSecrets(parsed, servers().find((item) => item.id === parsed.id));
