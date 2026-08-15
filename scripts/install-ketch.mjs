@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { access, chmod, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { access, chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -45,7 +45,7 @@ try {
   await promisify(execFile)("tar", ["-xf", archivePath, "-C", temporary]);
   await mkdir(directory, { recursive: true });
   await rm(executable, { force: true });
-  await rename(join(temporary, process.platform === "win32" ? "ketch.exe" : "ketch"), executable);
+  await copyFile(join(temporary, process.platform === "win32" ? "ketch.exe" : "ketch"), executable);
   if (process.platform !== "win32") await chmod(executable, 0o755);
   await writeFile(versionFile, `${version}\n`);
   console.log(`Installed Ketch ${version} for ${process.platform}-${process.arch}`);
