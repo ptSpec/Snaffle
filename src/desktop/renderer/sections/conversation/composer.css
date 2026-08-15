@@ -12,8 +12,27 @@
 
 .context-gauge {
   position: relative;
-  flex: 0 0 auto;
+  flex: 0 0 0;
+  width: 0;
+  overflow: hidden;
   color: var(--text-faint);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(5px);
+  transition:
+    flex-basis 240ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    width 240ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    opacity 180ms ease,
+    transform 240ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.context-gauge.revealed {
+  flex-basis: 40px;
+  width: 40px;
+  overflow: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
 }
 
 .context-gauge > summary {
@@ -73,7 +92,7 @@
 }
 
 .context-gauge-details {
-  position: absolute;
+  position: fixed;
   right: 0;
   bottom: 34px;
   z-index: 8;
@@ -196,30 +215,12 @@ textarea {
   min-width: 0;
   max-width: min(520px, 100%);
   height: 27px;
-  overflow: visible;
+  overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border-default) 38%, transparent);
   border-radius: 999px;
 }
 
 .adaptive-model-control:focus-within {
-  border-color: color-mix(in srgb, var(--border-focus) 65%, transparent);
-}
-
-.adaptive-model-control:has(.model-provider-mark.logo) {
-  border-color: transparent;
-}
-
-.adaptive-model-control:has(.model-provider-mark.logo)::after {
-  content: "";
-  position: absolute;
-  inset: -1px -1px -1px 26px;
-  pointer-events: none;
-  border: 1px solid color-mix(in srgb, var(--border-default) 38%, transparent);
-  border-left: 0;
-  border-radius: 0 999px 999px 0;
-}
-
-.adaptive-model-control:has(.model-provider-mark.logo):focus-within::after {
   border-color: color-mix(in srgb, var(--border-focus) 65%, transparent);
 }
 
@@ -243,48 +244,33 @@ textarea {
   position: relative;
   align-self: center;
   box-sizing: border-box;
-  flex-basis: 27px;
-  width: 27px;
-  height: 27px;
-  margin-left: -1px;
+  flex-basis: 25px;
+  width: 25px;
+  height: 25px;
+  margin-left: 0;
   overflow: visible;
   border: 0;
-  border-radius: 999px 0 0 999px;
-  z-index: 1;
-}
-
-.model-provider-mark.logo::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border: 1px solid color-mix(in srgb, var(--border-default) 38%, transparent);
-  border-radius: inherit;
-  z-index: 2;
-}
-
-.adaptive-model-control:focus-within .model-provider-mark.logo::after {
-  border-color: color-mix(in srgb, var(--border-focus) 65%, transparent);
+  border-radius: 0;
 }
 
 .model-provider-mark.logo svg {
-  width: 23.35px;
-  height: 23.35px;
-  border-radius: 6px;
-  transform: translateX(1px);
+  width: 25px;
+  height: 25px;
+  border-radius: 0;
+  transform: none;
 }
 
 .model-provider-mark.logo img {
-  width: 23.35px;
-  height: 23.35px;
-  border-radius: 6px;
-  transform: translateX(1px);
+  width: 25px;
+  height: 25px;
+  object-fit: contain;
+  border-radius: 0;
+  transform: none;
 }
 
 .model-provider-mark.logo .opencode-go-mark,
-.provider-filter-mark.logo .opencode-go-mark {
-  object-fit: contain;
-  border-radius: 0;
+.provider-filter-mark .opencode-go-mark {
+  object-fit: cover;
 }
 
 .model-provider-mark svg {
@@ -361,7 +347,7 @@ textarea {
 }
 
 .model-provider-mark.logo + .model-picker-trigger {
-  padding-left: 3px;
+  padding-left: 7px;
 }
 
 .model-picker-trigger:hover,
@@ -449,7 +435,7 @@ textarea {
 }
 
 .model-variant-menu {
-  position: absolute;
+  position: fixed;
   right: 0;
   bottom: 33px;
   z-index: 31;
@@ -489,7 +475,7 @@ textarea {
 }
 
 .model-picker-menu {
-  position: absolute;
+  position: fixed;
   bottom: 33px;
   left: 0;
   z-index: 30;
