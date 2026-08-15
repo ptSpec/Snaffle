@@ -40,6 +40,7 @@ export function createDesktopWindow(
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
+      devTools: !app.isPackaged,
       nodeIntegration: false,
       sandbox: true,
       preload: preloadPath,
