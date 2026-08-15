@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import type { ProviderModelVariant } from "../../../../providers/provider.js";
 import { applyModelVariant, splitModelVariant } from "../../../../providers/profiles.js";
 
@@ -112,7 +113,11 @@ export function ModelPicker({
         <span>{(selection.routable ? selection.baseModelId : value) || placeholder}</span><PickerCaret />
       </button>
       {open ? (
-        <div className={showProviders ? "model-picker-menu with-providers" : "model-picker-menu"}>
+        <FloatingMenu
+          anchor={root}
+          align="left"
+          className={showProviders ? "model-picker-menu with-providers" : "model-picker-menu"}
+        >
           <input
             autoFocus
             value={query}
@@ -184,7 +189,7 @@ export function ModelPicker({
               {!matches.length ? <small className="model-picker-empty">No matches</small> : null}
             </div>
           </div>
-        </div>
+        </FloatingMenu>
       ) : null}
       <div className={showVariants ? "model-variant-picker visible" : "model-variant-picker"}>
           <button
@@ -203,7 +208,7 @@ export function ModelPicker({
             <span>{selectedVariant?.label ?? "Default"}</span><PickerCaret />
           </button>
           {showVariants && variantOpen ? (
-            <div className="model-variant-menu">
+            <FloatingMenu anchor={root} align="right" className="model-variant-menu">
               {selectedProvider?.variants?.map((variant) => (
                 <button
                   className={variant.id === selection.variantId ? "active" : ""}
@@ -215,10 +220,57 @@ export function ModelPicker({
                   <small>{variant.description}</small>
                 </button>
               ))}
-            </div>
+            </FloatingMenu>
           ) : null}
       </div>
     </div>
+  );
+}
+
+function FloatingMenu({
+  anchor,
+  align,
+  className,
+  children,
+}: {
+  anchor: RefObject<HTMLDivElement | null>;
+  align: "left" | "right";
+  className: string;
+  children: ReactNode;
+}): JSX.Element | null {
+  const [position, setPosition] = useState<{ horizontal: number; bottom: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const updatePosition = (): void => {
+      const rect = anchor.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPosition({
+        horizontal: align === "left" ? rect.left : window.innerWidth - rect.right,
+        bottom: window.innerHeight - rect.top + 6,
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [align, anchor]);
+
+  if (!position) return null;
+  return createPortal(
+    <div
+      className={className}
+      style={align === "left"
+        ? { left: position.horizontal, bottom: position.bottom }
+        : { right: position.horizontal, bottom: position.bottom }}
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      {children}
+    </div>,
+    document.body,
   );
 }
 
