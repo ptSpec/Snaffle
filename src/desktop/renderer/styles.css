@@ -13,3 +13,4 @@
 @import "./sections/inspector/json-inspector.css";
 @import "./components/search-picker.css";
 @import "./commands/palette.css";
+@import "./sections/terminal/terminal.css";
