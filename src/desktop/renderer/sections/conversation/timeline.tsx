@@ -242,8 +242,8 @@ function ApprovalEntry({
       <strong>Command needs extra access</strong>
       <code>{item.command}</code>
       <p>
-        Restricted execution blocked this command in <code>{item.cwd}</code>. Approval reruns it
-        outside the sandbox with your user access.
+        This command needs access unavailable in restricted execution in <code>{item.cwd}</code>.
+        Approval runs it outside the sandbox with your user access.
       </p>
       <div className="approval-actions">
         <button type="button" onClick={() => onResolve?.(item.id, "deny")}>Deny</button>
