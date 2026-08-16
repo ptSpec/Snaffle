@@ -35,22 +35,23 @@ export async function searchWithKetch(
   apiKey: string | undefined,
   query: string,
   maxResults: number,
+  signal?: AbortSignal,
 ): Promise<{ title: string; url: string; content: string }[]> {
   const args = ["search", query, "--backend", backend, "--limit", String(maxResults), "--json"];
   const environment = apiKey ? { [keyEnvironment[backend]]: apiKey } : {};
   let output: string;
   try {
-    output = await runKetch(executable, args, undefined, 15_000, environment);
+    output = await runKetch(executable, args, undefined, 15_000, environment, signal);
   } catch (error) {
     if (backend !== "ddg" || !isDdgRateLimit(error)) throw error;
     // Ketch already made two quick DDG retries; continue the shared schedule at retry three.
-    await waitForRetry(retryBackoffMs(3));
+    await waitForRetry(retryBackoffMs(3), signal);
     try {
-      output = await runKetch(executable, args, undefined, 15_000, environment);
+      output = await runKetch(executable, args, undefined, 15_000, environment, signal);
     } catch (retryError) {
       if (!isDdgRateLimit(retryError)) throw retryError;
-      await waitForRetry(retryBackoffMs(4));
-      output = await runKetch(executable, args, undefined, 15_000, environment);
+      await waitForRetry(retryBackoffMs(4), signal);
+      output = await runKetch(executable, args, undefined, 15_000, environment, signal);
     }
   }
   const results = JSON.parse(output) as KetchSearchResult[];
@@ -77,6 +78,7 @@ export async function extractWithKetch(
   html: string,
   url: string,
   maxChars: number,
+  signal?: AbortSignal,
 ): Promise<{ title?: string; content: string }> {
   const output = await runKetch(
     executable,
@@ -84,6 +86,7 @@ export async function extractWithKetch(
     html,
     10_000,
     {},
+    signal,
   );
   const result = JSON.parse(output) as KetchExtractResult;
   if (typeof result.markdown !== "string") throw new Error("Ketch returned invalid extracted content");
@@ -99,10 +102,13 @@ function runKetch(
   input: string | undefined,
   timeoutMs: number,
   environment: NodeJS.ProcessEnv,
+  signal?: AbortSignal,
 ): Promise<string> {
+  signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, {
       env: { ...safeEnvironment(), ...environment },
+      signal,
       stdio: ["pipe", "pipe", "pipe"],
     });
     const output: Buffer[] = [];
