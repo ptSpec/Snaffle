@@ -37,6 +37,32 @@
   color: var(--text-faint);
 }
 
+.active-plan {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  max-width: min(760px, 100%);
+  margin: 2px 0 10px;
+  color: var(--text-muted);
+  font-size: calc(13px * var(--interface-font-scale));
+}
+
+.active-plan > span:not(.activity-spinner) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active-plan.blocked {
+  color: var(--status-warning-text);
+}
+
+.active-plan.complete {
+  color: var(--status-success-text);
+}
+
 .tool-healed {
   padding: 1px 4px;
   color: var(--status-success-text) !important;

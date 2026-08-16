@@ -178,6 +178,74 @@ export function TimelineEntry({
   );
 }
 
+export function ActivePlan({ items }: { items: TimelineItem[] }): JSX.Element | null {
+  const progress = planProgress(items);
+  if (!progress) return null;
+  return (
+    <div className={`active-plan ${progress.state}`} title={progress.label}>
+      <ToolIcon name="update_plan" />
+      <span>{progress.label}</span>
+      {progress.state === "working" ? <span className="activity-spinner" aria-hidden="true" /> : null}
+    </div>
+  );
+}
+
+type PlanItem = {
+  step: string;
+  status: "pending" | "in_progress" | "completed" | "blocked";
+};
+
+type PlanProgress = {
+  label: string;
+  state: "working" | "blocked" | "complete";
+};
+
+function planProgress(items: TimelineItem[]): PlanProgress | null {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (!item || item.kind === "user") return null;
+    if (item.kind !== "tool" || item.call.name !== "update_plan") continue;
+    if (item.phase === "running") return { label: "Updating plan…", state: "working" };
+    if (item.isError) continue;
+    const plan = planItems(item.call.input);
+    if (!plan) continue;
+    const current = plan.findIndex((entry) => entry.status === "in_progress");
+    if (current !== -1) {
+      return {
+        label: `Plan · Step ${current + 1} of ${plan.length} — ${plan[current]!.step}`,
+        state: "working",
+      };
+    }
+    const next = plan.findIndex((entry) => entry.status === "pending");
+    if (next !== -1) {
+      return {
+        label: `Plan · Next step ${next + 1} of ${plan.length} — ${plan[next]!.step}`,
+        state: "working",
+      };
+    }
+    const blocked = plan.find((entry) => entry.status === "blocked");
+    if (blocked) return { label: `Plan blocked — ${blocked.step}`, state: "blocked" };
+    return { label: `Plan complete · ${plan.length} of ${plan.length}`, state: "complete" };
+  }
+  return null;
+}
+
+function planItems(input: unknown): PlanItem[] | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  const rawItems = (input as Record<string, unknown>).items;
+  if (!Array.isArray(rawItems) || !rawItems.length) return null;
+  const items: PlanItem[] = [];
+  for (const rawItem of rawItems) {
+    if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) return null;
+    const entry = rawItem as Record<string, unknown>;
+    if (typeof entry.step !== "string" ||
+      (entry.status !== "pending" && entry.status !== "in_progress" &&
+        entry.status !== "completed" && entry.status !== "blocked")) return null;
+    items.push({ step: entry.step, status: entry.status });
+  }
+  return items;
+}
+
 function mcpToolName(call: { name: string; input: unknown }): string | undefined {
   if (call.name !== "mcp" || !call.input || typeof call.input !== "object" || Array.isArray(call.input)) return undefined;
   const input = call.input as Record<string, unknown>;
