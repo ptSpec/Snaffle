@@ -11,7 +11,7 @@ export const runTool: Tool = {
     properties: {
       command: { type: "string", description: "Required. Shell command to execute." },
       cwd: { type: "string", description: "Optional. Workspace-relative working directory; omit to use the workspace root. Never send an empty string." },
-      timeoutMs: { type: "integer", description: "Optional. Timeout in milliseconds; defaults to 120000.", minimum: 1000, maximum: 120000 },
+      timeoutMs: { type: "integer", description: "Optional. Timeout in milliseconds; defaults to 120000.", minimum: 1, maximum: 120000 },
       network: { type: "boolean", description: "Optional. Set true when the command requires network access. This requires user approval in restricted execution." },
     },
     required: ["command"],
@@ -24,8 +24,8 @@ export const runTool: Tool = {
     const timeoutMs = integerField(input, "timeoutMs", 120000);
     const network = input.network ?? false;
 
-    if (timeoutMs < 1000 || timeoutMs > 120000) {
-      throw new ToolInputError("timeoutMs must be between 1000 and 120000");
+    if (timeoutMs < 1 || timeoutMs > 120000) {
+      throw new ToolInputError("timeoutMs must be between 1 and 120000");
     }
     if (typeof network !== "boolean") throw new ToolInputError("network must be a boolean");
 
