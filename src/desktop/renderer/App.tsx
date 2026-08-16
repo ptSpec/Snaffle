@@ -152,7 +152,7 @@ export function App(): JSX.Element {
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [leftWidth, setLeftWidth] = useState(270);
-  const [rightWidth, setRightWidth] = useState(320);
+  const [rightWidth, setRightWidth] = useState(328);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("inspect");

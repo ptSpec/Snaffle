@@ -286,6 +286,23 @@ body.resizing-columns .column-resizer::after {
   transform: translateX(50%);
 }
 
+.right-resizer::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 14px;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--pane-depth-shadow) 46%, transparent),
+    transparent
+  );
+  filter: blur(2.5px);
+  mask-image: linear-gradient(180deg, transparent, black 28%, black 72%, transparent);
+}
+
 body.resizing-columns,
 body.resizing-columns * {
   cursor: col-resize !important;
