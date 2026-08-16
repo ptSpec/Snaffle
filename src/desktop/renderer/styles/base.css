@@ -321,7 +321,7 @@ body.resizing-columns .workspace-shell {
   min-width: 0;
   min-height: 0;
   background: var(--sidebar-background);
-  box-shadow: inset -12px 0 18px -14px var(--pane-depth-shadow);
+  box-shadow: inset -12px 0 18px -14px color-mix(in srgb, var(--pane-depth-shadow) 88%, transparent);
 }
 
 .workspace-shell > .conversation,
