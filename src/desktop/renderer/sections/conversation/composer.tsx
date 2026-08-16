@@ -4,6 +4,7 @@ import type {
   FormEvent,
   RefObject,
 } from "react";
+import { useEffect, useRef } from "react";
 import type { ProviderCatalog } from "../../../../providers/provider.js";
 import { providerProfile } from "../../../../providers/profiles.js";
 import type { ContextReport } from "../../../../context/report.js";
@@ -211,8 +212,19 @@ function ToolSurfaceControl({
   disabled: boolean;
   onChange(surface: ModelToolSurface): void;
 }): JSX.Element {
+  const details = useRef<HTMLDetailsElement>(null);
   const labels = activeSurfaceLabels(activeToolNames);
   const choices = compactToolChoices().filter((name) => availableToolNames.includes(name));
+
+  useEffect(() => {
+    function close(event: PointerEvent): void {
+      if (details.current?.open && event.target instanceof Node && !details.current.contains(event.target)) {
+        details.current.open = false;
+      }
+    }
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, []);
 
   function toggle(name: string, enabled: boolean): void {
     const optionalTools = enabled
@@ -222,7 +234,7 @@ function ToolSurfaceControl({
   }
 
   return (
-    <details className="tool-surface-control">
+    <details ref={details} className="tool-surface-control">
       <summary title={`Active tools: ${activeToolNames.join(", ")}`}>
         {surface.mode === "compact" ? "Compact" : "Expanded"}
         <span>{labels.length ? ` · ${labels.join(" · ")}` : " · Core only"}</span>
