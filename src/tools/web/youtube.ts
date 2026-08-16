@@ -33,12 +33,12 @@ export function youtubeVideo(value: string): YoutubeVideo | undefined {
   return { id, url: `https://www.youtube.com/watch?v=${id}` };
 }
 
-export async function fetchYoutubeTranscript(video: YoutubeVideo): Promise<{
+export async function fetchYoutubeTranscript(video: YoutubeVideo, signal?: AbortSignal): Promise<{
   title: string;
   url: string;
   content: string;
 }> {
-  const transcript = await fetchTranscript(video.id);
+  const transcript = await abortable(fetchTranscript(video.id), signal);
   if (!transcript.length) throw new Error("No transcript is available for this video");
   const milliseconds = transcript.some((item) => item.duration > 100);
   const content = transcript
@@ -51,6 +51,25 @@ export async function fetchYoutubeTranscript(video: YoutubeVideo): Promise<{
     .join("\n");
   if (!content) throw new Error("No transcript is available for this video");
   return { title: "YouTube transcript", url: video.url, content };
+}
+
+function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  signal.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const aborted = (): void => reject(signal.reason);
+    signal.addEventListener("abort", aborted, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", aborted);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", aborted);
+        reject(error);
+      },
+    );
+  });
 }
 
 function timestamp(seconds: number): string {

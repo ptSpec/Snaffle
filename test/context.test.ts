@@ -17,6 +17,7 @@ import {
 } from "../src/context/summary.js";
 import { buildContextReport } from "../src/context/report.js";
 import type { Message, ToolSpec } from "../src/protocol.js";
+import { withRecoveredPlan, type PlanItem } from "../src/tools/plan.js";
 
 const checkpoint: ContextCheckpoint = {
   id: "checkpoint-1",
@@ -130,7 +131,19 @@ test("compaction keeps the latest complete turn in the raw tail", () => {
     { sequence: 2, message: { role: "assistant", content: "first answer" } },
     { sequence: 3, message: { role: "user", content: "latest" } },
     { sequence: 4, message: { role: "assistant", content: "latest answer" } },
+    { sequence: 5, message: { role: "user", content: "continue plan", internal: true } },
   ]), 2);
+});
+
+test("active plan recovery stays beside the current request", () => {
+  const items: PlanItem[] = [
+    { step: "Implement", status: "completed" },
+    { step: "Verify", status: "pending" },
+  ];
+  const task = withRecoveredPlan("Continue the work", items);
+  assert.match(task, /2\. \[pending\] Verify/);
+  assert.ok(task.indexOf("[pending] Verify") < task.indexOf("Current user request:"));
+  assert.match(task, /Current user request:\nContinue the work$/);
 });
 
 test("context report exposes usage and the resolved compaction point", () => {

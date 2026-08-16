@@ -228,8 +228,8 @@ function ToolSurfaceControl({
   return (
     <details ref={details} className="tool-surface-control">
       <summary title={`Active tools: ${activeToolNames.join(", ")}`}>
-        {surface.mode === "custom" ? "Custom" : "Expanded"}
-        <span>{` · ${activeToolNames.length} ${activeToolNames.length === 1 ? "tool" : "tools"}`}</span>
+        Tools
+        <span>{` · ${activeToolNames.length}`}</span>
       </summary>
       <div className="tool-surface-details">
         <strong>Model tool surface</strong>

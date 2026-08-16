@@ -386,6 +386,7 @@ export function timelineFromEntries(entries: DesktopEntry[], checkpoints: Contex
   entries.forEach(({ id: entryId, sequence, message }, index) => {
     if (message.role === "system") return;
     if (message.role === "user") {
+      if (message.internal) return;
       items.push({
         id: `entry-${entryId}`,
         kind: "user",

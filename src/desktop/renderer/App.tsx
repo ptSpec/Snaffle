@@ -60,6 +60,7 @@ import { AsideShelf } from "./sections/conversation/aside-shelf.js";
 import { CommandPalette, type AppCommand } from "./commands/palette.js";
 import { TerminalPanel } from "./sections/terminal/terminal.js";
 import {
+  ActivePlan,
   TimelineEntry,
 } from "./sections/conversation/timeline.js";
 import {
@@ -151,7 +152,7 @@ export function App(): JSX.Element {
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [leftWidth, setLeftWidth] = useState(270);
-  const [rightWidth, setRightWidth] = useState(320);
+  const [rightWidth, setRightWidth] = useState(328);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("inspect");
@@ -1743,8 +1744,9 @@ export function App(): JSX.Element {
               onScroll={(event) => {
                 const view = event.currentTarget;
                 const distanceFromBottom = view.scrollHeight - view.scrollTop - view.clientHeight;
-                followTimeline.current = distanceFromBottom < 80;
-                setShowJumpToLatest(distanceFromBottom > 240);
+                const following = distanceFromBottom < 80;
+                followTimeline.current = following;
+                setShowJumpToLatest(!following);
               }}
             >
               {timeline.map((item) => (
@@ -1783,6 +1785,7 @@ export function App(): JSX.Element {
                   {...(!running ? { onFork: (sequence) => void forkThread(sequence) } : {})}
                 />
               ))}
+              {running ? <ActivePlan items={timeline} /> : null}
             </div>
             <AsideShelf
               messages={desktopState.keptAside}
@@ -1800,7 +1803,7 @@ export function App(): JSX.Element {
                   if (!view) return;
                   followTimeline.current = true;
                   setShowJumpToLatest(false);
-                  view.scrollTo({ top: view.scrollHeight, behavior: "smooth" });
+                  view.scrollTop = view.scrollHeight;
                 }}
               >
                 <svg viewBox="0 0 20 20" aria-hidden="true">

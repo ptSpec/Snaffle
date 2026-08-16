@@ -4,18 +4,18 @@ import { PROJECT } from "../../identity.js";
 
 const MAX_RESPONSE_BYTES = 2_000_000;
 
-export async function fetchPublicText(rawUrl: string): Promise<{ url: string; contentType: string; text: string }> {
+export async function fetchPublicText(rawUrl: string, signal?: AbortSignal): Promise<{ url: string; contentType: string; text: string }> {
   let url = publicUrl(rawUrl);
 
   for (let redirect = 0; redirect <= 5; redirect += 1) {
-    await rejectPrivateHost(url.hostname);
+    await rejectPrivateHost(url.hostname, signal);
     const response = await fetch(url, {
       redirect: "manual",
-      signal: AbortSignal.timeout(30_000),
+      signal: requestSignal(signal),
       headers: { "User-Agent": `${PROJECT.slug}/0.0 web_fetch` },
     });
     if (response.status === 403 && response.headers.get("cf-mitigated") === "challenge") {
-      const fandom = await fetchFandomPage(url);
+      const fandom = await fetchFandomPage(url, signal);
       if (fandom) return fandom;
     }
     if (response.status >= 300 && response.status < 400) {
@@ -35,7 +35,7 @@ export async function fetchPublicText(rawUrl: string): Promise<{ url: string; co
   throw new Error("Too many redirects");
 }
 
-async function fetchFandomPage(url: URL): Promise<{ url: string; contentType: string; text: string } | undefined> {
+async function fetchFandomPage(url: URL, signal?: AbortSignal): Promise<{ url: string; contentType: string; text: string } | undefined> {
   if (!url.hostname.endsWith(".fandom.com") || !url.pathname.startsWith("/wiki/")) return undefined;
   let page: string;
   try {
@@ -54,7 +54,7 @@ async function fetchFandomPage(url: URL): Promise<{ url: string; contentType: st
     origin: "*",
   }).toString();
   const response = await fetch(api, {
-    signal: AbortSignal.timeout(30_000),
+    signal: requestSignal(signal),
     headers: { "User-Agent": `${PROJECT.slug}/0.0 web_fetch` },
   });
   if (!response.ok) return undefined;
@@ -90,15 +90,22 @@ function publicUrl(rawUrl: string): URL {
   return url;
 }
 
-async function rejectPrivateHost(hostname: string): Promise<void> {
+async function rejectPrivateHost(hostname: string, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
   const host = hostname.toLowerCase();
   if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) {
     throw new Error("Private and local addresses are not allowed");
   }
   const addresses = isIP(host) ? [host] : (await lookup(host, { all: true })).map(({ address }) => address);
+  signal?.throwIfAborted();
   if (!addresses.length || addresses.some(isPrivateAddress)) {
     throw new Error("Private and local addresses are not allowed");
   }
+}
+
+function requestSignal(signal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(30_000);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
 
 function isPrivateAddress(address: string): boolean {

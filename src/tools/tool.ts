@@ -10,6 +10,7 @@ export type ToolResult = {
 };
 
 export type ToolExecutionContext = {
+  signal: AbortSignal;
   report(update: SubagentActivityUpdate): Promise<void>;
 };
 

@@ -23,11 +23,11 @@ export function webSearchTool(options: WebSearchOptions): Tool | undefined {
   const backend = options.backend ?? "ddg";
   const search = backend === "openrouter"
     ? options.openRouterApiKey
-      ? (query: string, maxResults: number) => searchOpenRouter(options.openRouterApiKey!, query, maxResults)
+      ? (query: string, maxResults: number, signal?: AbortSignal) => searchOpenRouter(options.openRouterApiKey!, query, maxResults, signal)
       : undefined
     : options.ketchPath && (backend === "ddg" || backend === "exa" || options.apiKey)
-      ? (query: string, maxResults: number) => searchKetch(
-          options.ketchPath!, backend, options.apiKey, query, maxResults,
+      ? (query: string, maxResults: number, signal?: AbortSignal) => searchKetch(
+          options.ketchPath!, backend, options.apiKey, query, maxResults, signal,
         )
       : undefined;
   if (!search) return undefined;
@@ -45,13 +45,13 @@ export function webSearchTool(options: WebSearchOptions): Tool | undefined {
       additionalProperties: false,
     },
     exampleInput: { query: "Node.js current LTS release", maxResults: 5 },
-    async execute(_workspace, rawInput) {
+    async execute(_workspace, rawInput, context) {
       const input = objectInput(rawInput);
       const query = stringField(input, "query")!;
       const maxResults = integerField(input, "maxResults", 5);
       if (maxResults < 1 || maxResults > 10) throw new ToolInputError("maxResults must be from 1 to 10");
 
-      return search(query, maxResults);
+      return search(query, maxResults, context?.signal);
     },
   };
 }
@@ -62,9 +62,10 @@ async function searchKetch(
   apiKey: string | undefined,
   query: string,
   maxResults: number,
+  signal?: AbortSignal,
 ): Promise<SearchResult> {
   try {
-    const results = await searchWithKetch(executable, backend, apiKey, query, maxResults);
+    const results = await searchWithKetch(executable, backend, apiKey, query, maxResults, signal);
     return results.length
       ? resultList(results)
       : { content: "No search results found. Try a shorter query and remove site: filters unless a specific domain is required.", sources: [] };
@@ -91,10 +92,11 @@ async function searchOpenRouter(
   apiKey: string,
   query: string,
   maxResults: number,
+  signal?: AbortSignal,
 ): Promise<SearchResult> {
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    signal: AbortSignal.timeout(60_000),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000),
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: OPENROUTER_SEARCH_MODEL,

@@ -33,11 +33,32 @@ export function healToolInput(value: unknown, schema?: JsonSchema): ParsedToolIn
   candidate = parseStringifiedProperties(candidate, schema, repairs);
   candidate = wrapSingleArrayItems(candidate, schema, repairs);
   candidate = removeEmptyOptionalStrings(candidate, schema, repairs);
+  candidate = raiseLowIntegers(candidate, schema, repairs);
   const healed = candidate !== null && typeof candidate === "object" && !Array.isArray(candidate);
   return {
     input: candidate,
     ...(healed && repairs.length ? { repair: repairs.join("; ") } : {}),
   };
+}
+
+function raiseLowIntegers(
+  input: unknown,
+  schema: JsonSchema | undefined,
+  repairs: string[],
+): unknown {
+  if (!isObject(input) || !isObject(schema?.properties)) return input;
+  let result = input;
+
+  for (const [name, definition] of Object.entries(schema.properties)) {
+    if (!isObject(definition) || definition.type !== "integer" || typeof definition.minimum !== "number") continue;
+    const value = input[name];
+    if (!Number.isInteger(value) || (value as number) >= definition.minimum) continue;
+    if (result === input) result = { ...input };
+    result[name] = definition.minimum;
+    repairs.push(`"${name}" was ${value}, below the supported minimum; used ${definition.minimum}`);
+  }
+
+  return result;
 }
 
 function parseStringifiedProperties(

@@ -59,10 +59,11 @@ export class McpManager {
     }
   }
 
-  async search(query: string, serverId?: string): Promise<Array<McpToolInfo & { serverId: string; serverName: string }>> {
+  async search(query: string, serverId?: string, signal?: AbortSignal): Promise<Array<McpToolInfo & { serverId: string; serverName: string }>> {
+    signal?.throwIfAborted();
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
     const servers = this.enabled().filter((server) => !serverId || server.id === serverId);
-    const results = await Promise.all(servers.map(async (server) => ({ server, session: await this.session(server) })));
+    const results = await Promise.all(servers.map(async (server) => ({ server, session: await this.session(server, signal) })));
     return results.flatMap(({ server, session }) => session.tools.map((tool) => {
       const text = `${tool.name} ${tool.description ?? ""}`.toLowerCase();
       return { tool, server, score: words.filter((word) => text.includes(word)).length };
@@ -73,15 +74,16 @@ export class McpManager {
       .slice(0, 12);
   }
 
-  async call(serverId: string, toolName: string, args: Record<string, unknown>): Promise<{ content: string; serverName: string }> {
+  async call(serverId: string, toolName: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<{ content: string; serverName: string }> {
     const server = this.enabled().find((item) => item.id === serverId);
     if (!server) throw new Error(`MCP server is not enabled: ${serverId}`);
     let result;
     try {
       result = await withTimeout(
-        (await this.session(server)).client.callTool({ name: toolName, arguments: args }),
+        (await this.session(server, signal)).client.callTool({ name: toolName, arguments: args }),
         TOOL_TIMEOUT_MS,
         `${server.name}.${toolName}`,
+        signal,
       );
     } catch (error) {
       await this.forget(serverId);
@@ -103,7 +105,8 @@ export class McpManager {
     this.sessions.clear();
   }
 
-  private async session(server: McpServerConfig): Promise<Session> {
+  private async session(server: McpServerConfig, signal?: AbortSignal): Promise<Session> {
+    signal?.throwIfAborted();
     const cached = this.sessions.get(server.id);
     if (cached) return cached;
     const client = await connect(server);
@@ -112,6 +115,7 @@ export class McpManager {
         client.listTools(),
         CONNECTION_TIMEOUT_MS,
         `${server.name} tool discovery`,
+        signal,
       );
       const session: Session = {
         client,
@@ -181,15 +185,23 @@ function valueRecord(values: Array<{ name: string; value: string }>): Record<str
   return Object.fromEntries(values.filter((entry) => entry.name && entry.value).map((entry) => [entry.name, entry.value]));
 }
 
-async function withTimeout<T>(promise: Promise<T>, milliseconds: number, label: string): Promise<T> {
+async function withTimeout<T>(promise: Promise<T>, milliseconds: number, label: string, signal?: AbortSignal): Promise<T> {
+  signal?.throwIfAborted();
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let aborted: (() => void) | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error(`${label} timed out after ${milliseconds / 1000} seconds`)), milliseconds);
   });
+  const cancellation = new Promise<never>((_, reject) => {
+    if (!signal) return;
+    aborted = () => reject(signal.reason);
+    signal.addEventListener("abort", aborted, { once: true });
+  });
   try {
-    return await Promise.race([promise, timeout]);
+    return await Promise.race([promise, timeout, cancellation]);
   } finally {
     if (timer) clearTimeout(timer);
+    if (aborted) signal?.removeEventListener("abort", aborted);
   }
 }
 

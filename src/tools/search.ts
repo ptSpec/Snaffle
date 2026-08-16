@@ -17,7 +17,7 @@ export const searchTool: Tool = {
     required: ["query"],
     additionalProperties: false,
   },
-  async execute(workspace, rawInput) {
+  async execute(workspace, rawInput, context) {
     const input = objectInput(rawInput);
     const query = stringField(input, "query") as string;
     const searchPath = stringField(input, "path", { optional: true });
@@ -32,7 +32,7 @@ export const searchTool: Tool = {
       ...(searchPath === undefined ? {} : { path: searchPath }),
       ...(glob === undefined ? {} : { glob }),
       maxResults: maxResults + 1,
-    });
+    }, context?.signal);
     if (!matches.length) return { content: "No matches." };
     const visible = matches.slice(0, maxResults).map((match) =>
       match.length > 1_000 ? `${match.slice(0, 1_000)}… [line truncated]` : match,
