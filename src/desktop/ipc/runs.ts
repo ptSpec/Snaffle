@@ -38,7 +38,12 @@ export function registerRunIpc(options: {
   attachments: AttachmentStore;
   compactor: ContextCompactor;
   state: (includeConversation?: boolean) => Promise<DesktopState>;
-  capabilities: (workspacePath: string) => ActiveCapabilities;
+  capabilities: (
+    workspacePath: string,
+    connectionId: string,
+    model: string,
+    explicitlyActive?: string[],
+  ) => ActiveCapabilities;
   provider: (
     connectionId: string,
     model: string,
@@ -139,7 +144,12 @@ export function registerRunIpc(options: {
       acceptingSteering: true,
     };
     active.set(threadId, run);
-    const baseCapabilities = options.capabilities(selectedWorkspace.path);
+    const baseCapabilities = options.capabilities(
+      selectedWorkspace.path,
+      input.providerConnectionId,
+      input.model,
+      input.explicitlyActiveTools,
+    );
     const subagent = threadSubagent(settings.subagent, selectedThread.subagentMode);
     let capabilities = subagent && !settings.disabledTools.includes("delegate_task")
       ? activeCapabilities([
@@ -522,6 +532,9 @@ function parseStartRunInput(input: unknown): StartRunInput {
     : 128_000;
   const attachments = Array.isArray(value.attachments) ? value.attachments.map(parseAttachment) : [];
   const imageInputSupported = value.imageInputSupported !== false;
+  const explicitlyActiveTools = Array.isArray(value.explicitlyActiveTools)
+    ? [...new Set(value.explicitlyActiveTools.filter((name): name is string => name === "use_skill"))]
+    : [];
   if (attachments.length > MAX_ATTACHMENTS) throw new Error(`Attach at most ${MAX_ATTACHMENTS} files`);
   if (!task && attachments.length === 0) throw new Error("Enter a task or attach a file before starting a run");
   if (task.length > 30000) throw new Error("Task is too long");
@@ -537,6 +550,7 @@ function parseStartRunInput(input: unknown): StartRunInput {
     contextLength,
     imageInputSupported,
     ...(attachments.length ? { attachments } : {}),
+    ...(explicitlyActiveTools.length ? { explicitlyActiveTools } : {}),
   };
 }
 

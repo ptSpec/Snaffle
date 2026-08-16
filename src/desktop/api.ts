@@ -16,6 +16,7 @@ import type { GitChanges, GitDiffPreview, GitFileContents } from "../git/types.j
 import type { McpServerConfig, McpServerStatus } from "../mcp/types.js";
 import type { SkillSummary } from "../extensions/skills/types.js";
 import type { ImageUnderstandingProfile } from "../attachments/vision.js";
+import type { ModelToolSurface, ModelToolSurfaces } from "../capabilities/surface.js";
 
 export type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents } from "../git/types.js";
 
@@ -109,6 +110,7 @@ export type DesktopState = {
   systemPrompt: string;
   runtimeMetadata: string;
   disabledTools: string[];
+  modelToolSurfaces: ModelToolSurfaces;
   skills: SkillSummary[];
   savedMessages: SavedMessageSummary[];
   keptAside: KeptAsideMessage[];
@@ -159,6 +161,7 @@ export type StartRunInput = {
   contextLength: number;
   imageInputSupported: boolean;
   attachments?: AttachmentRef[];
+  explicitlyActiveTools?: string[];
 };
 
 export type DesktopRunEvent = {
@@ -228,6 +231,7 @@ export interface DesktopApi {
   setCompaction(mode: CompactionMode, threshold: number): Promise<void>;
   setSystemPrompt(prompt: string): Promise<DesktopState>;
   setToolEnabled(name: string, enabled: boolean): Promise<DesktopState>;
+  setModelToolSurface(connectionId: string, model: string, surface: ModelToolSurface): Promise<DesktopState>;
   getContextReport(threadId: string, contextLength: number): Promise<ContextReport>;
   compactContext(threadId: string, connectionId: string, model: string, contextLength: number): Promise<void>;
   setWebSearchEnabled(enabled: boolean): Promise<void>;

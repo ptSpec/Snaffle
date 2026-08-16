@@ -453,6 +453,14 @@ function ToolIcon({ name }: { name: string }): JSX.Element {
     );
   }
 
+  if (name === "update_plan") {
+    return (
+      <svg className="tool-row-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="m2.5 4 1 1 2-2M7 4h6M2.5 8 1 1 2-2M7 8h6M2.5 12l1 1 2-2M7 12h6" />
+      </svg>
+    );
+  }
+
   if (name === "youtube_transcript") {
     return (
       <svg className="tool-row-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">

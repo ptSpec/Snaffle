@@ -5,11 +5,12 @@ import { gfm } from "turndown-plugin-gfm";
 import { integerField, objectInput, stringField, ToolInputError, type Tool } from "../tool.js";
 import { fetchPublicText } from "./request.js";
 import { extractWithKetch } from "./ketch.js";
+import { fetchYoutubeTranscript, youtubeVideo } from "./youtube.js";
 
 export function webFetchTool(searchAvailable: boolean, ketchPath?: string): Tool {
   return {
     name: "web_fetch",
-    description: "Fetch a known direct public HTTP or HTTPS page and return readable text without invoking a paid search or model API. Do not use search-engine pages. If the page is truncated, continue with the returned start offset." + (searchAvailable
+    description: "Fetch readable content from a known public HTTP or HTTPS URL without invoking a paid search or model API. Supported YouTube video URLs return their transcript. Do not use search-engine pages. If content is truncated, continue with the returned start offset." + (searchAvailable
       ? ""
       : " Web discovery is unavailable in this run. Do not repeatedly guess URL paths; if no direct URL is known, answer cautiously or tell the user web search is disabled."),
     inputSchema: {
@@ -34,14 +35,11 @@ export function webFetchTool(searchAvailable: boolean, ketchPath?: string): Tool
       if (start < 0) throw new ToolInputError("start must be at least 0");
       if (maxChars < 1_000 || maxChars > 30_000) throw new ToolInputError("maxChars must be from 1000 to 30000");
 
-      const page = await fetchPublicText(url);
-      if (page.contentType && !/(^text\/|json|xml|javascript|xhtml)/i.test(page.contentType)) {
-        throw new Error(`Unsupported content type: ${page.contentType.split(";")[0]}`);
-      }
-      const html = /html|xhtml/i.test(page.contentType) || /<html[\s>]/i.test(page.text);
-      const readable = html ? await extractReadable(page.text, page.url, 2_000_000, ketchPath) : undefined;
-      const title = readable?.title || (html ? pageTitle(page.text) : new URL(page.url).hostname);
-      const content = readable?.content || (html ? markdown(page.text) : page.text.trim());
+      const video = youtubeVideo(url);
+      const fetched = video
+        ? await fetchYoutubeTranscript(video)
+        : await fetchReadableUrl(url, ketchPath);
+      const { title, content } = fetched;
       if (start >= content.length && content.length) {
         throw new ToolInputError(`start ${start} is beyond the extracted page (${content.length} characters)`);
       }
@@ -50,10 +48,24 @@ export function webFetchTool(searchAvailable: boolean, ketchPath?: string): Tool
         ? `\n\n[Showing characters ${start}-${end - 1} of ${content.length}. Continue with start ${end}.]`
         : "";
       return {
-        content: `Source: ${title}\nURL: ${page.url}\n\n${content.slice(start, end)}${continuation}`,
-        sources: [{ title, url: page.url }],
+        content: `Source: ${title}\nURL: ${fetched.url}\n\n${content.slice(start, end)}${continuation}`,
+        sources: [{ title, url: fetched.url }],
       };
     },
+  };
+}
+
+async function fetchReadableUrl(url: string, ketchPath?: string): Promise<{ title: string; url: string; content: string }> {
+  const page = await fetchPublicText(url);
+  if (page.contentType && !/(^text\/|json|xml|javascript|xhtml)/i.test(page.contentType)) {
+    throw new Error(`Unsupported content type: ${page.contentType.split(";")[0]}`);
+  }
+  const html = /html|xhtml/i.test(page.contentType) || /<html[\s>]/i.test(page.text);
+  const readable = html ? await extractReadable(page.text, page.url, 2_000_000, ketchPath) : undefined;
+  return {
+    title: readable?.title || (html ? pageTitle(page.text) : new URL(page.url).hostname),
+    url: page.url,
+    content: readable?.content || (html ? markdown(page.text) : page.text.trim()),
   };
 }
 

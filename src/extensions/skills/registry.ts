@@ -9,7 +9,7 @@ const MAX_RESOURCE_CHARACTERS = 50_000;
 const VALID_SKILL_NAME = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const SUPPORTED_TOOLS = new Set([
   "run_command", "read_file", "search_files", "edit_file", "write_file",
-  "web_fetch", "web_search", "youtube_transcript", "delegate_task", "check_command",
+  "update_plan", "web_fetch", "web_search", "delegate_task", "check_command",
   "mcp", "use_skill",
 ]);
 

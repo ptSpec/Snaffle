@@ -87,6 +87,7 @@ async function runChild(options: {
   onUpdate?: (update: SubagentActivityUpdate) => void | Promise<void>;
 }): Promise<string> {
   const route = await options.provider(options.signal);
+  const systemPrompt = `${profilePrompt(options.profile)}\n\n${RETURN_TEMPLATE}`;
   try {
     const result = await runAgent({
       task: options.task,
@@ -96,10 +97,7 @@ async function runChild(options: {
       trace: silentTrace,
       signal: options.signal,
       maxSteps: options.maxSteps,
-      history: [{
-        role: "system",
-        content: `${profilePrompt(options.profile)}\n\n${RETURN_TEMPLATE}`,
-      }],
+      systemPrompt,
       onEvent: async (event) => {
         if (event.type === "run.started") {
           await options.onUpdate?.({

@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { runAgent } from "../src/agent/loop.js";
 import { activeCapabilities, builtInCapabilities } from "../src/capabilities/active.js";
+import { activeToolNamesForSurface } from "../src/capabilities/surface.js";
 import type { ModelProvider } from "../src/providers/provider.js";
 import type { Message, ModelResponse, RunEvent, ToolSpec } from "../src/protocol.js";
 import { defaultTools } from "../src/tools/built-ins.js";
@@ -75,6 +76,23 @@ test("active capabilities reject duplicate tool names", () => {
       { source: { type: "plugin", pluginId: "example" }, tool: writeTool },
     ]),
     /Active tool name must be unique: write_file/,
+  );
+});
+
+test("custom model surfaces allow selected tools beyond the recommendation", () => {
+  const available = [
+    "run_command", "read_file", "search_files", "edit_file", "write_file",
+    "update_plan", "web_search", "web_fetch", "use_skill", "mcp",
+  ];
+  const custom = activeToolNamesForSurface(
+    available,
+    { mode: "custom", optionalTools: ["web_search", "web_fetch", "mcp"] },
+    ["use_skill"],
+  );
+  assert.deepEqual(custom, available);
+  assert.deepEqual(
+    activeToolNamesForSurface(available, { mode: "expanded", optionalTools: [] }),
+    available,
   );
 });
 
@@ -248,14 +266,10 @@ test("web tools follow web search availability", () => {
   const disabledSearch = defaultTools({ webSearchEnabled: false, openRouterApiKey: "test" });
 
   assert.equal(withoutWeb.some((tool) => tool.name === "web_fetch"), false);
-  assert.equal(withoutWeb.some((tool) => tool.name === "youtube_transcript"), false);
   assert.doesNotMatch(withWeb.find((tool) => tool.name === "web_fetch")?.description ?? "", /Web discovery is unavailable/);
-  assert.equal(withWeb.some((tool) => tool.name === "youtube_transcript"), true);
-  assert.equal(richSearch.some((tool) => tool.name === "web_fetch"), false);
-  assert.equal(richSearch.some((tool) => tool.name === "youtube_transcript"), true);
+  assert.equal(richSearch.some((tool) => tool.name === "web_fetch"), true);
   assert.equal(disabledSearch.some((tool) => tool.name === "web_search"), false);
   assert.equal(disabledSearch.some((tool) => tool.name === "web_fetch"), false);
-  assert.equal(disabledSearch.some((tool) => tool.name === "youtube_transcript"), false);
 });
 
 test("only explicitly cited tool sources reach the final answer", async (t) => {
