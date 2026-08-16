@@ -295,6 +295,10 @@ textarea {
   color: var(--text-faint);
 }
 
+.tool-surface-choices .tool-surface-warning {
+  color: var(--status-warning-text);
+}
+
 .tool-surface-choices label {
   display: flex;
   align-items: center;

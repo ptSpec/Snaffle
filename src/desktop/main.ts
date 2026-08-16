@@ -19,7 +19,7 @@ import {
 } from "../attachments/vision.js";
 import { activeCapabilities, type ActiveTool } from "../capabilities/active.js";
 import {
-  compactToolChoices,
+  customToolChoices,
   modelSurfaceKey,
   parseModelToolSurfaces,
   surfaceForModel,
@@ -543,10 +543,10 @@ function registerIpc(): void {
       throw new Error("Tool surface must be an object");
     }
     const input = rawSurface as Record<string, unknown>;
-    if (input.mode !== "compact" && input.mode !== "expanded") throw new Error("Unknown tool surface mode");
-    if (!Array.isArray(input.optionalTools) || input.optionalTools.length > 2 || input.optionalTools.some((name) =>
-      typeof name !== "string" || !compactToolChoices().includes(name))) {
-      throw new Error("Compact tool surface accepts up to two optional tools");
+    if (input.mode !== "custom" && input.mode !== "expanded") throw new Error("Unknown tool surface mode");
+    if (!Array.isArray(input.optionalTools) || input.optionalTools.some((name) =>
+      typeof name !== "string" || !customToolChoices().includes(name))) {
+      throw new Error("Unknown custom tool surface capability");
     }
     const surface: ModelToolSurface = {
       mode: input.mode,

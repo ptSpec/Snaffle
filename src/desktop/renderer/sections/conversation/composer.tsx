@@ -12,7 +12,7 @@ import { ThinkingOrb, type OrbMotion } from "../../components/thinking-orb.js";
 import { ContextGauge } from "./context-gauge.js";
 import { ModelPicker } from "./model-picker.js";
 import { providerVisual } from "./provider-mark.js";
-import { compactToolChoices, type ModelToolSurface } from "../../../../capabilities/surface.js";
+import { customToolChoices, type ModelToolSurface } from "../../../../capabilities/surface.js";
 
 export function Composer({
   task,
@@ -214,7 +214,7 @@ function ToolSurfaceControl({
 }): JSX.Element {
   const details = useRef<HTMLDetailsElement>(null);
   const labels = activeSurfaceLabels(activeToolNames);
-  const choices = compactToolChoices().filter((name) => availableToolNames.includes(name));
+  const choices = customToolChoices().filter((name) => availableToolNames.includes(name));
 
   useEffect(() => {
     function close(event: PointerEvent): void {
@@ -230,13 +230,13 @@ function ToolSurfaceControl({
     const optionalTools = enabled
       ? [...surface.optionalTools, name]
       : surface.optionalTools.filter((tool) => tool !== name);
-    if (optionalTools.length <= 2) onChange({ mode: surface.mode, optionalTools });
+    onChange({ mode: surface.mode, optionalTools });
   }
 
   return (
     <details ref={details} className="tool-surface-control">
       <summary title={`Active tools: ${activeToolNames.join(", ")}`}>
-        {surface.mode === "compact" ? "Compact" : "Expanded"}
+        {surface.mode === "custom" ? "Custom" : "Expanded"}
         <span>{labels.length ? ` · ${labels.join(" · ")}` : " · Core only"}</span>
       </summary>
       <div className="tool-surface-details">
@@ -245,10 +245,10 @@ function ToolSurfaceControl({
         <div className="tool-surface-modes">
           <button
             type="button"
-            className={surface.mode === "compact" ? "selected" : ""}
+            className={surface.mode === "custom" ? "selected" : ""}
             disabled={disabled}
-            onClick={() => onChange({ mode: "compact", optionalTools: surface.optionalTools })}
-          >Compact</button>
+            onClick={() => onChange({ mode: "custom", optionalTools: surface.optionalTools })}
+          >Custom</button>
           <button
             type="button"
             className={surface.mode === "expanded" ? "selected" : ""}
@@ -256,9 +256,14 @@ function ToolSurfaceControl({
             onClick={() => onChange({ mode: "expanded", optionalTools: surface.optionalTools })}
           >Expanded</button>
         </div>
-        {surface.mode === "compact" ? (
+        {surface.mode === "custom" ? (
           <div className="tool-surface-choices">
-            <small>Choose up to two optional capabilities. Plan remains available.</small>
+            <small>Choose the capabilities this model can use. Plan remains available.</small>
+            {surface.optionalTools.length > 2 ? (
+              <small className="tool-surface-warning">
+                Smaller models may be less reliable with more than two optional capabilities.
+              </small>
+            ) : null}
             {choices.map((name) => {
               const checked = surface.optionalTools.includes(name);
               return (
@@ -266,7 +271,7 @@ function ToolSurfaceControl({
                   <input
                     type="checkbox"
                     checked={checked}
-                    disabled={disabled || (!checked && surface.optionalTools.length >= 2)}
+                    disabled={disabled}
                     onChange={(event) => toggle(name, event.target.checked)}
                   />
                   {toolLabel(name)}

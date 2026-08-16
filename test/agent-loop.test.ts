@@ -79,17 +79,17 @@ test("active capabilities reject duplicate tool names", () => {
   );
 });
 
-test("compact model surfaces keep selected tools and explicit overrides", () => {
+test("custom model surfaces allow selected tools beyond the recommendation", () => {
   const available = [
     "run_command", "read_file", "search_files", "edit_file", "write_file",
     "update_plan", "web_search", "web_fetch", "use_skill", "mcp",
   ];
-  const compact = activeToolNamesForSurface(
+  const custom = activeToolNamesForSurface(
     available,
-    { mode: "compact", optionalTools: ["web_search", "web_fetch"] },
+    { mode: "custom", optionalTools: ["web_search", "web_fetch", "mcp"] },
     ["use_skill"],
   );
-  assert.deepEqual(compact, available.filter((name) => name !== "mcp"));
+  assert.deepEqual(custom, available);
   assert.deepEqual(
     activeToolNamesForSurface(available, { mode: "expanded", optionalTools: [] }),
     available,
