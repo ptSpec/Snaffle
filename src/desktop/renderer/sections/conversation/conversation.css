@@ -611,7 +611,7 @@
   overflow: hidden;
   color: var(--code-text);
   background: var(--code-block-background);
-  border: 2px solid var(--border-default);
+  border: 1px solid var(--border-default);
   border-radius: 7px;
 }
 
