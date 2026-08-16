@@ -4,7 +4,9 @@ import { applySubagentUpdate } from "../src/agent/subagents/activity.js";
 import { ProviderCapacity } from "../src/agent/subagents/capacity.js";
 import { checkCommandTool } from "../src/agent/subagents/check-tool.js";
 import { threadSubagent, type SubagentProfile } from "../src/agent/subagents/profile.js";
+import { runSubagents } from "../src/agent/subagents/runner.js";
 import type { Workspace } from "../src/execution/workspace.js";
+import type { Message } from "../src/protocol.js";
 
 test("thread subagent mode can inherit or override the app default", () => {
   const profile: SubagentProfile = {
@@ -109,4 +111,42 @@ test("a reserved provider route releases capacity between model calls", async ()
   const next = capacity.tryAcquire("local", 1);
   assert.ok(next);
   next();
+});
+
+test("subagents receive their profile and reporting instructions", async () => {
+  let messages: Message[] = [];
+  const workspace = {
+    environment: "test",
+    async read() { return ""; },
+    async write() {},
+    async search() { return []; },
+    async run() { return { exitCode: 0, stdout: "", stderr: "" }; },
+  } satisfies Workspace;
+
+  await runSubagents({
+    profile: "review",
+    tasks: ["Review the current change."],
+    workspace,
+    signal: new AbortController().signal,
+    maxSteps: 2,
+    async provider() {
+      return {
+        connectionName: "Test",
+        release() {},
+        provider: {
+          model: "test-model",
+          providerId: "test",
+          connectionId: "test",
+          async complete(requestMessages) {
+            messages = requestMessages;
+            return { text: "Review complete.", toolCalls: [] };
+          },
+        },
+      };
+    },
+  });
+
+  const prompt = messages.find((message) => message.role === "system")?.content ?? "";
+  assert.match(prompt, /focused read-only review agent/);
+  assert.match(prompt, /Return your final result using exactly this concise Markdown structure/);
 });
