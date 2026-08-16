@@ -154,13 +154,6 @@ export function Composer({
             {unsafe ? "Unsafe · this thread" : "Restricted"}
           </summary>
           <div className="execution-details">
-            <button
-              className="execution-details-close"
-              type="button"
-              aria-label="Close execution settings"
-              title="Close"
-              onClick={(event) => event.currentTarget.closest("details")?.removeAttribute("open")}
-            >×</button>
             <strong>{unsafe ? "Unrestricted host execution" : restrictedDetail}</strong>
             <p>
               {unsafe
@@ -213,7 +206,6 @@ function ToolSurfaceControl({
   onChange(surface: ModelToolSurface): void;
 }): JSX.Element {
   const details = useRef<HTMLDetailsElement>(null);
-  const labels = activeSurfaceLabels(activeToolNames);
   const choices = customToolChoices().filter((name) => availableToolNames.includes(name));
 
   useEffect(() => {
@@ -237,7 +229,7 @@ function ToolSurfaceControl({
     <details ref={details} className="tool-surface-control">
       <summary title={`Active tools: ${activeToolNames.join(", ")}`}>
         {surface.mode === "custom" ? "Custom" : "Expanded"}
-        <span>{labels.length ? ` · ${labels.join(" · ")}` : " · Core only"}</span>
+        <span>{` · ${activeToolNames.length} ${activeToolNames.length === 1 ? "tool" : "tools"}`}</span>
       </summary>
       <div className="tool-surface-details">
         <strong>Model tool surface</strong>
@@ -287,16 +279,6 @@ function ToolSurfaceControl({
       </div>
     </details>
   );
-}
-
-function activeSurfaceLabels(names: string[]): string[] {
-  const labels = new Set<string>();
-  if (names.includes("update_plan")) labels.add("Plan");
-  if (names.includes("web_search") || names.includes("web_fetch")) labels.add("Web");
-  if (names.includes("use_skill")) labels.add("Skills");
-  if (names.includes("mcp")) labels.add("MCP");
-  if (names.includes("delegate_task")) labels.add("Subagents");
-  return [...labels];
 }
 
 function toolLabel(name: string): string {
