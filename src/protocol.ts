@@ -22,7 +22,7 @@ export type ToolPresentation = {
 
 export type Message =
   | { role: "system"; content: string }
-  | { role: "user"; content: string; attachments?: AttachmentRef[] }
+  | { role: "user"; content: string; attachments?: AttachmentRef[]; internal?: boolean }
   | {
       role: "assistant";
       content: string;

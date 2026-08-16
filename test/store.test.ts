@@ -236,6 +236,10 @@ test("context checkpoints preserve the full transcript and project only the tail
     { role: "assistant", content: "second answer" },
   ];
   await store.saveMessages(threadId, messages);
+  await store.setActivePlan(threadId, [
+    { step: "Implement", status: "completed" },
+    { step: "Verify", status: "pending" },
+  ]);
   const checkpoint = await store.context.save({
     threadId,
     throughSequence: 2,
@@ -256,4 +260,8 @@ test("context checkpoints preserve the full transcript and project only the tail
   assert.equal(stored?.summary, "First turn completed.");
   assert.equal(stored?.injectedCharacters, 60);
   assert.equal(stored?.appliedThroughSequence, 4);
+  assert.deepEqual(await store.activePlan(threadId), [
+    { step: "Implement", status: "completed" },
+    { step: "Verify", status: "pending" },
+  ]);
 });

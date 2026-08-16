@@ -6,6 +6,12 @@ import { withoutMalformedToolCalls } from "../context/projection.js";
 import type { ModelProvider, ModelStreamEvent } from "../providers/provider.js";
 import type { Message, RunEvent, SourceReference } from "../protocol.js";
 import { healToolCall } from "../tools/input.js";
+import {
+  hasActionablePlan,
+  parsePlanItems,
+  planContinuationMessage,
+  type PlanItem,
+} from "../tools/plan.js";
 import { ToolInputError, toolErrorContent, type ToolResult } from "../tools/tool.js";
 import { truncateMiddle } from "../tools/output.js";
 import type { Trace } from "./trace.js";
@@ -27,6 +33,8 @@ export type RunAgentOptions = {
   sequenceStart?: number;
   takeSteering?: () => string[];
   systemPrompt?: string;
+  initialPlan?: PlanItem[];
+  onPlan?: (items: PlanItem[] | null) => void | Promise<void>;
 };
 
 export type AgentResult = {
@@ -61,6 +69,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
   }));
   const toolsByName = new Map(tools.map((tool) => [tool.name, tool]));
   const sources = new Map<string, SourceReference>();
+  let activePlan = options.initialPlan ?? null;
   let nextSequence = options.sequenceStart ?? messages.length;
 
   await emit(options, {
@@ -138,6 +147,13 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           nextSequence += steeringCount;
           continue;
         }
+        if (activePlan && hasActionablePlan(activePlan)) {
+          const notice = planContinuationMessage(activePlan);
+          messages.push(notice);
+          await options.onMessage?.(notice, nextSequence);
+          nextSequence += 1;
+          continue;
+        }
         if (!response.text.trim()) throw new Error("Model returned an empty final response");
         await emit(options, { type: "run.completed", text: response.text, steps: step });
         return { text: response.text, steps: step, messages };
@@ -165,6 +181,11 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
             },
           });
           content = result.content;
+          if (call.name === "update_plan") {
+            const nextPlan = parsePlanItems(call.input);
+            await options.onPlan?.(hasActionablePlan(nextPlan) ? nextPlan : null);
+            activePlan = nextPlan;
+          }
           exitCode = result.exitCode;
           resultSources = result.sources;
           presentation = result.presentation ?? presentation;

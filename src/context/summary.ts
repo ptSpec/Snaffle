@@ -81,7 +81,7 @@ export function serializeForSummary(messages: Message[]): string {
         ));
         return parts.join("\n\n");
       }
-      return `[${message.role === "user" ? "User" : "Assistant"}]\n${message.content}`;
+      return `[${message.role === "user" ? message.internal ? "Harness" : "User" : "Assistant"}]\n${message.content}`;
     })
     .join("\n\n");
 }

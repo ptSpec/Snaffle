@@ -33,7 +33,9 @@ export function buildContextReport(input: {
     input.mode,
     input.threshold,
   );
-  const latestUser = [...input.entries].reverse().find((entry) => entry.message.role === "user");
+  const latestUser = [...input.entries].reverse().find(
+    (entry) => entry.message.role === "user" && !entry.message.internal,
+  );
   return {
     estimatedCharacters: projection.estimatedCharacters,
     estimatedTokens: projection.estimatedTokens,

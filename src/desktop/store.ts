@@ -5,6 +5,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Message } from "../protocol.js";
 import type { ThreadSubagentMode } from "../agent/subagents/profile.js";
+import type { PlanItem } from "../tools/plan.js";
 import { ContextStore } from "../context/store.js";
 import type { DesktopEntry, DesktopSearchResult, DesktopThread, DesktopWorkspace } from "./api.js";
 import { AsideStore } from "./aside-store.js";
@@ -57,6 +58,7 @@ export class DesktopStore {
           source_entry_id TEXT,
           branch_label TEXT,
           subagent_mode TEXT NOT NULL DEFAULT 'inherit',
+          active_plan TEXT,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
         )`,
@@ -126,6 +128,9 @@ export class DesktopStore {
       await this.database.execute(
         "ALTER TABLE threads ADD COLUMN subagent_mode TEXT NOT NULL DEFAULT 'inherit'",
       );
+    }
+    if (!threadColumns.has("active_plan")) {
+      await this.database.execute("ALTER TABLE threads ADD COLUMN active_plan TEXT");
     }
     await this.database.execute("PRAGMA foreign_keys = ON");
     await this.asides.initialize();
@@ -368,6 +373,23 @@ export class DesktopStore {
     if (result.rowsAffected === 0) throw new Error("Thread no longer exists");
   }
 
+  async activePlan(threadId: string): Promise<PlanItem[] | null> {
+    const result = await this.database.execute({
+      sql: "SELECT active_plan FROM threads WHERE id = ?",
+      args: [threadId],
+    });
+    const value = rowOptionalText(result.rows[0], "active_plan");
+    return value ? JSON.parse(value) as PlanItem[] : null;
+  }
+
+  async setActivePlan(threadId: string, items: PlanItem[] | null): Promise<void> {
+    const result = await this.database.execute({
+      sql: "UPDATE threads SET active_plan = ? WHERE id = ?",
+      args: [items ? JSON.stringify(items) : null, threadId],
+    });
+    if (result.rowsAffected === 0) throw new Error("Thread no longer exists");
+  }
+
   async deleteThreads(threadIds: string[]): Promise<void> {
     if (threadIds.length === 0) return;
     const current = await this.state();
@@ -452,7 +474,9 @@ export class DesktopStore {
 
   async appendMessage(threadId: string, sequence: number, message: Message): Promise<void> {
     const now = Date.now();
-    const firstTask = message.role === "user" ? message.content.trim().replace(/\s+/g, " ") : "";
+    const firstTask = message.role === "user" && !message.internal
+      ? message.content.trim().replace(/\s+/g, " ")
+      : "";
     const title = firstTask && firstTask.length > 48 ? `${firstTask.slice(0, 47)}…` : firstTask;
     await this.database.batch(
       [
@@ -461,7 +485,15 @@ export class DesktopStore {
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(thread_id, sequence) DO UPDATE SET
               role = excluded.role, text = excluded.text, data = excluded.data`,
-          args: [randomUUID(), threadId, sequence, message.role, message.content, JSON.stringify(message), now],
+          args: [
+            randomUUID(),
+            threadId,
+            sequence,
+            message.role === "user" && message.internal ? "internal" : message.role,
+            message.content,
+            JSON.stringify(message),
+            now,
+          ],
         },
         {
           sql: `UPDATE threads
@@ -483,7 +515,9 @@ export class DesktopStore {
     const message = result.rows[0]
       ? JSON.parse(rowText(result.rows[0], "data")) as Message
       : null;
-    if (message?.role !== "user") throw new Error("The restore point is no longer available");
+    if (message?.role !== "user" || message.internal) {
+      throw new Error("The restore point is no longer available");
+    }
 
     await this.database.batch(
       [
@@ -497,7 +531,7 @@ export class DesktopStore {
           args: [threadId, sequence],
         },
         {
-          sql: "UPDATE threads SET draft = ?, updated_at = ? WHERE id = ?",
+          sql: "UPDATE threads SET draft = ?, active_plan = NULL, updated_at = ? WHERE id = ?",
           args: [message.content, Date.now(), threadId],
         },
       ],
@@ -541,7 +575,7 @@ export class DesktopStore {
     ) {
       unchanged += 1;
     }
-    const firstTask = messages.find((message) => message.role === "user")?.content
+    const firstTask = messages.find((message) => message.role === "user" && !message.internal)?.content
       .trim()
       .replace(/\s+/g, " ");
     const title = firstTask && firstTask.length > 48 ? `${firstTask.slice(0, 47)}…` : firstTask;
@@ -557,7 +591,7 @@ export class DesktopStore {
           randomUUID(),
           threadId,
           unchanged + offset,
-          message.role,
+          message.role === "user" && message.internal ? "internal" : message.role,
           message.content,
           JSON.stringify(message),
           now,
@@ -567,6 +601,7 @@ export class DesktopStore {
         sql: `UPDATE threads
           SET title = CASE WHEN title GLOB 'Thread [0-9]*' AND ? IS NOT NULL THEN ? ELSE title END,
               draft = '',
+              active_plan = NULL,
               updated_at = ?
           WHERE id = ?`,
         args: [title ?? null, title ?? null, now, threadId],
