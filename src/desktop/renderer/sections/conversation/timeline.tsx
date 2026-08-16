@@ -560,10 +560,11 @@ function ReasoningEntry({
 }): JSX.Element {
   const [open, setOpen] = useState(item.streaming);
   const textRef = useRef<HTMLDivElement>(null);
+  const followText = useRef(true);
 
   useEffect(() => setOpen(item.streaming), [item.streaming]);
   useEffect(() => {
-    if (item.streaming && open && textRef.current) {
+    if (item.streaming && open && followText.current && textRef.current) {
       textRef.current.scrollTop = textRef.current.scrollHeight;
     }
   }, [item.text, item.streaming, open]);
@@ -578,7 +579,18 @@ function ReasoningEntry({
         <span>{item.status ?? (item.streaming ? "Thinking…" : "Thinking")}</span>
         {item.streaming ? <span className="activity-spinner" aria-hidden="true" /> : null}
       </summary>
-      {item.text ? <div ref={textRef} className="reasoning-text">{item.text}</div> : null}
+      {item.text ? (
+        <div
+          ref={textRef}
+          className="reasoning-text"
+          onScroll={(event) => {
+            const text = event.currentTarget;
+            followText.current = text.scrollHeight - text.scrollTop - text.clientHeight < 24;
+          }}
+        >
+          {item.text}
+        </div>
+      ) : null}
     </details>
   );
 }

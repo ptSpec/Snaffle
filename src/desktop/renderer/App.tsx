@@ -1744,8 +1744,9 @@ export function App(): JSX.Element {
               onScroll={(event) => {
                 const view = event.currentTarget;
                 const distanceFromBottom = view.scrollHeight - view.scrollTop - view.clientHeight;
-                followTimeline.current = distanceFromBottom < 80;
-                setShowJumpToLatest(distanceFromBottom > 240);
+                const following = distanceFromBottom < 80;
+                followTimeline.current = following;
+                setShowJumpToLatest(!following);
               }}
             >
               {timeline.map((item) => (
@@ -1802,7 +1803,7 @@ export function App(): JSX.Element {
                   if (!view) return;
                   followTimeline.current = true;
                   setShowJumpToLatest(false);
-                  view.scrollTo({ top: view.scrollHeight, behavior: "smooth" });
+                  view.scrollTop = view.scrollHeight;
                 }}
               >
                 <svg viewBox="0 0 20 20" aria-hidden="true">
