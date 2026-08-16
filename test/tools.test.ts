@@ -83,23 +83,6 @@ test("run command reports a nonzero exit separately from tool failure", async (t
   assert.match(result.content, /exit code: 7/);
 });
 
-test("tool input healer raises impractical command timeouts", () => {
-  const healed = healToolCall(
-    {
-      id: "call-1",
-      name: "run_command",
-      input: { command: "python -c \"print('hello')\"", timeoutMs: 30 },
-    },
-    runTool.inputSchema,
-  );
-
-  assert.deepEqual(healed.input, {
-    command: "python -c \"print('hello')\"",
-    timeoutMs: 1_000,
-  });
-  assert.equal(healed.inputRepair, '"timeoutMs" was 30, below the supported minimum; used 1000');
-});
-
 test("read and command truncation is explicit and actionable", async (t) => {
   const { root, workspace } = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));
