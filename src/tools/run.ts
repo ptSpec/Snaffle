@@ -17,7 +17,7 @@ export const runTool: Tool = {
     required: ["command"],
     additionalProperties: false,
   },
-  async execute(workspace, rawInput) {
+  async execute(workspace, rawInput, context) {
     const input = objectInput(rawInput);
     const command = stringField(input, "command") as string;
     const cwd = stringField(input, "cwd", { optional: true });
@@ -29,7 +29,7 @@ export const runTool: Tool = {
     }
     if (typeof network !== "boolean") throw new ToolInputError("network must be a boolean");
 
-    const result = await workspace.run(command, cwd, timeoutMs, network);
+    const result = await workspace.run(command, cwd, timeoutMs, network, context?.signal);
     const header = [
       result.approval === "thread"
         ? "permission: user allowed unrestricted commands for this thread"

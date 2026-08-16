@@ -174,12 +174,15 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
 
         try {
           if (!tool) throw new Error(`Unknown tool: ${call.name}`);
+          options.signal.throwIfAborted();
           const result = await tool.execute(options.workspace, call.input, {
+            signal: options.signal,
             report: async (update) => {
               details = applySubagentUpdate(details, update);
               await emit(options, { type: "tool.updated", callId: call.id, update });
             },
           });
+          options.signal.throwIfAborted();
           content = result.content;
           if (call.name === "update_plan") {
             const nextPlan = parsePlanItems(call.input);
@@ -191,6 +194,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
           presentation = result.presentation ?? presentation;
           for (const source of resultSources ?? []) sources.set(source.url, source);
         } catch (error) {
+          if (options.signal.aborted) options.signal.throwIfAborted();
           isError = true;
           inputError = error instanceof ToolInputError;
           malformedInput ||= inputError;

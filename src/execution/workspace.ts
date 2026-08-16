@@ -42,8 +42,8 @@ export interface Workspace {
   readonly environment: string;
   read(path: string): Promise<string>;
   write(path: string, content: string): Promise<void>;
-  search(query: string, options: SearchOptions): Promise<string[]>;
-  run(command: string, cwd: string | undefined, timeoutMs: number, network?: boolean): Promise<CommandResult>;
+  search(query: string, options: SearchOptions, signal?: AbortSignal): Promise<string[]>;
+  run(command: string, cwd: string | undefined, timeoutMs: number, network?: boolean, signal?: AbortSignal): Promise<CommandResult>;
 }
 
 export type CommandExecution = "disabled" | "restricted" | "unsafe";
@@ -86,7 +86,7 @@ export class LocalWorkspace implements Workspace {
     await rename(temporary, target);
   }
 
-  async search(query: string, options: SearchOptions): Promise<string[]> {
+  async search(query: string, options: SearchOptions, signal?: AbortSignal): Promise<string[]> {
     const searchPath = this.relative(await this.resolveExisting(options.path ?? "."));
     const args = [
       "--line-number", "--no-heading", "--color", "never",
@@ -97,7 +97,7 @@ export class LocalWorkspace implements Workspace {
     args.push(query, searchPath || ".");
 
     return new Promise((resolve, reject) => {
-      const child = spawn(ripgrepExecutable, args, { cwd: this.root });
+      const child = spawn(ripgrepExecutable, args, { cwd: this.root, signal });
       const matches: string[] = [];
       let pending = "";
       let errorOutput = "";
@@ -132,7 +132,9 @@ export class LocalWorkspace implements Workspace {
     cwd: string | undefined,
     timeoutMs: number,
     network = false,
+    signal?: AbortSignal,
   ): Promise<CommandResult> {
+    signal?.throwIfAborted();
     if (this.commandExecution === "disabled") {
       throw new Error("Host command execution is disabled");
     }
@@ -147,35 +149,39 @@ export class LocalWorkspace implements Workspace {
             stderr: "This command requests network access, which is unavailable in restricted execution.",
             permissionDenied: true,
           }
-        : await runRestrictedCommand(command, this.root, commandCwd, timeoutMs);
+        : await runRestrictedCommand(command, this.root, commandCwd, timeoutMs, signal);
       if (!result.permissionDenied || !this.approveCommand) return result;
 
+      signal?.throwIfAborted();
       const decision = await this.approveCommand({
         command,
         cwd: this.relative(commandCwd) || ".",
         reason: result.stderr,
       });
+      signal?.throwIfAborted();
       if (decision === "deny") {
         return { ...result, stderr: `${result.stderr}\nUnrestricted retry denied by the user.` };
       }
       if (decision === "thread") this.commandExecution = "unsafe";
-      const retried = await this.runUnsafe(command, commandCwd, timeoutMs);
+      const retried = await this.runUnsafe(command, commandCwd, timeoutMs, signal);
       return { ...retried, approval: decision };
     }
 
-    return this.runUnsafe(command, commandCwd, timeoutMs);
+    return this.runUnsafe(command, commandCwd, timeoutMs, signal);
   }
 
   private async runUnsafe(
     command: string,
     commandCwd: string,
     timeoutMs: number,
+    signal?: AbortSignal,
   ): Promise<CommandResult> {
     try {
       const { stdout, stderr } = await execAsync(command, {
         cwd: commandCwd,
         timeout: timeoutMs,
         maxBuffer: 512 * 1024,
+        signal,
       });
       return { exitCode: 0, stdout, stderr };
     } catch (error) {
