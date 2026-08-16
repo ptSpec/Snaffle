@@ -1,79 +1,28 @@
 import { fetchTranscript } from "youtube-transcript";
-import { integerField, objectInput, stringField, ToolInputError, type Tool } from "../tool.js";
+import { ToolInputError } from "../tool.js";
 
-export const youtubeTranscriptTool: Tool = {
-  name: "youtube_transcript",
-  description: "Get timestamped transcript text from a YouTube video URL. Set query to return only relevant passages, or omit it for the transcript.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      url: { type: "string", description: "Required. Full YouTube video URL." },
-      query: { type: "string", description: "Optional. Topic or phrase used to select relevant transcript passages." },
-      language: { type: "string", description: "Optional. Preferred transcript language code, such as en or de." },
-      maxChars: { type: "integer", description: "Optional. Maximum returned characters. Defaults to 12000; allowed range 1000-30000." },
-    },
-    required: ["url"],
-    additionalProperties: false,
-  },
-  exampleInput: { url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", query: "main argument", language: "en" },
-  async execute(_workspace, rawInput) {
-    const input = objectInput(rawInput);
-    const url = stringField(input, "url")!;
-    const query = stringField(input, "query", { optional: true });
-    const language = stringField(input, "language", { optional: true });
-    const maxChars = integerField(input, "maxChars", 12_000);
-    if (maxChars < 1_000 || maxChars > 30_000) throw new ToolInputError("maxChars must be from 1000 to 30000");
-    const video = youtubeVideo(url);
+type YoutubeVideo = { id: string; url: string };
 
-    const transcript = await fetchTranscript(video.id, language ? { lang: language } : undefined);
-    if (!transcript.length) throw new Error("No transcript is available for this video");
-    const milliseconds = transcript.some((item) => item.duration > 100);
-    const rows = transcript.map((item) => ({
-      text: item.text.replace(/\s+/g, " ").trim(),
-      seconds: (milliseconds ? item.offset / 1000 : item.offset),
-    })).filter((item) => item.text);
-    const selected = query ? relevantRows(rows, query) : rows;
-    if (!selected.length) return { content: `No transcript passages matched “${query}”.` };
-
-    const complete = selected.map((item) =>
-      `[${timestamp(item.seconds)}](${video.url}&t=${Math.floor(item.seconds)}s) ${item.text}`,
-    ).join("\n");
-    const content = complete.slice(0, maxChars);
-    const notice = content.length < complete.length
-      ? `\n\n[Transcript truncated: showing ${content.length} of ${complete.length} characters. Use query to request the relevant passages.]`
-      : "";
-    return {
-      content: `${query ? `Transcript passages for: ${query}` : "Transcript"}\n\n${content}${notice}`,
-      sources: [{ title: "YouTube transcript", url: video.url }],
-    };
-  },
-};
-
-function relevantRows(rows: { text: string; seconds: number }[], query: string): { text: string; seconds: number }[] {
-  const terms = query.toLowerCase().split(/\W+/).filter((term) => term.length > 2);
-  const indexes = new Set<number>();
-  rows.forEach((row, index) => {
-    const text = row.text.toLowerCase();
-    if (text.includes(query.toLowerCase()) || terms.some((term) => text.includes(term))) {
-      for (let nearby = Math.max(0, index - 2); nearby <= Math.min(rows.length - 1, index + 2); nearby += 1) indexes.add(nearby);
-    }
-  });
-  return [...indexes].sort((a, b) => a - b).map((index) => rows[index]!);
-}
-
-function youtubeVideo(value: string): { id: string; url: string } {
+export function youtubeVideo(value: string): YoutubeVideo | undefined {
   let parsed: URL;
   try {
     parsed = new URL(value);
   } catch {
-    throw new ToolInputError("url must be a full YouTube video URL");
+    return undefined;
   }
 
   const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+  if (!["youtu.be", "youtube.com", "m.youtube.com", "youtube-nocookie.com"].includes(host)) {
+    return undefined;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new ToolInputError("YouTube URLs must use http or https");
+  }
+
   let id: string | undefined;
   if (host === "youtu.be") {
     id = parsed.pathname.split("/").filter(Boolean)[0];
-  } else if (host === "youtube.com" || host === "m.youtube.com" || host === "youtube-nocookie.com") {
+  } else {
     id = parsed.searchParams.get("v") ?? undefined;
     if (!id) {
       const [kind, pathId] = parsed.pathname.split("/").filter(Boolean);
@@ -82,6 +31,26 @@ function youtubeVideo(value: string): { id: string; url: string } {
   }
   if (!id || !/^[\w-]{11}$/.test(id)) throw new ToolInputError("url must identify a YouTube video");
   return { id, url: `https://www.youtube.com/watch?v=${id}` };
+}
+
+export async function fetchYoutubeTranscript(video: YoutubeVideo): Promise<{
+  title: string;
+  url: string;
+  content: string;
+}> {
+  const transcript = await fetchTranscript(video.id);
+  if (!transcript.length) throw new Error("No transcript is available for this video");
+  const milliseconds = transcript.some((item) => item.duration > 100);
+  const content = transcript
+    .map((item) => {
+      const text = item.text.replace(/\s+/g, " ").trim();
+      const seconds = milliseconds ? item.offset / 1000 : item.offset;
+      return text ? `[${timestamp(seconds)}](${video.url}&t=${Math.floor(seconds)}s) ${text}` : "";
+    })
+    .filter(Boolean)
+    .join("\n");
+  if (!content) throw new Error("No transcript is available for this video");
+  return { title: "YouTube transcript", url: video.url, content };
 }
 
 function timestamp(seconds: number): string {

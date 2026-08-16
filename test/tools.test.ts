@@ -13,6 +13,7 @@ import { webFetchTool } from "../src/tools/web/fetch.js";
 import { webSearchTool } from "../src/tools/web/search.js";
 import { extractWithKetch, searchWithKetch } from "../src/tools/web/ketch.js";
 import { fetchPublicText } from "../src/tools/web/request.js";
+import { youtubeVideo } from "../src/tools/web/youtube.js";
 import { writeTool } from "../src/tools/write.js";
 import { LocalWorkspace } from "../src/execution/workspace.js";
 import { nativeSandboxStatus } from "../src/execution/native/sandbox.js";
@@ -141,6 +142,12 @@ test("web fetch exposes continuation instead of silently cutting a page", async 
     maxChars: 1_000,
   });
   assert.match(continued.content, /Showing characters 1000-1999 of 2500/);
+});
+
+test("web fetch recognizes supported YouTube video URLs", () => {
+  assert.equal(youtubeVideo("https://youtu.be/dQw4w9WgXcQ")?.id, "dQw4w9WgXcQ");
+  assert.equal(youtubeVideo("https://www.youtube.com/shorts/dQw4w9WgXcQ")?.id, "dQw4w9WgXcQ");
+  assert.equal(youtubeVideo("https://example.com/video")?.id, undefined);
 });
 
 test("the generic tool-output guard reports middle truncation", () => {

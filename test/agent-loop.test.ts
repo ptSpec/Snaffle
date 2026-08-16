@@ -248,14 +248,10 @@ test("web tools follow web search availability", () => {
   const disabledSearch = defaultTools({ webSearchEnabled: false, openRouterApiKey: "test" });
 
   assert.equal(withoutWeb.some((tool) => tool.name === "web_fetch"), false);
-  assert.equal(withoutWeb.some((tool) => tool.name === "youtube_transcript"), false);
   assert.doesNotMatch(withWeb.find((tool) => tool.name === "web_fetch")?.description ?? "", /Web discovery is unavailable/);
-  assert.equal(withWeb.some((tool) => tool.name === "youtube_transcript"), true);
-  assert.equal(richSearch.some((tool) => tool.name === "web_fetch"), false);
-  assert.equal(richSearch.some((tool) => tool.name === "youtube_transcript"), true);
+  assert.equal(richSearch.some((tool) => tool.name === "web_fetch"), true);
   assert.equal(disabledSearch.some((tool) => tool.name === "web_search"), false);
   assert.equal(disabledSearch.some((tool) => tool.name === "web_fetch"), false);
-  assert.equal(disabledSearch.some((tool) => tool.name === "youtube_transcript"), false);
 });
 
 test("only explicitly cited tool sources reach the final answer", async (t) => {

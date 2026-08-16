@@ -680,7 +680,7 @@ function currentToolSpecs(mode: ThreadSubagentMode = "inherit", workspacePath?: 
 
 const MODEL_TOOL_NAMES = new Set([
   "run_command", "read_file", "search_files", "edit_file", "write_file",
-  "web_search", "web_fetch", "youtube_transcript", "use_skill", "mcp", "delegate_task",
+  "web_search", "web_fetch", "use_skill", "mcp", "delegate_task",
 ]);
 
 const MODEL_TOGGLEABLE_TOOL_NAMES = new Set(["use_skill"]);
