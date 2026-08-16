@@ -619,7 +619,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     ),
     modelTools: modelToolSettings(activeThread?.subagentMode, workspace?.path),
     systemPrompt,
-    runtimeMetadata: currentEnvironmentContent(workspace?.path),
+    runtimeMetadata: currentEnvironmentContent(),
     disabledTools,
     modelToolSurfaces,
     skills: skillsFor(workspace?.path).summaries(),

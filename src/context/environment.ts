@@ -1,14 +1,13 @@
 import path from "node:path";
-import type { Workspace } from "../execution/workspace.js";
 import type { Message } from "../protocol.js";
 
 const sessionStartedAt = new Date();
 
-export function currentEnvironmentMessage(workspace: Workspace, now = sessionStartedAt): Message {
-  return { role: "system", content: currentEnvironmentContent(workspace.root, now) };
+export function currentEnvironmentMessage(now = sessionStartedAt): Message {
+  return { role: "system", content: currentEnvironmentContent(now) };
 }
 
-export function currentEnvironmentContent(workspaceRoot: string | undefined, now = sessionStartedAt): string {
+export function currentEnvironmentContent(now = sessionStartedAt): string {
   const platform = process.platform === "darwin"
     ? "macOS"
     : process.platform === "win32"
@@ -26,7 +25,7 @@ export function currentEnvironmentContent(workspaceRoot: string | undefined, now
 - Time zone: ${zone} (${utcOffset(now)})
 - Preferred language: ${language} (${locale}); use it unless the user asks for another language
 - Platform: ${platform} ${process.arch}
-- Workspace: ${workspaceRoot ?? "unknown"}
+- Workspace: current project root; use workspace-relative paths
 - Shell: ${shell}`;
 }
 
