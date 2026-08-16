@@ -261,7 +261,7 @@ function ToolSurfaceControl({
             <small>Choose the capabilities this model can use. Plan remains available.</small>
             {surface.optionalTools.length > 2 ? (
               <small className="tool-surface-warning">
-                Smaller models may be less reliable with more than two optional capabilities.
+                Smaller models usually work best with fewer active capabilities.
               </small>
             ) : null}
             {choices.map((name) => {
