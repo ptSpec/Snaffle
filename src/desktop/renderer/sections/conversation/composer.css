@@ -207,6 +207,113 @@ textarea {
   font-size: calc(11px * var(--interface-font-scale));
 }
 
+.tool-surface-control {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--text-faint);
+  font-size: calc(11px * var(--interface-font-scale));
+}
+
+.tool-surface-control > summary {
+  display: block;
+  max-width: 210px;
+  min-height: 27px;
+  padding: 6px 10px;
+  overflow: hidden;
+  color: var(--text-muted);
+  border: 1px solid color-mix(in srgb, var(--border-default) 55%, transparent);
+  border-radius: 999px;
+  cursor: pointer;
+  list-style: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-surface-control > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-surface-control > summary:hover,
+.tool-surface-control[open] > summary {
+  color: var(--text-secondary);
+  background: var(--hover-background);
+}
+
+.tool-surface-details {
+  position: absolute;
+  left: 0;
+  bottom: 33px;
+  z-index: 4;
+  width: 260px;
+  padding: 12px;
+  color: var(--text-secondary);
+  background: var(--card-background);
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 24%);
+}
+
+.tool-surface-details strong {
+  color: var(--text-primary);
+  font-size: calc(12px * var(--interface-font-scale));
+}
+
+.tool-surface-details p {
+  margin: 5px 0 10px;
+  line-height: 1.4;
+}
+
+.tool-surface-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.tool-surface-modes button {
+  padding: 6px 8px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+}
+
+.tool-surface-modes button.selected {
+  color: var(--text-primary);
+  background: var(--hover-background);
+  border-color: var(--border-focus);
+}
+
+.tool-surface-choices {
+  display: grid;
+  gap: 7px;
+}
+
+.tool-surface-choices small,
+.tool-surface-details > small {
+  color: var(--text-faint);
+}
+
+.tool-surface-choices label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.tool-surface-active {
+  display: grid;
+  gap: 3px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border-default);
+  line-height: 1.4;
+}
+
+.tool-surface-active small {
+  color: var(--text-faint);
+}
+
 .adaptive-model-control {
   position: relative;
   display: flex;

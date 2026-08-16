@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { runAgent } from "../src/agent/loop.js";
 import { activeCapabilities, builtInCapabilities } from "../src/capabilities/active.js";
+import { activeToolNamesForSurface } from "../src/capabilities/surface.js";
 import type { ModelProvider } from "../src/providers/provider.js";
 import type { Message, ModelResponse, RunEvent, ToolSpec } from "../src/protocol.js";
 import { defaultTools } from "../src/tools/built-ins.js";
@@ -75,6 +76,23 @@ test("active capabilities reject duplicate tool names", () => {
       { source: { type: "plugin", pluginId: "example" }, tool: writeTool },
     ]),
     /Active tool name must be unique: write_file/,
+  );
+});
+
+test("compact model surfaces keep selected tools and explicit overrides", () => {
+  const available = [
+    "run_command", "read_file", "search_files", "edit_file", "write_file",
+    "update_plan", "web_search", "web_fetch", "use_skill", "mcp",
+  ];
+  const compact = activeToolNamesForSurface(
+    available,
+    { mode: "compact", optionalTools: ["web_search", "web_fetch"] },
+    ["use_skill"],
+  );
+  assert.deepEqual(compact, available.filter((name) => name !== "mcp"));
+  assert.deepEqual(
+    activeToolNamesForSurface(available, { mode: "expanded", optionalTools: [] }),
+    available,
   );
 });
 

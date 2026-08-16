@@ -18,6 +18,15 @@ import {
   type ImageUnderstandingProfile,
 } from "../attachments/vision.js";
 import { activeCapabilities, type ActiveTool } from "../capabilities/active.js";
+import {
+  compactToolChoices,
+  modelSurfaceKey,
+  parseModelToolSurfaces,
+  surfaceForModel,
+  toolsForSurface,
+  type ModelToolSurface,
+  type ModelToolSurfaces,
+} from "../capabilities/surface.js";
 import { updatePlanTool } from "../tools/plan.js";
 import {
   DEFAULT_COMPACTION_THRESHOLD,
@@ -123,6 +132,7 @@ let selectedModel = DEVELOPMENT_MODEL;
 let selectedProviderConnectionId = OPENROUTER_CONNECTION_ID;
 let systemPrompt = SYSTEM_PROMPT;
 let disabledTools: string[] = [];
+let modelToolSurfaces: ModelToolSurfaces = {};
 let mcpEnabled = true;
 let imageUnderstanding: ImageUnderstandingProfile = imageUnderstandingProfile(undefined);
 
@@ -182,6 +192,7 @@ async function start(): Promise<void> {
     ? settings.systemPrompt
     : SYSTEM_PROMPT;
   disabledTools = validDisabledTools(settings.disabledTools);
+  modelToolSurfaces = parseModelToolSurfaces(settings.modelToolSurfaces);
   imageUnderstanding = imageUnderstandingProfile(settings.imageUnderstanding);
   webSearchBackend = validWebSearchBackend(settings.webSearchBackend) ?? "ddg";
   loadWebSearchApiKeys(settings.webSearchApiKeys);
@@ -321,12 +332,15 @@ function registerIpc(): void {
     const threadId = parseId(rawThreadId, "Thread");
     const contextLength = parseContextLength(rawContextLength);
     const checkpoint = await store.context.latest(threadId);
+    const selection = await threadToolSelection(threadId);
     return buildContextReport({
       entries: await store.context.entries(threadId, checkpoint),
       checkpoint,
       tools: currentToolSpecs(
         await store.threadSubagentMode(threadId),
-        await workspacePathForThread(threadId),
+        selection.workspacePath,
+        selection.connectionId,
+        selection.model,
       ),
       contextLength,
       mode: compactionMode,
@@ -346,6 +360,7 @@ function registerIpc(): void {
     const providerConnectionId = parseId(rawConnectionId, "Provider connection");
     const model = typeof rawModel === "string" ? rawModel.trim() : "";
     if (!model) throw new Error("Choose a model before compacting context");
+    const selection = await threadToolSelection(threadId);
     await contextCompactor.force({
       threadId,
       providerConnectionId,
@@ -353,7 +368,9 @@ function registerIpc(): void {
       contextLength: parseContextLength(rawContextLength),
       tools: currentToolSpecs(
         await store.threadSubagentMode(threadId),
-        await workspacePathForThread(threadId),
+        selection.workspacePath,
+        providerConnectionId,
+        model,
       ),
     });
   });
@@ -513,6 +530,36 @@ function registerIpc(): void {
     return desktopState(false);
   });
 
+  ipcMain.handle("desktop:set-model-tool-surface", async (
+    _event,
+    rawConnectionId: unknown,
+    rawModel: unknown,
+    rawSurface: unknown,
+  ): Promise<DesktopState> => {
+    const connectionId = parseId(rawConnectionId, "Provider connection");
+    providerConnections.resolve(connectionId);
+    if (typeof rawModel !== "string" || !rawModel.trim()) throw new Error("Model must be text");
+    if (!rawSurface || typeof rawSurface !== "object" || Array.isArray(rawSurface)) {
+      throw new Error("Tool surface must be an object");
+    }
+    const input = rawSurface as Record<string, unknown>;
+    if (input.mode !== "compact" && input.mode !== "expanded") throw new Error("Unknown tool surface mode");
+    if (!Array.isArray(input.optionalTools) || input.optionalTools.length > 2 || input.optionalTools.some((name) =>
+      typeof name !== "string" || !compactToolChoices().includes(name))) {
+      throw new Error("Compact tool surface accepts up to two optional tools");
+    }
+    const surface: ModelToolSurface = {
+      mode: input.mode,
+      optionalTools: [...new Set(input.optionalTools as string[])],
+    };
+    modelToolSurfaces = {
+      ...modelToolSurfaces,
+      [modelSurfaceKey(connectionId, rawModel.trim())]: surface,
+    };
+    saveSettings({ modelToolSurfaces });
+    return desktopState(false);
+  });
+
   ipcMain.handle("desktop:set-web-search-backend", async (_event, value: unknown): Promise<DesktopState> => {
     const backend = validWebSearchBackend(value);
     if (!backend) throw new Error("Unknown web search backend");
@@ -564,11 +611,17 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     conversation,
     contextCheckpoints: includeConversation ? await store.context.checkpoints(state.activeThreadId) : [],
     modelInstructions: await store.systemInstructions(state.activeThreadId),
-    toolSpecs: currentToolSpecs(activeThread?.subagentMode, workspace?.path),
+    toolSpecs: currentToolSpecs(
+      activeThread?.subagentMode,
+      workspace?.path,
+      activeThread?.providerConnectionId || selectedProviderConnectionId,
+      activeThread?.model || selectedModel,
+    ),
     modelTools: modelToolSettings(activeThread?.subagentMode, workspace?.path),
     systemPrompt,
     runtimeMetadata: currentEnvironmentContent(workspace?.path),
     disabledTools,
+    modelToolSurfaces,
     skills: skillsFor(workspace?.path).summaries(),
     savedMessages: await store.savedMessages.summaries(),
     keptAside: await store.asides.list(state.activeThreadId),
@@ -643,9 +696,21 @@ function skillsFor(workspacePath?: string): SkillRegistry {
   return new SkillRegistry(workspacePath, path.join(app.getPath("userData"), "skills"));
 }
 
-function currentCapabilities(workspacePath?: string) {
-  return activeCapabilities(configuredTools(workspacePath)
-    .filter(({ tool }) => !disabledTools.includes(tool.name)));
+function currentCapabilities(
+  workspacePath: string | undefined,
+  connectionId = selectedProviderConnectionId,
+  model = selectedModel,
+  explicitlyActive: string[] = [],
+) {
+  const configured = configuredTools(workspacePath)
+    .filter(({ tool }) => !disabledTools.includes(tool.name));
+  const surface = surfaceForModel(
+    modelToolSurfaces,
+    connectionId,
+    model,
+    configured.map(({ tool }) => tool.name),
+  );
+  return activeCapabilities(toolsForSurface(configured, surface, explicitlyActive));
 }
 
 function configuredTools(workspacePath?: string): ActiveTool[] {
@@ -668,8 +733,13 @@ function configuredTools(workspacePath?: string): ActiveTool[] {
   return tools;
 }
 
-function currentToolSpecs(mode: ThreadSubagentMode = "inherit", workspacePath?: string) {
-  const tools = currentCapabilities(workspacePath).tools.map(({ tool }) => tool);
+function currentToolSpecs(
+  mode: ThreadSubagentMode = "inherit",
+  workspacePath?: string,
+  connectionId = selectedProviderConnectionId,
+  model = selectedModel,
+) {
+  const tools = currentCapabilities(workspacePath, connectionId, model).tools.map(({ tool }) => tool);
   if (threadSubagent(subagent, mode) && !disabledTools.includes("delegate_task")) {
     tools.push(delegateTaskTool(async () => ""));
   }
@@ -714,11 +784,23 @@ function modelToolSettings(mode: ThreadSubagentMode = "inherit", workspacePath?:
   }));
 }
 
-async function workspacePathForThread(threadId: string): Promise<string | undefined> {
+async function threadToolSelection(threadId: string): Promise<{
+  workspacePath?: string;
+  connectionId: string;
+  model: string;
+}> {
   const state = await store.state();
-  return state.workspaces.find((workspace) =>
-    workspace.threads.some((thread) => thread.id === threadId)
-  )?.path;
+  for (const workspace of state.workspaces) {
+    const thread = workspace.threads.find((item) => item.id === threadId);
+    if (thread) {
+      return {
+        workspacePath: workspace.path,
+        connectionId: thread.providerConnectionId || selectedProviderConnectionId,
+        model: thread.model || selectedModel,
+      };
+    }
+  }
+  return { connectionId: selectedProviderConnectionId, model: selectedModel };
 }
 
 async function launchEditor(target: string): Promise<void> {

@@ -28,6 +28,12 @@ import type { SubagentProfile, ThreadSubagentMode } from "../../agent/subagents/
 import type { ContextReport } from "../../context/report.js";
 import type { KetchSearchBackend, WebSearchBackend } from "../../tools/web/types.js";
 import type { McpServerConfig, McpServerStatus } from "../../mcp/types.js";
+import {
+  activeToolNamesForSurface,
+  modelSurfaceKey,
+  surfaceForModel,
+  type ModelToolSurface,
+} from "../../capabilities/surface.js";
 import { DEFAULT_MODEL_CONTEXT_LENGTH } from "../../providers/provider.js";
 import { providerProfile, splitModelVariant } from "../../providers/profiles.js";
 import { DEFAULT_THEME, themeById, type Theme } from "../themes/index.js";
@@ -83,6 +89,7 @@ const initialState: DesktopState = {
   systemPrompt: "",
   runtimeMetadata: "",
   disabledTools: [],
+  modelToolSurfaces: {},
   skills: [],
   savedMessages: [],
   keptAside: [],
@@ -158,6 +165,7 @@ export function App(): JSX.Element {
   const [contextReport, setContextReport] = useState<ContextReport | null>(null);
   const [contextRefresh, setContextRefresh] = useState(0);
   const [compactingContext, setCompactingContext] = useState(false);
+  const [explicitlyActiveTools, setExplicitlyActiveTools] = useState<string[]>([]);
   const taskInput = useRef<HTMLTextAreaElement>(null);
   const timelineView = useRef<HTMLDivElement>(null);
   const executionMode = useRef<HTMLDetailsElement>(null);
@@ -509,6 +517,20 @@ export function App(): JSX.Element {
   const selectedModelBase = splitModelVariant(selectedModel, selectedProfile?.modelVariants).baseModelId;
   const selectedProviderModel = selectedCatalog?.models.find((model) => model.id === selectedModel) ??
     selectedCatalog?.models.find((model) => model.id === selectedModelBase);
+  const availableToolNames = desktopState.modelTools
+    .filter((tool) => tool.available && tool.enabled)
+    .map((tool) => tool.name);
+  const toolSurface = surfaceForModel(
+    desktopState.modelToolSurfaces,
+    selectedProviderConnectionId,
+    selectedModel,
+    availableToolNames,
+  );
+  const explicitTools = [
+    ...explicitlyActiveTools,
+    ...(availableToolNames.includes("delegate_task") ? ["delegate_task"] : []),
+  ];
+  const activeToolNames = activeToolNamesForSurface(availableToolNames, toolSurface, explicitTools);
   const selectedContextLength = selectedProviderModel?.contextLength ??
     DEFAULT_MODEL_CONTEXT_LENGTH;
   const pendingContextTokens = Math.ceil(task.length / 4) + pendingAttachments.reduce(
@@ -623,13 +645,16 @@ export function App(): JSX.Element {
       ...(pendingAttachments.length
         ? { attachments: pendingAttachments.map(attachmentRef) }
         : {}),
+      ...(explicitlyActiveTools.length ? { explicitlyActiveTools } : {}),
     };
 
     followTimeline.current = true;
     appendUserMessage(request.threadId, request.task, pendingAttachments);
     const sentAttachments = pendingAttachments;
+    const sentExplicitTools = explicitlyActiveTools;
     setTask("");
     setPendingAttachments([]);
+    setExplicitlyActiveTools([]);
     threadAttachments.current.delete(request.threadId);
     setDesktopState((state) => ({
       ...state,
@@ -644,6 +669,7 @@ export function App(): JSX.Element {
         runningThreadIds: state.runningThreadIds.filter((id) => id !== request.threadId),
       }));
       setPendingAttachments(sentAttachments);
+      setExplicitlyActiveTools(sentExplicitTools);
       threadAttachments.current.set(request.threadId, sentAttachments);
       setError(errorMessage(cause));
     }
@@ -918,6 +944,7 @@ export function App(): JSX.Element {
 
   function showDesktopState(state: DesktopState): void {
     followTimeline.current = true;
+    const threadChanged = activeThreadId.current !== state.activeThreadId;
     if (activeThreadId.current) {
       threadAttachments.current.set(activeThreadId.current, pendingAttachments);
     }
@@ -940,6 +967,7 @@ export function App(): JSX.Element {
     setPendingAttachments(
       state.activeThreadId ? threadAttachments.current.get(state.activeThreadId) ?? [] : [],
     );
+    if (threadChanged) setExplicitlyActiveTools([]);
     setError(null);
     setView("conversation");
   }
@@ -1378,6 +1406,26 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setModelToolSurface(surface: ModelToolSurface): Promise<void> {
+    if (!selectedModel) return;
+    try {
+      const state = await window.desktop.setModelToolSurface(
+        selectedProviderConnectionId,
+        selectedModel,
+        surface,
+      );
+      setDesktopState((current) => ({
+        ...current,
+        modelToolSurfaces: state.modelToolSurfaces,
+        toolSpecs: state.toolSpecs,
+      }));
+      setContextRefresh((value) => value + 1);
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   async function setWebSearchBackend(webSearchBackend: WebSearchBackend): Promise<void> {
     try {
       await window.desktop.setWebSearchBackend(webSearchBackend);
@@ -1555,6 +1603,7 @@ export function App(): JSX.Element {
         setTask((current) => current.trim()
           ? `${activation}\n\n${current}`
           : `${activation}\n\n`);
+        setExplicitlyActiveTools((current) => [...new Set([...current, "use_skill"])]);
         window.requestAnimationFrame(() => taskInput.current?.focus());
       },
     })),
@@ -1781,6 +1830,9 @@ export function App(): JSX.Element {
             models={models}
             selectedProviderConnectionId={selectedProviderConnectionId}
             selectedModel={selectedModel}
+            toolSurface={toolSurface}
+            activeToolNames={activeToolNames}
+            availableToolNames={availableToolNames}
             loadingModels={loadingModels}
             providerAvailable={desktopState.providerConnections.some((connection) => connection.enabled)}
             contextReport={contextReport}
@@ -1801,6 +1853,7 @@ export function App(): JSX.Element {
             onPasteMarkdown={() => void pasteMarkdown()}
             onChooseAttachments={() => void chooseAttachments()}
             onModel={selectModel}
+            onToolSurface={(surface) => void setModelToolSurface(surface)}
             onCompact={() => void compactCurrentContext()}
             onUnsafe={(value) => void setThreadUnsafe(value)}
             onStop={() => void stopRun()}

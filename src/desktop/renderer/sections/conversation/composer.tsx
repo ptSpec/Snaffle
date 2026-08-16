@@ -11,6 +11,7 @@ import { ThinkingOrb, type OrbMotion } from "../../components/thinking-orb.js";
 import { ContextGauge } from "./context-gauge.js";
 import { ModelPicker } from "./model-picker.js";
 import { providerVisual } from "./provider-mark.js";
+import { compactToolChoices, type ModelToolSurface } from "../../../../capabilities/surface.js";
 
 export function Composer({
   task,
@@ -23,6 +24,9 @@ export function Composer({
   models,
   selectedProviderConnectionId,
   selectedModel,
+  toolSurface,
+  activeToolNames,
+  availableToolNames,
   loadingModels,
   providerAvailable,
   contextReport,
@@ -43,6 +47,7 @@ export function Composer({
   onPasteMarkdown,
   onChooseAttachments,
   onModel,
+  onToolSurface,
   onCompact,
   onUnsafe,
   onStop,
@@ -135,6 +140,13 @@ export function Composer({
             onCompact={onCompact}
           />
         </div>
+        <ToolSurfaceControl
+          surface={toolSurface}
+          activeToolNames={activeToolNames}
+          availableToolNames={availableToolNames}
+          disabled={running || !selectedModel}
+          onChange={onToolSurface}
+        />
         <details ref={executionMode} className={unsafe ? "execution-mode unsafe" : "execution-mode"}>
           <summary>
             {unsafe ? <span className="execution-dot" aria-hidden="true" /> : <Shield />}
@@ -186,6 +198,105 @@ export function Composer({
   );
 }
 
+function ToolSurfaceControl({
+  surface,
+  activeToolNames,
+  availableToolNames,
+  disabled,
+  onChange,
+}: {
+  surface: ModelToolSurface;
+  activeToolNames: string[];
+  availableToolNames: string[];
+  disabled: boolean;
+  onChange(surface: ModelToolSurface): void;
+}): JSX.Element {
+  const labels = activeSurfaceLabels(activeToolNames);
+  const choices = compactToolChoices().filter((name) => availableToolNames.includes(name));
+
+  function toggle(name: string, enabled: boolean): void {
+    const optionalTools = enabled
+      ? [...surface.optionalTools, name]
+      : surface.optionalTools.filter((tool) => tool !== name);
+    if (optionalTools.length <= 2) onChange({ mode: surface.mode, optionalTools });
+  }
+
+  return (
+    <details className="tool-surface-control">
+      <summary title={`Active tools: ${activeToolNames.join(", ")}`}>
+        {surface.mode === "compact" ? "Compact" : "Expanded"}
+        <span>{labels.length ? ` · ${labels.join(" · ")}` : " · Core only"}</span>
+      </summary>
+      <div className="tool-surface-details">
+        <strong>Model tool surface</strong>
+        <p>Saved for this model. Explicit thread actions may add a tool temporarily.</p>
+        <div className="tool-surface-modes">
+          <button
+            type="button"
+            className={surface.mode === "compact" ? "selected" : ""}
+            disabled={disabled}
+            onClick={() => onChange({ mode: "compact", optionalTools: surface.optionalTools })}
+          >Compact</button>
+          <button
+            type="button"
+            className={surface.mode === "expanded" ? "selected" : ""}
+            disabled={disabled}
+            onClick={() => onChange({ mode: "expanded", optionalTools: surface.optionalTools })}
+          >Expanded</button>
+        </div>
+        {surface.mode === "compact" ? (
+          <div className="tool-surface-choices">
+            <small>Choose up to two optional capabilities. Plan remains available.</small>
+            {choices.map((name) => {
+              const checked = surface.optionalTools.includes(name);
+              return (
+                <label key={name}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={disabled || (!checked && surface.optionalTools.length >= 2)}
+                    onChange={(event) => toggle(name, event.target.checked)}
+                  />
+                  {toolLabel(name)}
+                </label>
+              );
+            })}
+          </div>
+        ) : <small>All configured high-level tools are active.</small>}
+        <div className="tool-surface-active">
+          <small>Active now</small>
+          <span>{activeToolNames.map(toolLabel).join(", ")}</span>
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function activeSurfaceLabels(names: string[]): string[] {
+  const labels = new Set<string>();
+  if (names.includes("update_plan")) labels.add("Plan");
+  if (names.includes("web_search") || names.includes("web_fetch")) labels.add("Web");
+  if (names.includes("use_skill")) labels.add("Skills");
+  if (names.includes("mcp")) labels.add("MCP");
+  if (names.includes("delegate_task")) labels.add("Subagents");
+  return [...labels];
+}
+
+function toolLabel(name: string): string {
+  if (name === "run_command") return "Run command";
+  if (name === "read_file") return "Read file";
+  if (name === "search_files") return "Search files";
+  if (name === "edit_file") return "Edit file";
+  if (name === "write_file") return "Write file";
+  if (name === "update_plan") return "Plan";
+  if (name === "web_search") return "Web search";
+  if (name === "web_fetch") return "Web fetch";
+  if (name === "use_skill") return "Skills";
+  if (name === "mcp") return "MCP";
+  if (name === "delegate_task") return "Subagents";
+  return name;
+}
+
 function MenuButton({ label, disabled, onClick }: {
   label: string;
   disabled?: boolean;
@@ -222,6 +333,9 @@ type ComposerProps = {
   models: ProviderCatalog[];
   selectedProviderConnectionId: string;
   selectedModel: string;
+  toolSurface: ModelToolSurface;
+  activeToolNames: string[];
+  availableToolNames: string[];
   loadingModels: boolean;
   providerAvailable: boolean;
   contextReport: ContextReport | null;
@@ -242,6 +356,7 @@ type ComposerProps = {
   onPasteMarkdown(): void;
   onChooseAttachments(): void;
   onModel(providerConnectionId: string, value: string): void;
+  onToolSurface(surface: ModelToolSurface): void;
   onCompact(): void;
   onUnsafe(value: boolean): void;
   onStop(): void;

@@ -15,6 +15,7 @@ import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js
 import type { SubagentProfile, ThreadSubagentMode } from "../agent/subagents/profile.js";
 import type { McpServerConfig } from "../mcp/types.js";
 import type { ImageUnderstandingProfile } from "../attachments/vision.js";
+import type { ModelToolSurface } from "../capabilities/surface.js";
 
 const api: DesktopApi = {
   platform: process.platform,
@@ -94,6 +95,8 @@ const api: DesktopApi = {
   setSystemPrompt: (prompt: string) => ipcRenderer.invoke("desktop:set-system-prompt", prompt),
   setToolEnabled: (name: string, enabled: boolean) =>
     ipcRenderer.invoke("desktop:set-tool-enabled", name, enabled),
+  setModelToolSurface: (connectionId: string, model: string, surface: ModelToolSurface) =>
+    ipcRenderer.invoke("desktop:set-model-tool-surface", connectionId, model, surface),
   getContextReport: (threadId, contextLength) =>
     ipcRenderer.invoke("desktop:get-context-report", threadId, contextLength),
   compactContext: (threadId, connectionId, model, contextLength) =>

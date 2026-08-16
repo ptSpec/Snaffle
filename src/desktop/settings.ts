@@ -7,6 +7,7 @@ import type { KetchSearchBackend, WebSearchBackend } from "../tools/web/types.js
 import type { McpServerConfig } from "../mcp/types.js";
 import type { FontId } from "./typography.js";
 import type { ImageUnderstandingProfile } from "../attachments/vision.js";
+import type { ModelToolSurfaces } from "../capabilities/surface.js";
 
 export type SavedSettings = {
   themeId?: unknown;
@@ -38,6 +39,7 @@ export type SavedSettings = {
   systemPrompt?: unknown;
   disabledTools?: unknown;
   imageUnderstanding?: unknown;
+  modelToolSurfaces?: unknown;
 };
 
 export type SettingsUpdate = {
@@ -70,6 +72,7 @@ export type SettingsUpdate = {
   systemPrompt?: string;
   disabledTools?: string[];
   imageUnderstanding?: ImageUnderstandingProfile;
+  modelToolSurfaces?: ModelToolSurfaces;
 };
 
 export function loadSettings(file: string): SavedSettings {
