@@ -205,6 +205,41 @@ test("agent loop applies steering after the current model output", async (t) => 
   ]);
 });
 
+test("a stopped run does not execute a pending tool call", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "agent-cancel-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const controller = new AbortController();
+  let executed = false;
+  const tool: Tool = {
+    name: "pending_tool",
+    description: "Test tool",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    async execute() {
+      executed = true;
+      return { content: "unexpected" };
+    },
+  };
+  const provider: ModelProvider = {
+    model: "cancel-test-model",
+    providerId: "test",
+    connectionId: "test",
+    async complete() {
+      controller.abort();
+      return { text: "", toolCalls: [{ id: "pending", name: tool.name, input: {} }] };
+    },
+  };
+
+  await assert.rejects(runAgent({
+    task: "Stop before the tool runs.",
+    provider,
+    capabilities: builtInCapabilities([tool]),
+    workspace: new LocalWorkspace(root, "disabled"),
+    trace: new MemoryTrace(),
+    signal: controller.signal,
+  }), /aborted/i);
+  assert.equal(executed, false);
+});
+
 test("an active plan keeps the agent running until actionable work is resolved", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "agent-plan-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));

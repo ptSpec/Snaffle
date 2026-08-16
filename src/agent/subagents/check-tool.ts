@@ -14,7 +14,7 @@ export function checkCommandTool(profile: Extract<SubagentProfileName, "review" 
       : "Run one verification command such as a test, lint, typecheck, git status, or git diff. Shell chaining and redirection are not allowed.",
     exampleInput: { command: profile === "review" ? "git diff --stat" : "npm test" },
     inputSchema: runTool.inputSchema,
-    async execute(workspace, rawInput) {
+    async execute(workspace, rawInput, context) {
       const input = objectInput(rawInput);
       const command = stringField(input, "command") as string;
       if (shellComposition.test(command)) {
@@ -25,7 +25,7 @@ export function checkCommandTool(profile: Extract<SubagentProfileName, "review" 
           ? "review commands must begin with git status, git diff, git log, or git show"
           : "test commands must be a supported test, lint, typecheck, or read-only Git command");
       }
-      return runTool.execute(workspace, input);
+      return runTool.execute(workspace, input, context);
     },
   };
 }

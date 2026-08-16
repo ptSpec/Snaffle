@@ -105,17 +105,18 @@ export async function runRestrictedCommand(
   workspace: string,
   cwd: string,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<SandboxResult> {
   const status = nativeSandboxStatus();
   if (!status.available) throw new Error(status.detail);
 
   if (process.platform === "darwin") {
-    return runMacos(command, workspace, cwd, timeoutMs);
+    return runMacos(command, workspace, cwd, timeoutMs, signal);
   }
 
   const bubblewrap = findExecutable("bwrap");
   if (!bubblewrap) throw new Error("Install Bubblewrap (bwrap) for restricted execution");
-  return runLinux(bubblewrap, command, workspace, cwd, timeoutMs);
+  return runLinux(bubblewrap, command, workspace, cwd, timeoutMs, signal);
 }
 
 async function runMacos(
@@ -123,6 +124,7 @@ async function runMacos(
   workspace: string,
   cwd: string,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<SandboxResult> {
   const temporary = await mkdtemp(path.join(tmpdir(), "coding-harness-sandbox-"));
   const home = path.join(temporary, "home");
@@ -140,6 +142,7 @@ async function runMacos(
       cwd,
       timeoutMs,
       commandEnvironment(workspace, home, temporary),
+      signal,
     );
   } finally {
     await rm(temporary, { recursive: true, force: true });
@@ -161,6 +164,7 @@ async function runLinux(
   workspace: string,
   cwd: string,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<SandboxResult> {
   const gitMetadata = await findGitMetadata(workspace);
   const args = [
@@ -184,6 +188,7 @@ async function runLinux(
     cwd,
     timeoutMs,
     commandEnvironment(workspace, "/tmp/home", "/tmp"),
+    signal,
   );
 }
 
@@ -201,7 +206,9 @@ async function runProcess(
   cwd: string,
   timeoutMs: number,
   env: NodeJS.ProcessEnv,
+  signal?: AbortSignal,
 ): Promise<SandboxResult> {
+  signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
     let timedOut = false;
     let outputExceeded = false;
@@ -212,6 +219,7 @@ async function runProcess(
       cwd,
       env,
       detached: true,
+      signal,
       stdio: ["ignore", "pipe", "pipe"],
     });
     const capture = (target: "stdout" | "stderr", chunk: Buffer): void => {
