@@ -1,6 +1,6 @@
-import { app, Menu, type MenuItemConstructorOptions } from "electron";
+import { Menu, type MenuItemConstructorOptions } from "electron";
 
-export function installDesktopMenu(): void {
+export function installDesktopMenu(development: boolean): void {
   const template: MenuItemConstructorOptions[] = [];
 
   if (process.platform === "darwin") template.push({ role: "appMenu" });
@@ -19,7 +19,7 @@ export function installDesktopMenu(): void {
     },
   );
 
-  if (!app.isPackaged) {
+  if (development) {
     template.push({
       label: "Developer",
       submenu: [

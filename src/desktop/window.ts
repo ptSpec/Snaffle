@@ -18,6 +18,7 @@ export function createDesktopWindow(
   rendererPath: string,
   preloadPath: string,
   appearance: WindowAppearance,
+  development: boolean,
 ): BrowserWindow {
   const window = new BrowserWindow({
     title: PROJECT.name,
@@ -40,7 +41,7 @@ export function createDesktopWindow(
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
-      devTools: !app.isPackaged,
+      devTools: development,
       nodeIntegration: false,
       sandbox: true,
       preload: preloadPath,
@@ -65,7 +66,7 @@ export function createDesktopWindow(
   return window;
 }
 
-export function applicationIcon(): string {
-  const root = app.isPackaged ? process.resourcesPath : process.cwd();
+export function applicationIcon(development = !app.isPackaged): string {
+  const root = development ? process.cwd() : process.resourcesPath;
   return path.join(root, "assets", "logo.png");
 }
