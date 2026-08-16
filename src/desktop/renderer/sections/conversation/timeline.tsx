@@ -179,13 +179,25 @@ export function TimelineEntry({
 }
 
 export function ActivePlan({ items }: { items: TimelineItem[] }): JSX.Element | null {
-  const progress = planProgress(items);
-  if (!progress) return null;
+  const plan = activePlan(items);
+  if (!plan) return null;
   return (
-    <div className={`active-plan ${progress.state}`} title={progress.label}>
-      <ToolIcon name="update_plan" />
-      <span>{progress.label}</span>
-      {progress.state === "working" ? <span className="activity-spinner" aria-hidden="true" /> : null}
+    <div className="active-plan">
+      <div className="active-plan-heading">
+        <ToolIcon name="update_plan" />
+        <strong>{plan.items ? "Plan" : "Updating plan…"}</strong>
+        {plan.updating ? <span className="activity-spinner" aria-hidden="true" /> : null}
+      </div>
+      {plan.items ? (
+        <ol className="active-plan-steps">
+          {plan.items.map((item, index) => (
+            <li className={`active-plan-step ${item.status}`} key={`${index}:${item.step}`}>
+              <span className="active-plan-marker" aria-hidden="true" />
+              <span>{item.step}</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
     </div>
   );
 }
@@ -195,37 +207,23 @@ type PlanItem = {
   status: "pending" | "in_progress" | "completed" | "blocked";
 };
 
-type PlanProgress = {
-  label: string;
-  state: "working" | "blocked" | "complete";
+type ActivePlanState = {
+  items: PlanItem[] | null;
+  updating: boolean;
 };
 
-function planProgress(items: TimelineItem[]): PlanProgress | null {
+function activePlan(items: TimelineItem[]): ActivePlanState | null {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index];
     if (!item || item.kind === "user") return null;
     if (item.kind !== "tool" || item.call.name !== "update_plan") continue;
-    if (item.phase === "running") return { label: "Updating plan…", state: "working" };
+    if (item.phase === "running") {
+      return { items: planItems(item.call.input), updating: true };
+    }
     if (item.isError) continue;
     const plan = planItems(item.call.input);
     if (!plan) continue;
-    const current = plan.findIndex((entry) => entry.status === "in_progress");
-    if (current !== -1) {
-      return {
-        label: `Plan · Step ${current + 1} of ${plan.length} — ${plan[current]!.step}`,
-        state: "working",
-      };
-    }
-    const next = plan.findIndex((entry) => entry.status === "pending");
-    if (next !== -1) {
-      return {
-        label: `Plan · Next step ${next + 1} of ${plan.length} — ${plan[next]!.step}`,
-        state: "working",
-      };
-    }
-    const blocked = plan.find((entry) => entry.status === "blocked");
-    if (blocked) return { label: `Plan blocked — ${blocked.step}`, state: "blocked" };
-    return { label: `Plan complete · ${plan.length} of ${plan.length}`, state: "complete" };
+    return { items: plan, updating: false };
   }
   return null;
 }

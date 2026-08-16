@@ -38,9 +38,6 @@
 }
 
 .active-plan {
-  display: flex;
-  align-items: center;
-  gap: 7px;
   width: fit-content;
   max-width: min(760px, 100%);
   margin: 2px 0 10px;
@@ -48,19 +45,84 @@
   font-size: calc(13px * var(--interface-font-scale));
 }
 
-.active-plan > span:not(.activity-spinner) {
+.active-plan-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.active-plan-heading strong {
+  font-weight: 550;
+}
+
+.active-plan-steps {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  margin: 7px 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.active-plan-steps::before {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 4px;
+  width: 1px;
+  background: var(--border-default);
+  content: "";
+}
+
+.active-plan-step {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding-left: 18px;
+  color: var(--text-faint);
 }
 
-.active-plan.blocked {
-  color: var(--status-warning-text);
+.active-plan-step > span:last-child {
+  min-width: 0;
+  line-height: 1.35;
 }
 
-.active-plan.complete {
+.active-plan-marker {
+  position: absolute;
+  top: 5px;
+  left: 0;
+  z-index: 1;
+  width: 9px;
+  height: 9px;
+  background: var(--app-background);
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+
+.active-plan-step.in_progress {
+  color: var(--accent);
+  font-weight: 550;
+}
+
+.active-plan-step.completed .active-plan-marker,
+.active-plan-step.in_progress .active-plan-marker,
+.active-plan-step.blocked .active-plan-marker {
+  background: currentColor;
+  border-color: currentColor;
+}
+
+.active-plan-step.completed .active-plan-marker {
   color: var(--status-success-text);
+}
+
+.active-plan-step.blocked .active-plan-marker {
+  color: var(--status-danger-text);
+}
+
+.active-plan-step.in_progress .active-plan-marker {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .tool-healed {
