@@ -18,6 +18,7 @@ import {
   type ImageUnderstandingProfile,
 } from "../attachments/vision.js";
 import { activeCapabilities, type ActiveTool } from "../capabilities/active.js";
+import { updatePlanTool } from "../tools/plan.js";
 import {
   DEFAULT_COMPACTION_THRESHOLD,
   type CompactionMode,
@@ -656,6 +657,7 @@ function configuredTools(workspacePath?: string): ActiveTool[] {
           openRouterApiKey: openRouterApiKey(),
         }
       : {}).map((tool) => ({ source: { type: "built-in" }, tool }));
+  tools.push({ source: { type: "built-in" }, tool: updatePlanTool() });
   const skills = skillsFor(workspacePath);
   if (skills.summaries().length) {
     tools.push({ source: { type: "built-in" }, tool: skillTool(skills) });
@@ -680,10 +682,10 @@ function currentToolSpecs(mode: ThreadSubagentMode = "inherit", workspacePath?: 
 
 const MODEL_TOOL_NAMES = new Set([
   "run_command", "read_file", "search_files", "edit_file", "write_file",
-  "web_search", "web_fetch", "use_skill", "mcp", "delegate_task",
+  "update_plan", "web_search", "web_fetch", "use_skill", "mcp", "delegate_task",
 ]);
 
-const MODEL_TOGGLEABLE_TOOL_NAMES = new Set(["use_skill"]);
+const MODEL_TOGGLEABLE_TOOL_NAMES = new Set(["update_plan", "use_skill"]);
 
 function validDisabledTools(value: unknown): string[] {
   return Array.isArray(value)
@@ -698,6 +700,7 @@ function modelToolSettings(mode: ThreadSubagentMode = "inherit", workspacePath?:
   const skills = skillsFor(workspacePath);
   const catalog = [
     ...defaultTools({ webSearchEnabled: true, backend: "ddg", ketchPath: "catalog" }),
+    updatePlanTool(),
     skillTool(skills),
     mcpTool(mcpManager),
     delegateTaskTool(async () => ""),

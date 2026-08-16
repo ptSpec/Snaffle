@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { healToolCall, healToolInput } from "../src/tools/input.js";
 import { editTool } from "../src/tools/edit.js";
+import { updatePlanTool } from "../src/tools/plan.js";
 import { truncateMiddle } from "../src/tools/output.js";
 import { readTool } from "../src/tools/read.js";
 import { runTool } from "../src/tools/run.js";
@@ -156,6 +157,23 @@ test("the generic tool-output guard reports middle truncation", () => {
   assert.match(result, /^HEAD/);
   assert.match(result, /omitted from the middle/);
   assert.match(result, /TAIL$/);
+});
+
+test("update plan keeps one concise current plan", async () => {
+  const { root, workspace } = await fixture();
+  try {
+    const result = await updatePlanTool().execute(workspace, {
+      items: [
+        { step: "Inspect", status: "completed" },
+        { step: "Implement", status: "in_progress" },
+        { step: "Verify", status: "pending" },
+      ],
+    });
+    assert.match(result.content, /1\/3 completed/);
+    assert.match(result.content, /Continue with the current or next pending item/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("OpenRouter web search has one bounded server-side search", async (t) => {

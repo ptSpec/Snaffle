@@ -9,6 +9,7 @@ import type { ResolvedProviderConnection } from "./providers/provider.js";
 import type { RunEvent } from "./protocol.js";
 import { probeNativeSandbox } from "./execution/native/sandbox.js";
 import { defaultTools } from "./tools/built-ins.js";
+import { updatePlanTool } from "./tools/plan.js";
 import { WEB_SEARCH_BACKENDS, type WebSearchBackend } from "./tools/web/types.js";
 import { JsonlTrace } from "./agent/trace.js";
 import { LocalWorkspace } from "./execution/workspace.js";
@@ -52,6 +53,7 @@ async function main(): Promise<void> {
   process.once("SIGINT", () => controller.abort());
 
   const tools = defaultTools(webSearchOptions(options));
+  tools.push(updatePlanTool());
   const skills = new SkillRegistry(options.workspace);
   if (skills.summaries().length) tools.push(skillTool(skills));
 

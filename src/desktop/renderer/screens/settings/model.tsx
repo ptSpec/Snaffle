@@ -20,7 +20,7 @@ export function ModelSettings({
 }): JSX.Element {
   const [draft, setDraft] = useState(systemPrompt);
   const coreTools = tools.filter((tool) => CORE_TOOLS.has(tool.name));
-  const optionalTools = tools.filter((tool) => tool.name === "use_skill");
+  const optionalTools = tools.filter((tool) => tool.name === "update_plan" || tool.name === "use_skill");
 
   useEffect(() => setDraft(systemPrompt), [systemPrompt]);
 
