@@ -178,6 +178,72 @@ export function TimelineEntry({
   );
 }
 
+export function ActivePlan({ items }: { items: TimelineItem[] }): JSX.Element | null {
+  const plan = activePlan(items);
+  if (!plan) return null;
+  return (
+    <div className="active-plan">
+      <div className="active-plan-heading">
+        <ToolIcon name="update_plan" />
+        <strong>{plan.items ? "Plan" : "Updating plan…"}</strong>
+        {plan.updating ? <span className="activity-spinner" aria-hidden="true" /> : null}
+      </div>
+      {plan.items ? (
+        <ol className="active-plan-steps">
+          {plan.items.map((item, index) => (
+            <li className={`active-plan-step ${item.status}`} key={`${index}:${item.step}`}>
+              <span className="active-plan-marker" aria-hidden="true" />
+              <span>{item.step}</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </div>
+  );
+}
+
+type PlanItem = {
+  step: string;
+  status: "pending" | "in_progress" | "completed" | "blocked";
+};
+
+type ActivePlanState = {
+  items: PlanItem[] | null;
+  updating: boolean;
+};
+
+function activePlan(items: TimelineItem[]): ActivePlanState | null {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (!item || item.kind === "user") return null;
+    if (item.kind !== "tool" || item.call.name !== "update_plan") continue;
+    if (item.phase === "running") {
+      return { items: planItems(item.call.input), updating: true };
+    }
+    if (item.isError) continue;
+    const plan = planItems(item.call.input);
+    if (!plan) continue;
+    return { items: plan, updating: false };
+  }
+  return null;
+}
+
+function planItems(input: unknown): PlanItem[] | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  const rawItems = (input as Record<string, unknown>).items;
+  if (!Array.isArray(rawItems) || !rawItems.length) return null;
+  const items: PlanItem[] = [];
+  for (const rawItem of rawItems) {
+    if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) return null;
+    const entry = rawItem as Record<string, unknown>;
+    if (typeof entry.step !== "string" ||
+      (entry.status !== "pending" && entry.status !== "in_progress" &&
+        entry.status !== "completed" && entry.status !== "blocked")) return null;
+    items.push({ step: entry.step, status: entry.status });
+  }
+  return items;
+}
+
 function mcpToolName(call: { name: string; input: unknown }): string | undefined {
   if (call.name !== "mcp" || !call.input || typeof call.input !== "object" || Array.isArray(call.input)) return undefined;
   const input = call.input as Record<string, unknown>;

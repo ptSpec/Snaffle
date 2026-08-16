@@ -60,6 +60,7 @@ import { AsideShelf } from "./sections/conversation/aside-shelf.js";
 import { CommandPalette, type AppCommand } from "./commands/palette.js";
 import { TerminalPanel } from "./sections/terminal/terminal.js";
 import {
+  ActivePlan,
   TimelineEntry,
 } from "./sections/conversation/timeline.js";
 import {
@@ -1783,6 +1784,7 @@ export function App(): JSX.Element {
                   {...(!running ? { onFork: (sequence) => void forkThread(sequence) } : {})}
                 />
               ))}
+              {running ? <ActivePlan items={timeline} /> : null}
             </div>
             <AsideShelf
               messages={desktopState.keptAside}
