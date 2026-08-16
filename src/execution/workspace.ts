@@ -24,6 +24,7 @@ export type CommandResult = {
   exitCode: number | null;
   stdout: string;
   stderr: string;
+  timedOut?: boolean;
   approval?: Exclude<CommandApprovalDecision, "deny">;
 };
 
@@ -190,6 +191,7 @@ export class LocalWorkspace implements Workspace {
         exitCode: typeof error.code === "number" ? error.code : null,
         stdout: error.stdout ?? "",
         stderr: error.stderr ?? error.message,
+        ...(error.killed ? { timedOut: true } : {}),
       };
     }
   }
@@ -259,6 +261,7 @@ export class LocalWorkspace implements Workspace {
 
 type ProcessError = Error & {
   code?: number | string;
+  killed?: boolean;
   stdout?: string;
   stderr?: string;
 };

@@ -779,8 +779,26 @@ html[data-accented-theme="true"] .thread-row.selected .thread-fork-marker {
 }
 
 .sidebar-footer {
+  position: relative;
   padding: 10px;
-  border-top: 1px solid var(--border-default);
+}
+
+.sidebar-footer::before {
+  position: absolute;
+  top: 0;
+  right: 14px;
+  left: 14px;
+  height: 1px;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--border-default) 70%, transparent) 22%,
+    color-mix(in srgb, var(--border-default) 70%, transparent) 78%,
+    transparent
+  );
+  box-shadow: 0 0 7px color-mix(in srgb, var(--border-default) 34%, transparent);
 }
 
 .sidebar-action {

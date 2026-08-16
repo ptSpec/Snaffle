@@ -6,7 +6,7 @@ export const darkTheme = {
   appearance: "dark",
   colors: {
     background: "#181818",
-    panel: "#222222",
+    panel: "#2b2b2b",
     surface: "#2d2d2d",
     border: "#353535",
     text: "#e8e8e8",

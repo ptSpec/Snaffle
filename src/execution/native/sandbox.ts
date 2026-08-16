@@ -62,6 +62,7 @@ export type SandboxResult = {
   exitCode: number | null;
   stdout: string;
   stderr: string;
+  timedOut?: boolean;
   permissionDenied?: boolean;
 };
 
@@ -249,6 +250,7 @@ async function runProcess(
         exitCode,
         stdout,
         stderr,
+        ...(timedOut ? { timedOut: true } : {}),
         ...(sandboxDenied(`${stderr}\n${stdout}`) ? { permissionDenied: true } : {}),
       });
     });
