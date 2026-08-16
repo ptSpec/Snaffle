@@ -136,6 +136,8 @@ export class ContextCompactor {
 }
 
 export function compactionBoundary(entries: ContextEntry[]): number {
-  const latestUser = [...entries].reverse().find((entry) => entry.message.role === "user");
+  const latestUser = [...entries].reverse().find(
+    (entry) => entry.message.role === "user" && !entry.message.internal,
+  );
   return (latestUser?.sequence ?? 0) - 1;
 }

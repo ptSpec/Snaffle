@@ -419,12 +419,14 @@ test("exact edit accepts LF input and preserves CRLF files", async (t) => {
   assert.equal(await readFile(path.join(root, "example.txt"), "utf8"), "one\r\ntwo\r\n");
 });
 
-test("workspace rejects paths outside its root", async (t) => {
+test("workspace accepts safe absolute paths and rejects paths outside its root", async (t) => {
   const { root, workspace } = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));
 
+  await workspace.write(path.join(root, "absolute.txt"), "inside");
+  assert.equal(await workspace.read("absolute.txt"), "inside");
   await assert.rejects(workspace.read("../secret"), /leaves the workspace/);
-  await assert.rejects(workspace.write("/tmp/secret", "no"), /must be relative/);
+  await assert.rejects(workspace.write(path.join(path.dirname(root), "secret"), "no"), /leaves the workspace/);
   await mkdir(path.join(root, ".git"));
   await assert.rejects(workspace.write(".git/config", "no"), /managed by Snaffle/);
 });

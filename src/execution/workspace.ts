@@ -189,15 +189,15 @@ export class LocalWorkspace implements Workspace {
   }
 
   private resolve(input: string): string {
-    if (path.isAbsolute(input)) throw new Error("Workspace paths must be relative");
-
     const resolved = path.resolve(this.root, input);
-    const relative = path.relative(this.root, resolved);
-
-    if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-      throw new Error(`Path leaves the workspace: ${input}`);
+    if (!path.isAbsolute(input)) {
+      const relative = path.relative(this.root, resolved);
+      if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+        throw new Error(`Path leaves the workspace: ${input}`);
+      }
     }
 
+    // Canonical checks in resolveExisting and resolveWrite handle absolute path aliases and symlinks.
     return resolved;
   }
 

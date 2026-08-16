@@ -10,6 +10,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = process.platform === "darwin" ? await macosDevelopmentApp() : electron;
 const child = spawn(executable, [root, ...process.argv.slice(2)], {
   cwd: root,
+  env: { ...process.env, SNAFFLE_DEVELOPMENT: "1" },
   stdio: "inherit",
 });
 

@@ -97,6 +97,7 @@ const userDataMigration = configureDesktopIdentity();
 const desktopDirectory = path.dirname(fileURLToPath(import.meta.url));
 const rendererPath = path.join(desktopDirectory, "../../renderer/index.html");
 const preloadPath = path.join(desktopDirectory, "preload.cjs");
+const development = !app.isPackaged || process.env.SNAFFLE_DEVELOPMENT === "1";
 
 let mainWindow: BrowserWindow | undefined;
 let store: DesktopStore;
@@ -140,7 +141,7 @@ let imageUnderstanding: ImageUnderstandingProfile = imageUnderstandingProfile(un
 async function start(): Promise<void> {
   loadDevelopmentEnvironment();
   migrateLegacyUserData(userDataMigration);
-  installDesktopMenu();
+  installDesktopMenu(development);
   const settings = loadSettings(settingsPath());
   activeTheme =
     typeof settings.themeId === "string"
@@ -213,8 +214,8 @@ async function start(): Promise<void> {
     onEvent: sendRunEvent,
   });
   attachments = new AttachmentStore(path.join(app.getPath("userData"), "attachments"));
-  if (process.platform === "darwin" && !app.isPackaged) app.dock?.setIcon(applicationIcon());
-  if (!app.isPackaged && (await store.state()).workspaces.length === 0) {
+  if (process.platform === "darwin" && development) app.dock?.setIcon(applicationIcon(development));
+  if (development && (await store.state()).workspaces.length === 0) {
     await store.addWorkspace(
       process.cwd(),
       path.basename(process.cwd()) || process.cwd(),
@@ -239,7 +240,7 @@ function createWindow(): void {
     codeFont,
     interfaceFontScale,
     conversationFontScale,
-  });
+  }, development);
   mainWindow.on("closed", () => {
     mainWindow = undefined;
   });
@@ -619,7 +620,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     ),
     modelTools: modelToolSettings(activeThread?.subagentMode, workspace?.path),
     systemPrompt,
-    runtimeMetadata: currentEnvironmentContent(workspace?.path),
+    runtimeMetadata: currentEnvironmentContent(),
     disabledTools,
     modelToolSurfaces,
     skills: skillsFor(workspace?.path).summaries(),
@@ -955,7 +956,7 @@ function compactRunEvent(event: RunEvent): RunEvent {
 }
 
 function loadDevelopmentEnvironment(): void {
-  if (app.isPackaged) return;
+  if (!development) return;
   const projectRoot = path.resolve(desktopDirectory, "../../..");
   const environmentPath = path.join(projectRoot, ".env");
   if (existsSync(environmentPath)) loadEnvFile(environmentPath);

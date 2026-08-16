@@ -21,6 +21,10 @@ import { probeNativeSandbox } from "../../execution/native/sandbox.js";
 import { LocalWorkspace, type CommandApprovalRequest } from "../../execution/workspace.js";
 import type { ModelProvider, ProviderConnection } from "../../providers/provider.js";
 import type { CommandApprovalDecision, Message, RunEvent } from "../../protocol.js";
+import {
+  withRecoveredPlan,
+  type PlanItem,
+} from "../../tools/plan.js";
 import type { DesktopState, StartRunInput } from "../api.js";
 import type { DesktopStore } from "../store.js";
 
@@ -200,9 +204,13 @@ export function registerRunIpc(options: {
       tools: toolSpecs,
     };
     let conversation: Message[];
+    let initialPlan: PlanItem[] | null = null;
     let nextSequence: number;
 
     try {
+      if (toolSpecs.some((tool) => tool.name === "update_plan")) {
+        initialPlan = await options.store.activePlan(threadId);
+      }
       const lastSequence = await options.store.lastSequence(threadId);
       if (lastSequence < 0) {
         const initial = initialMessages(input.task, input.attachments, settings.systemPrompt);
@@ -336,6 +344,8 @@ export function registerRunIpc(options: {
       }
     }
 
+    if (initialPlan) modelTask = withRecoveredPlan(modelTask, initialPlan);
+
     let mainRoute: ProviderRoute;
     try {
       mainRoute = await providerRoute(
@@ -374,6 +384,8 @@ export function registerRunIpc(options: {
       history: conversation,
       ...(modelAttachments?.length ? { attachments: modelAttachments } : {}),
       maxSteps: settings.maxSteps,
+      ...(initialPlan ? { initialPlan } : {}),
+      onPlan: (items) => options.store.setActivePlan(threadId, items),
       sequenceStart: nextSequence,
       onMessage: (message, sequence) => options.store.appendMessage(threadId, sequence, message),
       takeSteering: () => run.steering.splice(0),
