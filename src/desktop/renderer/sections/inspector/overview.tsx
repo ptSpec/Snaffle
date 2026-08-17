@@ -141,10 +141,14 @@ function TurnOverview({
   const tools = events.flatMap((event) => event.type === "tool" ? [event.item] : []);
   const responses = events.flatMap((event) => event.type === "model" && event.item.kind === "assistant" ? [event.item] : []);
   const agents = tools.flatMap((tool) => tool.details?.runs ?? []);
-  const failed = items.some((item) => item.kind === "error") ||
-    tools.some((tool) => tool.isError) ||
-    agents.some((agent) => agent.status === "failed");
-  const status = failed ? "failed" : running ? "running" : "completed";
+  const failedToolCount = tools.filter((tool) => tool.isError).length;
+  const failedAgentCount = agents.filter((agent) => agent.status === "failed").length;
+  const issueCount = failedToolCount + failedAgentCount;
+  const runFailed = items.some((item) => item.kind === "error");
+  const status = runFailed ? "failed" : running ? "running" : issueCount ? "warning" : "completed";
+  const issueLabel = failedToolCount === issueCount
+    ? `${failedToolCount} tool error${failedToolCount === 1 ? "" : "s"}`
+    : `${issueCount} issue${issueCount === 1 ? "" : "s"}`;
   const latestResponse = responses.at(-1);
   const model = latestResponse?.model ?? selectedModel;
   const connectionId = latestResponse?.providerConnectionId ?? selectedProviderConnectionId;
@@ -177,7 +181,18 @@ function TurnOverview({
             <strong>{turn.title}</strong>
             <small>{turnMetadata(tools.length, agents.length, usage)}</small>
           </button>
-          {status === "completed" ? null : (
+          {status === "completed" ? null : status === "warning" ? (
+            <span
+              className="execution-status warning"
+              aria-label={`Completed with ${issueLabel}`}
+              title={`Completed with ${issueLabel}`}
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M7.1 2.4 1.6 12a1.1 1.1 0 0 0 1 1.6h10.8a1.1 1.1 0 0 0 1-1.6L8.9 2.4a1 1 0 0 0-1.8 0Z" />
+                <path d="M8 5.6v3.6M8 11.5v.1" />
+              </svg>
+            </span>
+          ) : (
             <span className={`execution-status ${status}`}>{status}</span>
           )}
         </div>
@@ -230,7 +245,15 @@ function ExecutionTimelineEvent({
         <div className="execution-event-content">
           <button className="execution-event-copy" type="button" onClick={() => onSelect(tool.id)}>
             <strong>{tool.call.name}{profile ? <ProfileBadge profile={profile} /> : null}</strong>
-            <small>{status}</small>
+            <small className={`execution-event-status ${status}`}>
+              {status === "failed" ? (
+                <svg viewBox="0 0 12 12" aria-hidden="true">
+                  <circle cx="6" cy="6" r="6" />
+                  <path d="m4 4 4 4M8 4 4 8" />
+                </svg>
+              ) : null}
+              {status}
+            </small>
             {tool.durationMs ? <time>{formatDuration(tool.durationMs)}</time> : null}
           </button>
           {tool.details?.runs?.length ? (

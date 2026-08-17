@@ -353,6 +353,10 @@
   background: var(--status-danger-text);
 }
 
+.execution-turn.warning .execution-turn-rail span {
+  background: var(--status-warning-text);
+}
+
 .execution-turn-content {
   min-width: 0;
   overflow: hidden;
@@ -412,12 +416,16 @@
 }
 
 .execution-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 4px 9px;
   color: var(--text-faint);
   border: 1px solid var(--border-default);
   border-radius: 999px;
   font-size: calc(12px * var(--interface-font-scale));
   text-transform: capitalize;
+  white-space: nowrap;
 }
 
 .execution-status.running {
@@ -426,6 +434,24 @@
 
 .execution-status.failed {
   color: var(--status-error-text);
+}
+
+.execution-status.warning {
+  padding: 2px;
+  color: var(--status-warning-text);
+  border: 0;
+  border-radius: 4px;
+  text-transform: none;
+}
+
+.execution-status.warning svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
 }
 
 .execution-empty {
@@ -584,6 +610,23 @@
   font-size: calc(12px * var(--interface-font-scale));
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.execution-event-status.failed {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--status-danger-text);
+}
+
+.execution-event-status.failed svg {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 auto;
+  fill: var(--status-danger-text);
+  stroke: var(--app-background);
+  stroke-linecap: round;
+  stroke-width: 1.5;
 }
 
 .execution-event-copy time {
