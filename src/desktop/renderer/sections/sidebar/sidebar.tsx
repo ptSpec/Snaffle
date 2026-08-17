@@ -339,7 +339,7 @@ export function Sidebar({
                 onView("search");
               }}
               aria-label="Search conversations"
-              title="Search conversations (⌘K / Ctrl+K)"
+              title={`Search conversations (${window.desktop.platform === "darwin" ? "⌘K" : "Ctrl+K"})`}
             >
               <SearchSidebarIcon />
             </button>
