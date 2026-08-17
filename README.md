@@ -11,7 +11,7 @@
 
 Snaffle is built for smaller models without making the experience smaller. It gives the model a compact, predictable surface while keeping you in the loop.
 
-## Less mystery, more work
+## Features
 
 - **Designed for local models out of the box.** Just five focused coding tools, bounded output, durable planning, and optional capabilities only when they are invited in.
 - **Transparent execution.** See the model's full input and output, active tool surface, tool calls, context, and execution details.
