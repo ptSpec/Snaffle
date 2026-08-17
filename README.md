@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo_svg.svg" alt="Snaffle logo" width="180">
+  <img src="assets/logo.png" alt="Snaffle logo" width="96">
 </p>
 
 <h1 align="center">Snaffle</h1>
