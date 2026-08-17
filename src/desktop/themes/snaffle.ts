@@ -11,6 +11,7 @@ export const snaffleTheme = {
   accented: true,
   colors: {
     ...darkTheme.colors,
+    panel: "#2b2b2b",
     primary: SNAFFLE_YELLOW,
     "primary-text": "#181818",
     brand: SNAFFLE_YELLOW,

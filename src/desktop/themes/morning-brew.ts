@@ -7,8 +7,8 @@ export const morningBrewTheme = {
   accented: true,
   colors: {
     background: "#fcffea",
-    panel: "#fffede",
-    surface: "#fffede",
+    panel: "#fafade",
+    surface: "#fafade",
     border: "#d9d3a7",
     text: "#30291f",
     "muted-text": "#746b58",

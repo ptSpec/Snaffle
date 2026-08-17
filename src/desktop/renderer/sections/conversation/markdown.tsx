@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import hljs from "highlight.js/lib/common";
 import type { SourceReference } from "../../../../protocol.js";
+import { MermaidDiagram } from "./mermaid.js";
 
 export const MarkdownContent = memo(function MarkdownContent({
   text,
@@ -127,6 +128,7 @@ function CodeBlock({ children }: ComponentProps<"pre">): JSX.Element {
 
   const code = String(child.props.children).replace(/\n$/, "");
   const language = /language-([\w-]+)/.exec(child.props.className ?? "")?.[1] ?? "text";
+  if (language.toLowerCase() === "mermaid") return <MermaidDiagram code={code} copyIcon={<CopyIcon />} />;
   const actionPositions = code.split("\n").length >= 8 ? ["top", "bottom"] : ["bottom"];
   const highlighted = hljs.getLanguage(language)
     ? hljs.highlight(code, { language, ignoreIllegals: true }).value
