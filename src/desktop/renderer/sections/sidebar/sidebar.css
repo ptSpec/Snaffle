@@ -805,6 +805,20 @@ html[data-accented-theme="true"] .thread-row.selected .thread-fork-marker {
   color: var(--text-muted);
 }
 
+.sidebar-shortcut {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: calc(11px * var(--interface-font-scale));
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.sidebar-action:hover .sidebar-shortcut,
+.sidebar-action:focus-visible .sidebar-shortcut {
+  opacity: 1;
+}
+
 .sidebar-action-icon {
   flex: 0 0 16px;
   width: 16px;

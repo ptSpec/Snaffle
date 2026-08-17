@@ -67,6 +67,8 @@ export function Sidebar({
     distance: number;
   } | null>(null);
   const [menu, setMenu] = useState<SidebarMenu | null>(null);
+  const searchShortcut = window.desktop.platform === "darwin" ? "⌘K" : "Ctrl+K";
+  const terminalShortcut = window.desktop.platform === "darwin" ? "⌃`" : "Ctrl+`";
   const sidebarRoot = useRef<HTMLElement>(null);
   const threadList = useRef<HTMLDivElement>(null);
   const promotedWorkspaceId = useRef(state.workspace?.id);
@@ -339,9 +341,10 @@ export function Sidebar({
                 onView("search");
               }}
               aria-label="Search conversations"
-              title={`Search conversations (${window.desktop.platform === "darwin" ? "⌘K" : "Ctrl+K"})`}
+              title={`Search conversations (${searchShortcut})`}
             >
               <SearchSidebarIcon />
+              <kbd className="brand-search-shortcut" aria-hidden="true">{searchShortcut}</kbd>
             </button>
           </span>
         )}
@@ -651,9 +654,11 @@ export function Sidebar({
               type="button"
               onClick={onTerminal}
               aria-pressed={terminalOpen}
+              title={`Terminal (${terminalShortcut})`}
             >
               <TerminalSidebarIcon />
               <span>Terminal</span>
+              <kbd className="sidebar-shortcut" aria-hidden="true">{terminalShortcut}</kbd>
             </button>
             <button
               className="sidebar-action"
