@@ -611,7 +611,7 @@
   overflow: hidden;
   color: var(--code-text);
   background: var(--code-block-background);
-  border: 2px solid var(--border-default);
+  border: 1px solid var(--border-default);
   border-radius: 7px;
 }
 
@@ -698,6 +698,41 @@
 }
 
 .code-block pre code {
+  font: inherit;
+}
+
+.mermaid-diagram {
+  display: flex;
+  min-height: 120px;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 18px 18px;
+  overflow: auto;
+}
+
+.mermaid-diagram svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-status {
+  display: grid;
+  min-height: 120px;
+  place-items: center;
+  color: var(--text-muted);
+  font-size: calc(12px * var(--interface-font-scale));
+}
+
+.mermaid-error {
+  padding: 10px 12px 0;
+  color: var(--status-danger-text);
+  font-size: calc(12px * var(--interface-font-scale));
+}
+
+.mermaid-block-actions button.mermaid-source-toggle {
+  width: auto;
+  padding: 0 3px;
   font: inherit;
 }
 

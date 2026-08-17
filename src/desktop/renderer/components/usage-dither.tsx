@@ -10,7 +10,6 @@ export type UsageDitherPoint = {
 
 type HoveredPoint = {
   index: number;
-  left: number;
 };
 
 const CHART_HEIGHT = 110;
@@ -76,10 +75,9 @@ export function UsageDither({
     const frame = frameRef.current;
     if (!canvas || !frame || !points.length) return null;
     const canvasRect = canvas.getBoundingClientRect();
-    const frameRect = frame.getBoundingClientRect();
     const x = Math.max(0, Math.min(chartWidth - 1, clientX - canvasRect.left));
     const index = Math.min(points.length - 1, Math.floor((x / chartWidth) * points.length));
-    return { index, left: Math.max(12, Math.min(frameRect.width - 12, clientX - frameRect.left)) };
+    return { index };
   };
 
   const point = hovered ? points[hovered.index] : undefined;
@@ -103,7 +101,7 @@ export function UsageDither({
         />
       </div>
       {point && hovered ? (
-        <div className="usage-dither-tooltip" style={{ left: hovered.left }}>
+        <div className="usage-dither-tooltip">
           <strong>{point.label}</strong>
           <span>{usageTooltip(point)}</span>
         </div>

@@ -408,7 +408,7 @@ export function timelineFromEntries(entries: DesktopEntry[], checkpoints: Contex
           streaming: false,
         });
       }
-      if (message.content.trim()) {
+      if (message.content.trim() || intermediate) {
         items.push({
           id: `entry-${entryId}`,
           kind: "assistant",
