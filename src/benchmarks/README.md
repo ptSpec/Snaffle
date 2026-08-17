@@ -4,6 +4,13 @@ Benchmarks must exercise the same agent, provider, context, tools, and execution
 
 This directory is the durable home for benchmark definitions, comparison runners, manifests, graders, and result reporting. Generated workspaces and results belong in ignored temporary or results directories.
 
+## Start here
+
+- Read **Harness comparison protocol** before changing or interpreting cross-harness measurements.
+- The standalone edit-protocol experiment currently lives at `benchmark/edit-protocol.mjs` and writes ignored results under `eval-results/`.
+- Desktop benchmark screens consume this shared boundary; evaluation and grading logic does not belong in React.
+- Preserve the reference comparison below as historical evidence, not as a timeless product claim.
+
 ## Harness comparison protocol
 
 Use this protocol when comparing the product harness with Pi, OpenCode, or another coding harness.
