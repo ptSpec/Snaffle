@@ -2,6 +2,16 @@
 
 Providers translate Snaffle messages and tool definitions to remote or local model APIs.
 
+## Start here
+
+- `provider.ts` defines the normalized provider contract and events.
+- `registry.ts` owns provider definitions and named behavior.
+- `profiles.ts` exposes renderer-safe provider and model metadata.
+- `openai-compatible.ts` and `anthropic-messages.ts` implement the shared wire adapters.
+- Named files such as `openrouter.ts` and `deepseek.ts` contain only genuinely provider-specific behavior.
+
+## Ownership and invariants
+
 The design has three small pieces:
 
 - A **connection** is user data: name, base URL, secret, enabled state, and optional manual models.
