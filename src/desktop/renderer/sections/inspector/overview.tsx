@@ -42,6 +42,7 @@ export function ExecutionOverview({
   onSelect(id: string): void;
   onNavigateTurn(id: string): void;
 }): JSX.Element {
+  const [disclosureCommand, setDisclosureCommand] = useState<{ id: number; open: boolean } | null>(null);
   const turns = executionTurns(timeline);
   const threadUsage = sumUsage(turns.map((turn) => turn.usage));
   const completeCacheData = turns.every((turn) => !(turn.usage.inputTokens ?? 0) || turn.cacheAvailable);
@@ -77,20 +78,37 @@ export function ExecutionOverview({
       </div>
 
       {turns.length ? (
-        <div className="execution-turns">
-          {turns.map((turn, index) => (
-            <TurnOverview
-              key={turn.id}
-              turn={turn}
-              running={running && index === turns.length - 1}
-              selectedModel={selectedModel}
-              selectedProviderConnectionId={selectedProviderConnectionId}
-              providerNames={providerNames}
-              onSelect={onSelect}
-              onNavigate={onNavigateTurn}
-            />
-          ))}
-        </div>
+        <>
+          <div className="execution-disclosure-actions">
+            <button
+              type="button"
+              onClick={() => setDisclosureCommand((current) => ({ id: (current?.id ?? 0) + 1, open: true }))}
+            >
+              Expand all
+            </button>
+            <button
+              type="button"
+              onClick={() => setDisclosureCommand((current) => ({ id: (current?.id ?? 0) + 1, open: false }))}
+            >
+              Collapse all
+            </button>
+          </div>
+          <div className="execution-turns">
+            {turns.map((turn, index) => (
+              <TurnOverview
+                key={turn.id}
+                turn={turn}
+                running={running && index === turns.length - 1}
+                selectedModel={selectedModel}
+                selectedProviderConnectionId={selectedProviderConnectionId}
+                providerNames={providerNames}
+                onSelect={onSelect}
+                onNavigate={onNavigateTurn}
+                disclosureCommand={disclosureCommand}
+              />
+            ))}
+          </div>
+        </>
       ) : (
         <p className="execution-empty">Execution activity will appear here after the first message.</p>
       )}
@@ -106,6 +124,7 @@ function TurnOverview({
   providerNames,
   onSelect,
   onNavigate,
+  disclosureCommand,
 }: {
   turn: ExecutionTurn;
   running: boolean;
@@ -114,6 +133,7 @@ function TurnOverview({
   providerNames: Record<string, string>;
   onSelect(id: string): void;
   onNavigate(id: string): void;
+  disclosureCommand: { id: number; open: boolean } | null;
 }): JSX.Element {
   const [open, setOpen] = useState(running);
   const items = flatten(turn.items);
@@ -134,6 +154,10 @@ function TurnOverview({
     if (running) setOpen(true);
   }, [running]);
 
+  useEffect(() => {
+    if (disclosureCommand) setOpen(disclosureCommand.open);
+  }, [disclosureCommand]);
+
   function toggleOpen(): void {
     if (!running) setOpen((current) => !current);
     onNavigate(turn.id);
@@ -143,7 +167,7 @@ function TurnOverview({
     <section className={`execution-turn ${status}`}>
       <div className="execution-turn-rail" aria-hidden="true"><span /></div>
       <div className="execution-turn-content">
-        <div className="execution-turn-heading">
+        <div className={`execution-turn-heading ${status}`}>
           <button
             className="execution-turn-copy"
             type="button"
@@ -153,7 +177,9 @@ function TurnOverview({
             <strong>{turn.title}</strong>
             <small>{turnMetadata(tools.length, agents.length, usage)}</small>
           </button>
-          <span className={`execution-status ${status}`}>{status}</span>
+          {status === "completed" ? null : (
+            <span className={`execution-status ${status}`}>{status}</span>
+          )}
         </div>
 
         <div
