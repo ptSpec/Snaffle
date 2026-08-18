@@ -353,6 +353,16 @@ textarea {
   border-radius: 999px 0 0 999px;
 }
 
+button.model-provider-mark {
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+button.model-provider-mark:hover {
+  background: var(--hover-background);
+}
+
 .model-provider-mark.logo {
   position: relative;
   align-self: center;
@@ -364,6 +374,74 @@ textarea {
   overflow: visible;
   border: 0;
   border-radius: 0;
+}
+
+.model-provider-mark.logo.allowance-warning,
+.model-provider-mark.logo.allowance-critical {
+  isolation: isolate;
+}
+
+.model-provider-mark.logo.allowance-warning {
+  --allowance-status-color: color-mix(in srgb, #ffd84a 82%, var(--text-primary));
+}
+
+.model-provider-mark.logo.allowance-critical {
+  --allowance-status-color: var(--status-danger-text);
+}
+
+.model-provider-mark.logo.allowance-warning::after,
+.model-provider-mark.logo.allowance-critical::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  box-shadow: inset 0 0 6px var(--allowance-status-color);
+  content: "";
+  pointer-events: none;
+}
+
+.model-provider-mark.logo.allowance-warning::after {
+  animation: allowance-warning-attention 1333ms ease-in-out 3;
+}
+
+.model-provider-mark.logo.allowance-critical::after {
+  animation: allowance-critical-attention 1333ms ease-in-out 3;
+}
+
+@keyframes allowance-warning-attention {
+  0%,
+  100% {
+    box-shadow: inset 0 0 6px var(--allowance-status-color);
+  }
+
+  50% {
+    box-shadow: inset 0 0 11px var(--allowance-status-color);
+  }
+}
+
+@keyframes allowance-critical-attention {
+  0%,
+  100% {
+    box-shadow: inset 0 0 6px var(--allowance-status-color);
+  }
+
+  50% {
+    box-shadow:
+      inset 0 0 12px var(--allowance-status-color),
+      0 0 5px color-mix(in srgb, var(--allowance-status-color) 35%, transparent);
+  }
+}
+
+html[data-appearance="light"] .model-provider-mark.logo.allowance-warning {
+  --allowance-status-color: #c28c00;
+}
+
+html[data-appearance="light"] .model-provider-mark.logo.allowance-critical {
+  --allowance-status-color: #f02f4f;
+}
+
+html[data-appearance="light"] .model-provider-mark.logo.allowance-warning::after,
+html[data-appearance="light"] .model-provider-mark.logo.allowance-critical::after {
+  box-shadow: inset 0 0 9px var(--allowance-status-color);
 }
 
 .model-provider-mark.logo svg {
@@ -559,6 +637,104 @@ textarea {
   border: 1px solid var(--border-default);
   border-radius: 12px;
   box-shadow: 0 10px 30px rgb(0 0 0 / 24%);
+}
+
+.model-option-group + .model-option-group {
+  margin-top: 5px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--border-default) 55%, transparent);
+}
+
+.model-option-group > strong {
+  display: block;
+  padding: 3px 9px 4px;
+  color: var(--text-muted);
+  font-size: calc(9px * var(--interface-font-scale));
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.provider-allowance-menu {
+  position: fixed;
+  z-index: 32;
+  display: grid;
+  gap: 10px;
+  width: min(270px, 78vw);
+  padding: 12px;
+  color: var(--text-secondary);
+  background: var(--card-background);
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 24%);
+  font-size: calc(11px * var(--interface-font-scale));
+}
+
+.provider-allowance-menu p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.provider-allowance-heading {
+  display: grid;
+  gap: 2px;
+}
+
+.provider-allowance-heading strong {
+  color: var(--text-primary);
+  font-size: calc(12px * var(--interface-font-scale));
+}
+
+.provider-allowance-heading small,
+.provider-allowance-row small {
+  color: var(--text-muted);
+  font-size: calc(10px * var(--interface-font-scale));
+}
+
+.provider-allowance-row {
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.provider-allowance-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.provider-allowance-label span {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.provider-allowance-segments {
+  display: grid;
+  grid-template-columns: repeat(20, 7px);
+  justify-content: space-between;
+}
+
+.provider-allowance-segments span {
+  width: 7px;
+  height: 7px;
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  border-radius: 1px;
+}
+
+.provider-allowance-segments span.used {
+  color: var(--accent);
+  animation: provider-allowance-fill 260ms ease-in-out both;
+}
+
+@keyframes provider-allowance-fill {
+  from {
+    background-color: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  }
+
+  to {
+    background-color: currentColor;
+  }
 }
 
 .model-variant-menu button {

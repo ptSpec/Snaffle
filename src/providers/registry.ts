@@ -8,9 +8,10 @@ import {
   listAnthropicModels,
   testAnthropicModel,
 } from "./anthropic-messages.js";
-import { getDeepSeekStatus } from "./deepseek.js";
+import { getDeepSeekStatus, listDeepSeekModels } from "./deepseek.js";
 import {
   createOpenCodeGoProvider,
+  getOpenCodeGoStatus,
   listOpenCodeGoModels,
   testOpenCodeGoModel,
 } from "./opencode-go.js";
@@ -45,7 +46,7 @@ const definitions: ProviderDefinition[] = [
   {
     ...providerProfile("deepseek"),
     create: createOpenAICompatible,
-    listModels: (connection, signal) => listOpenAICompatibleModels(
+    listModels: (connection, signal) => listDeepSeekModels(
       connection.baseUrl,
       requiredKey(connection),
       signal,
@@ -61,6 +62,7 @@ const definitions: ProviderDefinition[] = [
     ...providerProfile("opencode-go"),
     create: createOpenCodeGoProvider,
     listModels: listOpenCodeGoModels,
+    getStatus: getOpenCodeGoStatus,
     testModel: testOpenCodeGoModel,
   },
   openAICompatibleDefinition("llama-cpp"),
@@ -145,12 +147,18 @@ function createOpenAICompatible(
   options: ProviderRuntimeOptions,
 ): ModelProvider {
   const sendParallelToolCalls = providerDefinition(connection.providerId).sendParallelToolCalls;
+  const reasoningFormat = connection.providerId === "openrouter"
+    ? "openrouter"
+    : connection.providerId === "deepseek"
+      ? "deepseek"
+      : "standard";
   return new OpenAICompatibleProvider({
     baseUrl: connection.baseUrl,
     model: modelId,
     providerId: connection.providerId,
     connectionId: connection.id,
     ...(sendParallelToolCalls === undefined ? {} : { sendParallelToolCalls }),
+    reasoningFormat,
     ...(connection.apiKey ? { apiKey: connection.apiKey } : {}),
     ...options,
   });
@@ -161,12 +169,17 @@ function openAICompatibleDefinition(id: string): ProviderDefinition {
   return {
     ...profile,
     create: createOpenAICompatible,
-    listModels: (connection, signal) => listOpenAICompatibleModels(
-      connection.baseUrl,
-      connection.apiKey,
-      signal,
-      profile.defaultContextLength,
-    ),
+    listModels: async (connection, signal) => {
+      const models = await listOpenAICompatibleModels(
+        connection.baseUrl,
+        connection.apiKey,
+        signal,
+        profile.defaultContextLength,
+      );
+      return id === "llama-cpp"
+        ? models.map((model) => ({ ...model, reasoning: { efforts: ["none" as const] } }))
+        : models;
+    },
     testModel: (connection, modelId, signal) => testOpenAICompatibleModel(
       connection.baseUrl,
       modelId,

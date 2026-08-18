@@ -1,7 +1,7 @@
 import type { AttachmentRef, ResolvedAttachment } from "../attachments/types.js";
 import { PROJECT } from "../identity.js";
 import type { Message, ModelResponse, ProviderState, ToolCall, ToolSpec, Usage } from "../protocol.js";
-import { retryAfterMilliseconds, retryBackoffMs, waitForRetry } from "../retry.js";
+import { canRetryStatus, retryAfterMilliseconds, retryBackoffMs, waitForRetry } from "../retry.js";
 import { healToolInput } from "../tools/input.js";
 import {
   DEFAULT_MODEL_CONTEXT_LENGTH,
@@ -89,7 +89,7 @@ export class AnthropicMessagesProvider implements ModelProvider {
         emptyResponse = true;
         throw new Error("Model returned neither a final answer nor a tool call.");
       } catch (error) {
-        if (signal.aborted || isAuthFailure(status)) throw error;
+        if (signal.aborted || !canRetryStatus(status)) throw error;
         if (attempt === this.maxRetries) {
           if (emptyResponse) {
             throw new Error(`Model returned an empty final response after ${this.maxRetries + 1} attempts`);
@@ -99,9 +99,16 @@ export class AnthropicMessagesProvider implements ModelProvider {
         }
         const nextAttempt = attempt + 1;
         const message = errorMessage(error);
-        await onEvent?.({ type: "retry", attempt: nextAttempt, maxRetries: this.maxRetries, message });
+        const delayMs = retryBackoffMs(nextAttempt, retryAfterMs);
+        await onEvent?.({
+          type: "retry",
+          attempt: nextAttempt,
+          maxRetries: this.maxRetries,
+          message,
+          delayMs,
+        });
         requestMessages = addRetryReminder(messages, message);
-        await waitForRetry(retryBackoffMs(nextAttempt, retryAfterMs), signal);
+        await waitForRetry(delayMs, signal);
       }
     }
 
@@ -503,10 +510,6 @@ function appendStreamText(current: string, delta: string, label: string): string
 function requiredBody(response: Response): ReadableStream<Uint8Array> {
   if (!response.body) throw new Error("Provider returned an empty stream");
   return response.body;
-}
-
-function isAuthFailure(status: number | undefined): boolean {
-  return status === 401 || status === 402 || status === 403;
 }
 
 function addRetryReminder(messages: Message[], failure: string): Message[] {

@@ -19,7 +19,12 @@ import { projectContext } from "../../context/projection.js";
 import { estimateContextCharacters, estimateContextTokens } from "../../context/budget.js";
 import { probeNativeSandbox } from "../../execution/native/sandbox.js";
 import { LocalWorkspace, type CommandApprovalRequest } from "../../execution/workspace.js";
-import type { ModelProvider, ProviderConnection } from "../../providers/provider.js";
+import {
+  isReasoningEffort,
+  type ModelProvider,
+  type ProviderConnection,
+  type ReasoningEffort,
+} from "../../providers/provider.js";
 import type { CommandApprovalDecision, Message, RunEvent } from "../../protocol.js";
 import {
   withRecoveredPlan,
@@ -52,6 +57,7 @@ export function registerRunIpc(options: {
     connectionId: string,
     model: string,
     resolveAttachment: (attachment: AttachmentRef) => ReturnType<AttachmentStore["resolve"]>,
+    reasoningEffort?: ReasoningEffort,
   ) => ModelProvider;
   connection(connectionId: string): ProviderConnection;
   settings: () => {
@@ -132,7 +138,12 @@ export function registerRunIpc(options: {
     }
 
     const settings = options.settings();
-    await options.store.setThreadModel(input.threadId, input.providerConnectionId, input.model);
+    await options.store.setThreadModel(
+      input.threadId,
+      input.providerConnectionId,
+      input.model,
+      input.reasoningEffort ?? "",
+    );
     const controller = new AbortController();
     const threadId = input.threadId;
     const workspace = new LocalWorkspace(
@@ -371,6 +382,7 @@ export function registerRunIpc(options: {
           connectionId,
           model,
           (attachment) => options.attachments.resolve(attachment),
+          input.reasoningEffort,
         ),
         {
           foreground: true,
@@ -609,6 +621,9 @@ function parseStartRunInput(input: unknown): StartRunInput {
   const explicitlyActiveTools = Array.isArray(value.explicitlyActiveTools)
     ? [...new Set(value.explicitlyActiveTools.filter((name): name is string => name === "use_skill"))]
     : [];
+  const reasoningEffort = isReasoningEffort(value.reasoningEffort)
+    ? value.reasoningEffort
+    : undefined;
   if (attachments.length > MAX_ATTACHMENTS) throw new Error(`Attach at most ${MAX_ATTACHMENTS} files`);
   if (!task && attachments.length === 0) throw new Error("Enter a task or attach a file before starting a run");
   if (task.length > 30000) throw new Error("Task is too long");
@@ -623,6 +638,7 @@ function parseStartRunInput(input: unknown): StartRunInput {
     model,
     contextLength,
     imageInputSupported,
+    ...(reasoningEffort ? { reasoningEffort } : {}),
     ...(attachments.length ? { attachments } : {}),
     ...(explicitlyActiveTools.length ? { explicitlyActiveTools } : {}),
   };

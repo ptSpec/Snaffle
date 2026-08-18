@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { CommandApprovalDecision } from "../protocol.js";
-import type { ProviderConnectionInput } from "../providers/provider.js";
+import type { ProviderConnectionInput, ReasoningEffort } from "../providers/provider.js";
 import type {
   DesktopApi,
   DesktopRunEvent,
@@ -45,14 +45,25 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:search-conversations", query),
   listProviderModels: () => ipcRenderer.invoke("desktop:list-provider-models"),
   getProviderStatus: (input: ProviderConnectionInput) => ipcRenderer.invoke("desktop:get-provider-status", input),
+  getProviderAllowance: (connectionId: string) => ipcRenderer.invoke("desktop:get-provider-allowance", connectionId),
   saveProviderConnection: (input: ProviderConnectionInput) => ipcRenderer.invoke("desktop:save-provider-connection", input),
   removeProviderConnection: (connectionId: string) => ipcRenderer.invoke("desktop:remove-provider-connection", connectionId),
   setMcpEnabled: (enabled: boolean) => ipcRenderer.invoke("desktop:set-mcp-enabled", enabled),
   saveMcpServer: (server: McpServerConfig) => ipcRenderer.invoke("desktop:save-mcp-server", server),
   removeMcpServer: (id: string) => ipcRenderer.invoke("desktop:remove-mcp-server", id),
   testMcpServer: (server: McpServerConfig) => ipcRenderer.invoke("desktop:test-mcp-server", server),
-  setSelectedModel: (threadId: string | null, connectionId: string, model: string) =>
-    ipcRenderer.invoke("desktop:set-selected-model", threadId, connectionId, model),
+  setSelectedModel: (
+    threadId: string | null,
+    connectionId: string,
+    model: string,
+    reasoningEffort?: ReasoningEffort,
+  ) => ipcRenderer.invoke(
+    "desktop:set-selected-model",
+    threadId,
+    connectionId,
+    model,
+    reasoningEffort ?? "",
+  ),
   chooseAttachments: () => ipcRenderer.invoke("desktop:choose-attachments"),
   importDroppedFiles: (files: File[]) =>
     ipcRenderer.invoke("desktop:import-dropped-files", files.map((file) => webUtils.getPathForFile(file))),

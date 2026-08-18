@@ -1,4 +1,32 @@
-import type { ProviderStatus } from "./provider.js";
+import { listOpenAICompatibleModels } from "./openai-compatible.js";
+import type {
+  ProviderModel,
+  ProviderModelReasoning,
+  ProviderStatus,
+} from "./provider.js";
+
+const DEEPSEEK_REASONING: Record<string, ProviderModelReasoning> = {
+  "deepseek-v4-flash": { efforts: ["none", "low", "high", "max"] },
+  "deepseek-v4-pro": { efforts: ["none", "high", "max"] },
+};
+
+export async function listDeepSeekModels(
+  baseUrl: string,
+  apiKey: string,
+  signal?: AbortSignal,
+  defaultContextLength?: number,
+): Promise<ProviderModel[]> {
+  const models = await listOpenAICompatibleModels(
+    baseUrl,
+    apiKey,
+    signal,
+    defaultContextLength,
+  );
+  return models.map((model) => {
+    const reasoning = DEEPSEEK_REASONING[model.id];
+    return reasoning ? { ...model, reasoning } : model;
+  });
+}
 
 export async function getDeepSeekStatus(
   baseUrl: string,
