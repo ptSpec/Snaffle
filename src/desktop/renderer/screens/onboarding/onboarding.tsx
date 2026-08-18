@@ -157,7 +157,9 @@ export function Onboarding({
     {
       id: "subagent" as const,
       label: "Subagents",
-      summary: subagent.enabled ? (subagent.model || "Enabled") : "Off · optional",
+      summary: subagent.enabled
+        ? subagent.modelMode === "main" ? "Use main conversation model" : subagent.model || "Choose a model"
+        : "Off · optional",
     },
   ]), [connection?.name, defaultModel, modelReady, subagent, themeId, webBackend, webEnabled]);
 
@@ -173,8 +175,6 @@ export function Onboarding({
         baseUrl: baseUrl.trim() || profile.defaultBaseUrl,
         enabled: true,
         requestLimit: connection?.requestLimit ?? profile.defaultRequestLimit ?? 1,
-        fallbackProviderConnectionId: connection?.fallbackProviderConnectionId ?? "",
-        fallbackModel: connection?.fallbackModel ?? "",
         manualModels: connection?.manualModels ?? [],
         ...(profile.apiKey !== "none" && apiKey ? { apiKey } : {}),
       });
@@ -243,14 +243,16 @@ export function Onboarding({
       onSubagent({
         ...subagent,
         enabled: true,
-        providerConnectionId: defaultConnectionId,
-        model: defaultModel ?? "",
+        modelMode: "main",
+        providerConnectionId: "",
+        model: "",
       });
       return;
     }
     onSubagent({
       ...subagent,
       enabled: true,
+      modelMode: "fixed",
       providerConnectionId: "",
       model: "",
     });
@@ -258,7 +260,7 @@ export function Onboarding({
 
   const subagentMode = !subagent.enabled
     ? "off"
-    : subagent.providerConnectionId === defaultConnectionId && subagent.model === defaultModel
+    : subagent.modelMode === "main"
       ? "primary"
       : "other";
   const webInfo = WEB_BACKENDS.find((backend) => backend.id === webBackend)!;
@@ -495,7 +497,13 @@ export function Onboarding({
                           searchPlaceholder="Search providers and models…"
                           onChange={(value) => {
                             const [providerConnectionId, model] = value.split("\n");
-                            onSubagent({ ...subagent, enabled: true, providerConnectionId: providerConnectionId ?? "", model: model ?? "" });
+                            onSubagent({
+                              ...subagent,
+                              enabled: true,
+                              modelMode: "fixed",
+                              providerConnectionId: providerConnectionId ?? "",
+                              model: model ?? "",
+                            });
                           }}
                         />
                       </div>

@@ -71,7 +71,8 @@ export function SearchPicker({
         }}
         aria-expanded={open}
       >
-        <span>{selected?.label ?? (value || placeholder)}</span><i aria-hidden="true">⌄</i>
+        <span>{selected?.label ?? (value || placeholder)}</span>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
       </button>
       {open ? (
         <div className="search-picker-menu">

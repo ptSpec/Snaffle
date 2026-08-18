@@ -79,10 +79,6 @@ export function TimelineEntry({
     );
   }
 
-  if (item.kind === "provider-fallback") {
-    return <div className="activity-row provider-fallback-row">↪ {item.text}</div>;
-  }
-
   if (item.kind === "image-understanding") {
     return (
       <button

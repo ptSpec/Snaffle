@@ -546,32 +546,6 @@ label.onboarding-field:has(> select)::after {
   border-radius: 9px;
 }
 
-.onboarding-body .search-picker-trigger > span {
-  flex: 1 1 auto;
-}
-
-.onboarding-body .search-picker-trigger > i {
-  position: relative;
-  flex: 0 0 auto;
-  width: 12px;
-  height: 12px;
-  margin-right: 3px;
-  font-size: 0;
-  transform: none;
-}
-
-.onboarding-body .search-picker-trigger > i::after {
-  position: absolute;
-  top: 1px;
-  left: 2px;
-  width: 7px;
-  height: 7px;
-  content: "";
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
-  transform: rotate(45deg);
-}
-
 .onboarding-body .search-picker-menu {
   z-index: 10;
 }

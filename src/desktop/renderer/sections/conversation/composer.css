@@ -1049,3 +1049,9 @@ html[data-theme="snaffle-sage"] .send-button:not(.stop) .send-button-orb {
   color: var(--status-danger-text);
   font-size: calc(12px * var(--interface-font-scale));
 }
+
+.provider-wait {
+  padding: 0 18px 10px;
+  color: var(--text-muted);
+  font-size: calc(11px * var(--interface-font-scale));
+}

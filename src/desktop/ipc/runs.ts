@@ -154,7 +154,16 @@ export function registerRunIpc(options: {
       input.model,
       input.explicitlyActiveTools,
     );
-    const subagent = threadSubagent(settings.subagent, selectedThread.subagentMode);
+    const configuredSubagent = threadSubagent(settings.subagent, selectedThread.subagentMode);
+    const subagent = configuredSubagent
+      ? {
+          ...configuredSubagent,
+          providerConnectionId: configuredSubagent.modelMode === "main"
+            ? input.providerConnectionId
+            : configuredSubagent.providerConnectionId,
+          model: configuredSubagent.modelMode === "main" ? input.model : configuredSubagent.model,
+        }
+      : null;
     let capabilities = subagent && !settings.disabledTools.includes("delegate_task")
       ? activeCapabilities([
           ...baseCapabilities.tools,
@@ -178,6 +187,10 @@ export function registerRunIpc(options: {
                       model,
                       (attachment) => options.attachments.resolve(attachment),
                     ),
+                    {
+                      overflowConnectionId: subagent.overflowProviderConnectionId,
+                      overflowModel: subagent.overflowModel,
+                    },
                   ),
                   workspace,
                   signal: controller.signal,
@@ -359,20 +372,20 @@ export function registerRunIpc(options: {
           model,
           (attachment) => options.attachments.resolve(attachment),
         ),
+        {
+          foreground: true,
+          onWait: (connection, active) => options.sendEvent(threadId, {
+            type: "provider.waiting",
+            connectionName: connection.name,
+            active,
+            limit: connection.requestLimit,
+          }),
+          onReady: () => options.sendEvent(threadId, { type: "provider.ready" }),
+        },
       );
     } catch (error) {
       active.delete(threadId);
       throw error;
-    }
-    if (mainRoute.fallbackFromConnectionName) {
-      const primaryConnection = options.connection(input.providerConnectionId);
-      const fallbackConnection = options.connection(mainRoute.provider.connectionId);
-      options.sendEvent(threadId, {
-        type: "provider.fallback",
-        fromConnectionName: primaryConnection.name,
-        toConnectionName: fallbackConnection.name,
-        model: mainRoute.provider.model,
-      });
     }
     void runAgent({
       task: modelTask,
@@ -489,23 +502,58 @@ async function providerRoute(
   signal: AbortSignal,
   connection: (connectionId: string) => ProviderConnection,
   create: (connectionId: string, model: string) => ModelProvider,
+  routing: {
+    overflowConnectionId?: string;
+    overflowModel?: string;
+    foreground?: boolean;
+    onWait?: (connection: ProviderConnection, active: number) => void;
+    onReady?: () => void;
+  } = {},
 ): Promise<ProviderRoute> {
   const primary = connection(connectionId);
   const immediate = capacity.tryAcquire(connectionId, primary.requestLimit);
-  if (immediate) return createRoute(create, capacity, primary, model, immediate);
+  if (immediate) {
+    return createRoute(
+      create,
+      capacity,
+      primary,
+      model,
+      immediate,
+      {
+        ...(routing.foreground ? { foreground: true } : {}),
+        onWait: () => routing.onWait?.(primary, capacity.activeCount(connectionId)),
+        ...(routing.onReady ? { onReady: routing.onReady } : {}),
+      },
+    );
+  }
 
-  if (primary.fallbackProviderConnectionId && primary.fallbackModel) {
-    const fallback = connection(primary.fallbackProviderConnectionId);
+  if (routing.overflowConnectionId && routing.overflowModel && routing.overflowConnectionId !== connectionId) {
+    const fallback = connection(routing.overflowConnectionId);
     const release = await capacity.acquire(
       fallback.id,
       fallback.requestLimit,
       signal,
     );
-    return createRoute(create, capacity, fallback, primary.fallbackModel, release, primary.name);
+    return createRoute(create, capacity, fallback, routing.overflowModel, release, {
+      overflowFromConnectionName: primary.name,
+    });
   }
 
-  const release = await capacity.acquire(connectionId, primary.requestLimit, signal);
-  return createRoute(create, capacity, primary, model, release);
+  routing.onWait?.(primary, capacity.activeCount(connectionId));
+  const release = await capacity.acquire(connectionId, primary.requestLimit, signal, routing.foreground);
+  routing.onReady?.();
+  return createRoute(
+    create,
+    capacity,
+    primary,
+    model,
+    release,
+    {
+      ...(routing.foreground ? { foreground: true } : {}),
+      onWait: () => routing.onWait?.(primary, capacity.activeCount(connectionId)),
+      ...(routing.onReady ? { onReady: routing.onReady } : {}),
+    },
+  );
 }
 
 function createRoute(
@@ -514,14 +562,28 @@ function createRoute(
   connection: ProviderConnection,
   model: string,
   release: () => void,
-  fallbackFromConnectionName?: string,
+  options: {
+    overflowFromConnectionName?: string;
+    foreground?: boolean;
+    onWait?: () => void;
+    onReady?: () => void;
+  } = {},
 ): ProviderRoute {
   try {
-    const route = capacity.reserve(create(connection.id, model), connection.requestLimit, release);
+    const route = capacity.reserve(
+      create(connection.id, model),
+      connection.requestLimit,
+      release,
+      options.foreground,
+      options.onWait,
+      options.onReady,
+    );
     return {
       ...route,
       connectionName: connection.name,
-      ...(fallbackFromConnectionName ? { fallbackFromConnectionName } : {}),
+      ...(options.overflowFromConnectionName
+        ? { fallbackFromConnectionName: options.overflowFromConnectionName }
+        : {}),
     };
   } catch (error) {
     release();

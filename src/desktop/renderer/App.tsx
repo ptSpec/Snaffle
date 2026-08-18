@@ -126,8 +126,11 @@ const initialState: DesktopState = {
   providerRetries: 4,
   subagent: {
     enabled: false,
+    modelMode: "main",
     providerConnectionId: "",
     model: "",
+    overflowProviderConnectionId: "",
+    overflowModel: "",
     maxSteps: 50,
   },
   imageUnderstanding: {
@@ -167,6 +170,7 @@ export function App(): JSX.Element {
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("appearance");
   const [bookmarksPage, setBookmarksPage] = useState<BookmarksPage>("threads");
   const [sendOrbMotion, setSendOrbMotion] = useState<OrbMotion>("stopped");
+  const [providerWaits, setProviderWaits] = useState<Record<string, string>>({});
   const [contextReport, setContextReport] = useState<ContextReport | null>(null);
   const [contextRefresh, setContextRefresh] = useState(0);
   const [compactingContext, setCompactingContext] = useState(false);
@@ -436,7 +440,18 @@ export function App(): JSX.Element {
         if (activeThreadId.current === threadId) setTimeline(next);
       });
 
+      if (event.type === "provider.waiting") {
+        setProviderWaits((current) => ({
+          ...current,
+          [threadId]: `${event.connectionName} is busy · ${event.active} of ${event.limit} generations active`,
+        }));
+      }
+      if (event.type === "provider.ready") {
+        setProviderWaits((current) => withoutKey(current, threadId));
+      }
+
       if (event.type === "run.started") {
+        setProviderWaits((current) => withoutKey(current, threadId));
         setDesktopState((state) => ({
           ...state,
           runningThreadIds: [...new Set([...state.runningThreadIds, threadId])],
@@ -446,6 +461,7 @@ export function App(): JSX.Element {
         }));
       }
       if (event.type === "run.completed" || event.type === "run.failed") {
+        setProviderWaits((current) => withoutKey(current, threadId));
         setDesktopState((state) => ({
           ...state,
           runningThreadIds: state.runningThreadIds.filter((id) => id !== threadId),
@@ -667,10 +683,12 @@ export function App(): JSX.Element {
       ...state,
       runningThreadIds: [...new Set([...state.runningThreadIds, request.threadId])],
     }));
+    setProviderWaits((current) => withoutKey(current, request.threadId));
 
     try {
       await window.desktop.startRun(request);
     } catch (cause) {
+      setProviderWaits((current) => withoutKey(current, request.threadId));
       setDesktopState((state) => ({
         ...state,
         runningThreadIds: state.runningThreadIds.filter((id) => id !== request.threadId),
@@ -1940,6 +1958,7 @@ export function App(): JSX.Element {
             composerAdd={composerAdd}
             dragging={draggingAttachments}
             running={running}
+            providerWait={desktopState.activeThreadId ? providerWaits[desktopState.activeThreadId] ?? null : null}
             pendingAttachmentCount={pendingAttachments.length}
             models={models}
             selectedProviderConnectionId={selectedProviderConnectionId}
@@ -2184,6 +2203,13 @@ function withoutConversation(state: DesktopState): DesktopState {
   return state.conversation.length || state.contextCheckpoints.length
     ? { ...state, conversation: [], contextCheckpoints: [] }
     : state;
+}
+
+function withoutKey(values: Record<string, string>, key: string): Record<string, string> {
+  if (!(key in values)) return values;
+  const next = { ...values };
+  delete next[key];
+  return next;
 }
 
 function trimThreadTimelines(

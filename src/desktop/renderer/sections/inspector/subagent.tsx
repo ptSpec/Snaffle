@@ -37,7 +37,7 @@ export function SubagentInspector({ activity }: { activity: SubagentActivity }):
               {run.model ? (
                 <p className="subagent-provider">
                   {run.model} · {run.providerConnectionName ?? run.providerConnectionId}
-                  {run.fallbackFromConnectionName ? ` · fallback from ${run.fallbackFromConnectionName}` : ""}
+                  {run.fallbackFromConnectionName ? ` · overflow from ${run.fallbackFromConnectionName}` : ""}
                 </p>
               ) : null}
               <h4>Task</h4>
