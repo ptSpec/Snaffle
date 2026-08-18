@@ -26,4 +26,4 @@ Keep provider retry, stream parsing, catalog discovery, and usage normalization 
 
 ## Capacity scheduling
 
-The first scheduler slice is deliberately scoped to the configured subagent connection. Main conversation requests and subagents share its in-memory generation limit. Delegated work may use an explicitly configured overflow provider while those slots are full; main conversations preserve their selected model and queue. Compaction and other background requests do not yet join this scheduler. Remote overflow remains opt-in because it can move workspace content outside the local privacy boundary.
+Main conversation requests and subagents share each connection's in-memory generation limit. Delegated work may use an explicitly configured overflow model while its selected connection is full. Main conversations preserve their selected model, receive the next available slot ahead of background work, and report when they are waiting. Compaction and other background requests do not yet join this scheduler.

@@ -35,13 +35,6 @@ export function ProviderSettings({
   const connectionsBeforeSave = useRef<Set<string> | null>(null);
   const profile = providerProfile(draft.providerId);
   const catalog = catalogs.find((item) => item.connection.id === selectedId);
-  const fallbackCatalogs = catalogs.filter((item) =>
-    item.connection.enabled && item.connection.id !== selectedId && item.models.length,
-  );
-  const fallbackCatalog = fallbackCatalogs.find((item) =>
-    item.connection.id === draft.fallbackProviderConnectionId
-  );
-  const usesFallback = Boolean(draft.fallbackProviderConnectionId && draft.fallbackModel);
 
   useEffect(() => {
     if (selectedId === NEW_CONNECTION && connectionsBeforeSave.current) {
@@ -80,8 +73,6 @@ export function ProviderSettings({
       baseUrl: draft.baseUrl,
       enabled: draft.enabled,
       requestLimit: draft.requestLimit,
-      fallbackProviderConnectionId: draft.fallbackProviderConnectionId,
-      fallbackModel: draft.fallbackModel,
       manualModels: draft.models.flatMap((model) => {
         const id = model.id.trim();
         if (!id) return [];
@@ -286,8 +277,8 @@ export function ProviderSettings({
               <summary>Advanced</summary>
               <label className="setting-field text-setting">
                 <span>
-                  <strong>Concurrent requests</strong>
-                  <small>Shared by every main conversation and subagent using this connection.</small>
+                  <strong>Parallel generations</strong>
+                  <small>How many model generations Snaffle may send to this connection at once. Used to decide when subagents overflow.</small>
                 </span>
                 <input
                   type="number"
@@ -301,70 +292,6 @@ export function ProviderSettings({
                 />
               </label>
 
-              <label className="setting-field">
-                <span>
-                  <strong>When full</strong>
-                  <small>Wait normally, or route new turns and subagents to another model.</small>
-                </span>
-                <select
-                  value={usesFallback ? "fallback" : "wait"}
-                  onChange={(event) => {
-                    const fallback = fallbackCatalogs[0];
-                    const model = fallback?.models[0];
-                    setDraft(event.target.value === "fallback" && fallback
-                      ? {
-                          ...draft,
-                          fallbackProviderConnectionId: fallback.connection.id,
-                          fallbackModel: model?.id ?? "",
-                        }
-                      : { ...draft, fallbackProviderConnectionId: "", fallbackModel: "" });
-                  }}
-                >
-                  <option value="wait">Wait for availability</option>
-                  <option value="fallback" disabled={!fallbackCatalogs.length}>Use fallback provider</option>
-                </select>
-              </label>
-
-              {usesFallback ? (
-                <label className="setting-field">
-                  <span>
-                    <strong>Fallback provider</strong>
-                    <small>Receives new work only while this connection is full.</small>
-                  </span>
-                  <select
-                    value={draft.fallbackProviderConnectionId}
-                    onChange={(event) => {
-                      const next = fallbackCatalogs.find((item) => item.connection.id === event.target.value);
-                      setDraft({
-                        ...draft,
-                        fallbackProviderConnectionId: next?.connection.id ?? "",
-                        fallbackModel: next?.models[0]?.id ?? "",
-                      });
-                    }}
-                  >
-                    {fallbackCatalogs.map((item) => (
-                      <option key={item.connection.id} value={item.connection.id}>{item.connection.name}</option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-
-              {usesFallback ? (
-                <label className="setting-field">
-                  <span>
-                    <strong>Fallback model</strong>
-                    <small>Used through the selected fallback provider.</small>
-                  </span>
-                  <select
-                    value={draft.fallbackModel}
-                    onChange={(event) => setDraft({ ...draft, fallbackModel: event.target.value })}
-                  >
-                    {fallbackCatalog?.models.map((model) => (
-                      <option key={model.id} value={model.id}>{model.name}</option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
             </details>
 
             <label className="setting-field text-setting">
@@ -521,8 +448,6 @@ type ConnectionDraft = {
   baseUrl: string;
   enabled: boolean;
   requestLimit: number;
-  fallbackProviderConnectionId: string;
-  fallbackModel: string;
   hasApiKey: boolean;
   models: ProviderModel[];
 };
@@ -534,8 +459,6 @@ function connectionDraft(connection?: ProviderConnection): ConnectionDraft {
     baseUrl: connection.baseUrl,
     enabled: connection.enabled,
     requestLimit: connection.requestLimit,
-    fallbackProviderConnectionId: connection.fallbackProviderConnectionId,
-    fallbackModel: connection.fallbackModel,
     hasApiKey: connection.hasApiKey,
     models: connection.manualModels.map((model) => ({
       ...model,
@@ -547,8 +470,6 @@ function connectionDraft(connection?: ProviderConnection): ConnectionDraft {
     baseUrl: "http://localhost:8080/v1",
     enabled: true,
     requestLimit: 1,
-    fallbackProviderConnectionId: "",
-    fallbackModel: "",
     hasApiKey: false,
     models: [],
   };

@@ -354,10 +354,7 @@
 }
 
 .subagent-model-picker .search-picker-trigger {
-  min-height: 36px;
-  padding: 7px 9px;
-  background: var(--input-background);
-  border-color: var(--border-default);
+  height: 36px;
 }
 
 .subagent-model-picker .search-picker-menu {
@@ -572,14 +569,19 @@
   width: 84px;
   padding: 7px 9px;
   color: var(--text-primary);
-  background: var(--input-background);
   border: 1px solid var(--border-default);
   border-radius: 7px;
   outline: none;
 }
 
+.setting-field input:not(.selection-checkbox) {
+  background: var(--input-background);
+}
+
 .setting-field select {
-  width: 180px;
+  width: min(310px, 52%);
+  height: 36px;
+  padding: 0 34px 0 10px;
 }
 
 .setting-field.text-setting input:not(.selection-checkbox) {
@@ -1120,10 +1122,18 @@
   min-width: 0;
   padding: 8px 9px;
   color: var(--text-primary);
-  background: var(--input-background);
   border: 1px solid var(--border-default);
   border-radius: 7px;
   outline: none;
+}
+
+.provider-model-row input {
+  background: var(--input-background);
+}
+
+.provider-model-row select {
+  height: 38px;
+  padding: 0 34px 0 9px;
 }
 
 .provider-models-setting .provider-model-row input {

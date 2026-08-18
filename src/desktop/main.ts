@@ -168,6 +168,14 @@ async function start(): Promise<void> {
   providerTimeoutMinutes = validProviderTimeout(settings.providerTimeoutMinutes) ?? providerTimeoutMinutes;
   providerRetries = validProviderRetries(settings.providerRetries) ?? DEFAULT_PROVIDER_RETRIES;
   subagent = subagentProfile(settings.subagent);
+  const savedOverflow = legacyConnectionOverflow(settings.providerConnections, subagent.providerConnectionId);
+  if (!subagent.overflowProviderConnectionId && savedOverflow) {
+    subagent = {
+      ...subagent,
+      overflowProviderConnectionId: savedOverflow.connectionId,
+      overflowModel: savedOverflow.model,
+    };
+  }
   compactionMode = settings.compactionMode === "custom" ? "custom" : "automatic";
   customCompactionThreshold = validCompactionThreshold(settings.compactionThreshold) ?? DEFAULT_COMPACTION_THRESHOLD;
   selectedModel = typeof settings.selectedModel === "string" ? settings.selectedModel : DEVELOPMENT_MODEL;
@@ -181,12 +189,11 @@ async function start(): Promise<void> {
       deepseek: process.env.DEEPSEEK_API_KEY ?? "",
     },
     legacyRequestLimits(settings.subagent, subagent.providerConnectionId),
-    legacyFallbacks(settings.subagent, subagent.providerConnectionId),
   );
   configuredMcpServers = loadMcpSecrets(mcpServers(settings.mcpServers));
   mcpEnabled = settings.mcpEnabled !== false;
   mcpManager.configure(configuredMcpServers);
-  if (hasLegacySubagentRouting(settings.subagent)) {
+  if (hasLegacySubagentLimit(settings.subagent) || savedOverflow) {
     saveSettings({ providerConnections: providerConnections.serialize(), subagent });
   }
   try {
@@ -499,7 +506,12 @@ function registerIpc(): void {
 
   ipcMain.handle("desktop:set-subagent", (_event, value: unknown): void => {
     const next = subagentProfile(value);
-    if (next.providerConnectionId) providerConnections.resolve(next.providerConnectionId);
+    if (next.modelMode === "fixed" && next.providerConnectionId) {
+      providerConnections.resolve(next.providerConnectionId);
+    }
+    if (next.overflowProviderConnectionId) {
+      providerConnections.resolve(next.overflowProviderConnectionId);
+    }
     subagent = next;
     saveSettings({ subagent });
   });
@@ -868,28 +880,25 @@ function hasLegacySubagentLimit(value: unknown): boolean {
     Number.isInteger((value as Record<string, unknown>).localConcurrency));
 }
 
-function hasLegacySubagentRouting(value: unknown): boolean {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const profile = value as Record<string, unknown>;
-  return hasLegacySubagentLimit(value) || typeof profile.overflowProviderConnectionId === "string";
-}
-
 function legacyRequestLimits(value: unknown, connectionId: string): Record<string, number> {
   if (!connectionId || !hasLegacySubagentLimit(value)) return {};
   const limit = Number((value as Record<string, unknown>).localConcurrency);
   return limit >= 1 && limit <= 16 ? { [connectionId]: limit } : {};
 }
 
-function legacyFallbacks(
+function legacyConnectionOverflow(
   value: unknown,
   connectionId: string,
-): Record<string, { connectionId: string; model: string }> {
-  if (!connectionId || !value || typeof value !== "object" || Array.isArray(value)) return {};
-  const profile = value as Record<string, unknown>;
-  if (typeof profile.overflowProviderConnectionId !== "string" ||
-      typeof profile.overflowModel !== "string" ||
-      !profile.overflowProviderConnectionId || !profile.overflowModel) return {};
-  return { [connectionId]: { connectionId: profile.overflowProviderConnectionId, model: profile.overflowModel } };
+): { connectionId: string; model: string } | null {
+  if (!connectionId || !Array.isArray(value)) return null;
+  const connection = value.find((item) => item && typeof item === "object" && !Array.isArray(item) &&
+    (item as Record<string, unknown>).id === connectionId) as Record<string, unknown> | undefined;
+  const overflowConnectionId = connection?.fallbackProviderConnectionId;
+  const overflowModel = connection?.fallbackModel;
+  return typeof overflowConnectionId === "string" && overflowConnectionId &&
+      typeof overflowModel === "string" && overflowModel
+    ? { connectionId: overflowConnectionId, model: overflowModel }
+    : null;
 }
 
 function parseId(value: unknown, label: string): string {

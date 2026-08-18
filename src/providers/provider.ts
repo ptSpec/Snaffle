@@ -20,8 +20,6 @@ export type ProviderConnection = {
   baseUrl: string;
   enabled: boolean;
   requestLimit: number;
-  fallbackProviderConnectionId: string;
-  fallbackModel: string;
   hasApiKey: boolean;
   manualModels: ProviderModel[];
 };

@@ -100,12 +100,8 @@ export type RunEvent =
       model: string;
     }
   | { type: "context.compaction.failed"; message: string }
-  | {
-      type: "provider.fallback";
-      fromConnectionName: string;
-      toConnectionName: string;
-      model: string;
-    }
+  | { type: "provider.waiting"; connectionName: string; active: number; limit: number }
+  | { type: "provider.ready" }
   | {
       type: "image.understanding.completed";
       imageName: string;

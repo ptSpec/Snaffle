@@ -1,10 +1,15 @@
 import type { ModelProvider } from "../../providers/provider.js";
 
 type Release = () => void;
+type Waiter = { resume: () => void; foreground: boolean };
 
 export class ProviderCapacity {
   private readonly active = new Map<string, number>();
-  private readonly waiters = new Map<string, Array<() => void>>();
+  private readonly waiters = new Map<string, Waiter[]>();
+
+  activeCount(connectionId: string): number {
+    return this.active.get(connectionId) ?? 0;
+  }
 
   tryAcquire(connectionId: string, limit: number): Release | null {
     const active = this.active.get(connectionId) ?? 0;
@@ -13,7 +18,12 @@ export class ProviderCapacity {
     return this.release(connectionId);
   }
 
-  async acquire(connectionId: string, limit: number, signal: AbortSignal): Promise<Release> {
+  async acquire(
+    connectionId: string,
+    limit: number,
+    signal: AbortSignal,
+    foreground = false,
+  ): Promise<Release> {
     if (signal.aborted) throw signal.reason ?? new Error("Run cancelled");
     const immediate = this.tryAcquire(connectionId, limit);
     if (immediate) return immediate;
@@ -26,7 +36,10 @@ export class ProviderCapacity {
         this.removeWaiter(connectionId, resume);
         reject(signal.reason ?? new Error("Run cancelled"));
       };
-      this.waiters.set(connectionId, [...this.waiters.get(connectionId) ?? [], resume]);
+      const waiters = [...this.waiters.get(connectionId) ?? []];
+      const index = foreground ? waiters.findIndex((waiter) => !waiter.foreground) : -1;
+      waiters.splice(index < 0 ? waiters.length : index, 0, { resume, foreground });
+      this.waiters.set(connectionId, waiters);
       signal.addEventListener("abort", abort, { once: true });
     });
   }
@@ -47,7 +60,14 @@ export class ProviderCapacity {
     };
   }
 
-  reserve(provider: ModelProvider, limit: number, initial: Release): { provider: ModelProvider; release: Release } {
+  reserve(
+    provider: ModelProvider,
+    limit: number,
+    initial: Release,
+    foreground = false,
+    onWait?: () => void,
+    onReady?: () => void,
+  ): { provider: ModelProvider; release: Release } {
     let reservation: Release | null = initial;
     return {
       provider: {
@@ -55,8 +75,13 @@ export class ProviderCapacity {
         providerId: provider.providerId,
         connectionId: provider.connectionId,
         complete: async (messages, tools, signal, onEvent) => {
-          const release = reservation ?? await this.acquire(provider.connectionId, limit, signal);
+          let release = reservation ?? this.tryAcquire(provider.connectionId, limit);
           reservation = null;
+          if (!release) {
+            onWait?.();
+            release = await this.acquire(provider.connectionId, limit, signal, foreground);
+            onReady?.();
+          }
           try {
             return await provider.complete(messages, tools, signal, onEvent);
           } finally {
@@ -79,7 +104,7 @@ export class ProviderCapacity {
       const waiter = this.waiters.get(connectionId)?.shift();
       if (waiter) {
         if (!this.waiters.get(connectionId)?.length) this.waiters.delete(connectionId);
-        waiter();
+        waiter.resume();
         return;
       }
       const next = (this.active.get(connectionId) ?? 1) - 1;
@@ -89,7 +114,7 @@ export class ProviderCapacity {
   }
 
   private removeWaiter(connectionId: string, waiter: () => void): void {
-    const next = this.waiters.get(connectionId)?.filter((item) => item !== waiter) ?? [];
+    const next = this.waiters.get(connectionId)?.filter((item) => item.resume !== waiter) ?? [];
     if (next.length) this.waiters.set(connectionId, next);
     else this.waiters.delete(connectionId);
   }

@@ -21,6 +21,7 @@ export function Composer({
   composerAdd,
   dragging,
   running,
+  providerWait,
   pendingAttachmentCount,
   models,
   selectedProviderConnectionId,
@@ -187,6 +188,7 @@ export function Composer({
           <span className="send-button-symbol send-button-stop-symbol" aria-hidden="true" />
         </button>
       </div>
+      {providerWait ? <div className="provider-wait" role="status">{providerWait} · waiting for the next slot</div> : null}
       {error ? <div className="composer-error" role="alert">{error}</div> : null}
     </form>
   );
@@ -328,6 +330,7 @@ type ComposerProps = {
   composerAdd: RefObject<HTMLDetailsElement>;
   dragging: boolean;
   running: boolean;
+  providerWait: string | null;
   pendingAttachmentCount: number;
   models: ProviderCatalog[];
   selectedProviderConnectionId: string;
