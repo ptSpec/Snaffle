@@ -45,7 +45,7 @@ export async function fetchYoutubeTranscript(video: YoutubeVideo, signal?: Abort
     .map((item) => {
       const text = item.text.replace(/\s+/g, " ").trim();
       const seconds = milliseconds ? item.offset / 1000 : item.offset;
-      return text ? `[${timestamp(seconds)}](${video.url}&t=${Math.floor(seconds)}s) ${text}` : "";
+      return text ? `[${timestamp(seconds)}] ${text}` : "";
     })
     .filter(Boolean)
     .join("\n");
