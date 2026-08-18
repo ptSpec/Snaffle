@@ -10,6 +10,7 @@ import type { ImageUnderstandingProfile } from "../attachments/vision.js";
 import type { ModelToolSurfaces } from "../capabilities/surface.js";
 
 export type SavedSettings = {
+  onboardingComplete?: unknown;
   themeId?: unknown;
   interfaceFont?: unknown;
   primaryFont?: unknown;
@@ -43,6 +44,7 @@ export type SavedSettings = {
 };
 
 export type SettingsUpdate = {
+  onboardingComplete?: boolean;
   themeId?: string;
   interfaceFont?: FontId;
   primaryFont?: FontId;

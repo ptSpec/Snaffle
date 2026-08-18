@@ -3,6 +3,7 @@ import { isIP } from "node:net";
 import { PROJECT } from "../../identity.js";
 
 const MAX_RESPONSE_BYTES = 2_000_000;
+const MAX_HTML_RESPONSE_BYTES = 7_000_000;
 
 export async function fetchPublicText(rawUrl: string, signal?: AbortSignal): Promise<{ url: string; contentType: string; text: string }> {
   let url = publicUrl(rawUrl);
@@ -121,8 +122,10 @@ function isPrivateAddress(address: string): boolean {
 }
 
 async function limitedText(response: Response): Promise<string> {
+  const html = /html|xhtml/i.test(response.headers.get("content-type") ?? "");
+  const maxBytes = html ? MAX_HTML_RESPONSE_BYTES : MAX_RESPONSE_BYTES;
   const declared = Number(response.headers.get("content-length"));
-  if (declared > MAX_RESPONSE_BYTES) throw new Error("Response is larger than 2 MB");
+  if (declared > maxBytes) throw responseTooLarge(html);
   if (!response.body) return "";
 
   const reader = response.body.getReader();
@@ -132,9 +135,9 @@ async function limitedText(response: Response): Promise<string> {
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > MAX_RESPONSE_BYTES) {
+    if (size > maxBytes) {
       await reader.cancel();
-      throw new Error("Response is larger than 2 MB");
+      throw responseTooLarge(html);
     }
     chunks.push(value);
   }
@@ -145,4 +148,10 @@ async function limitedText(response: Response): Promise<string> {
     offset += chunk.byteLength;
   }
   return new TextDecoder().decode(bytes);
+}
+
+function responseTooLarge(html: boolean): Error {
+  return new Error(html
+    ? "Page HTML exceeds the 7 MB download limit before extraction. maxChars only limits returned text, so lowering it will not help."
+    : "Response is larger than 2 MB");
 }

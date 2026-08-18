@@ -50,6 +50,7 @@ import {
 import { AttachmentTray } from "./sections/conversation/attachment-tray.js";
 import { htmlToMarkdown } from "./sections/conversation/attachment-markdown.js";
 import { Settings } from "./screens/settings/settings.js";
+import { Onboarding } from "./screens/onboarding/onboarding.js";
 import { Bookmarks, type BookmarksPage } from "./screens/bookmarks/bookmarks.js";
 import { Search } from "./screens/search/search.js";
 import { Sidebar, type AppView, type SettingsPage } from "./sections/sidebar/sidebar.js";
@@ -79,6 +80,7 @@ declare global {
 }
 
 const initialState: DesktopState = {
+  onboardingComplete: true,
   workspace: null,
   workspaces: [],
   activeThreadId: null,
@@ -139,6 +141,8 @@ const initialState: DesktopState = {
 
 export function App(): JSX.Element {
   const [desktopState, setDesktopState] = useState(initialState);
+  const [stateLoaded, setStateLoaded] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [savedMessages, setSavedMessages] = useState<SavedMessage[] | null>(null);
   const [models, setModels] = useState<ProviderCatalog[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
@@ -471,9 +475,11 @@ export function App(): JSX.Element {
         const selection = activeModel(state);
         setSelectedModel(selection.model);
         setSelectedProviderConnectionId(selection.providerConnectionId);
+        setOnboardingOpen(!state.onboardingComplete);
         void loadModels();
       })
-      .catch((cause: unknown) => setError(errorMessage(cause)));
+      .catch((cause: unknown) => setError(errorMessage(cause)))
+      .finally(() => setStateLoaded(true));
 
     const unsubscribe = window.desktop.onRunEvent((event) => {
       const previous = queuedEvents.at(-1);
@@ -1212,6 +1218,81 @@ export function App(): JSX.Element {
     }
   }
 
+  async function connectOnboardingProvider(
+    input: ProviderConnectionInput,
+  ): Promise<{ connectionId: string; status: ProviderStatus; connected: boolean }> {
+    setError(null);
+    const existingIds = new Set(desktopState.providerConnections.map((connection) => connection.id));
+    const state = await window.desktop.saveProviderConnection(input);
+    const connection = input.id
+      ? state.providerConnections.find((item) => item.id === input.id)
+      : state.providerConnections.find((item) => !existingIds.has(item.id));
+    if (!connection) throw new Error("The provider connection could not be saved");
+
+    const catalogs = await window.desktop.listProviderModels();
+    const catalog = catalogs.find((item) => item.connection.id === connection.id);
+    const currentBaseModel = splitModelVariant(
+      state.defaultModel ?? "",
+      providerProfile(connection.providerId).modelVariants,
+    ).baseModelId;
+    const currentModelIsAvailable = state.defaultProviderConnectionId === connection.id &&
+      catalog?.models.some((model) => model.id === state.defaultModel || model.id === currentBaseModel);
+    const defaultModel = currentModelIsAvailable ? state.defaultModel : catalog?.models[0]?.id ?? null;
+    if (defaultModel && !currentModelIsAvailable) {
+      await window.desktop.setSelectedModel(null, connection.id, defaultModel);
+    }
+
+    setDesktopState(withoutConversation({
+      ...state,
+      ...(defaultModel
+        ? { defaultProviderConnectionId: connection.id, defaultModel }
+        : {}),
+    }));
+    setModels(catalogs);
+    try {
+      const status = await window.desktop.getProviderStatus({ ...input, id: connection.id });
+      return { connectionId: connection.id, status, connected: true };
+    } catch (cause) {
+      return {
+        connectionId: connection.id,
+        status: { message: errorMessage(cause) },
+        connected: false,
+      };
+    }
+  }
+
+  async function setOnboardingManualModel(
+    connection: DesktopState["providerConnections"][number],
+    model: string,
+  ): Promise<void> {
+    const manualModel = {
+      id: model,
+      name: model,
+      contextLength: DEFAULT_MODEL_CONTEXT_LENGTH,
+      inputModalities: ["text"],
+    };
+    const state = await window.desktop.saveProviderConnection({
+      ...connection,
+      manualModels: [
+        ...connection.manualModels.filter((item) => item.id !== model),
+        manualModel,
+      ],
+    });
+    await window.desktop.setSelectedModel(null, connection.id, model);
+    setModels(await window.desktop.listProviderModels());
+    setDesktopState(withoutConversation({
+      ...state,
+      defaultProviderConnectionId: connection.id,
+      defaultModel: model,
+    }));
+  }
+
+  async function completeOnboarding(): Promise<void> {
+    await window.desktop.completeOnboarding();
+    setDesktopState((state) => ({ ...state, onboardingComplete: true }));
+    setOnboardingOpen(false);
+  }
+
   async function removeProviderConnection(id: string): Promise<void> {
     setError(null);
     try {
@@ -1616,6 +1697,35 @@ export function App(): JSX.Element {
     if (refocus) window.requestAnimationFrame(() => taskInput.current?.focus());
   }
 
+  if (!stateLoaded) return <main className="app-shell" />;
+
+  if (onboardingOpen) {
+    return (
+      <Onboarding
+        dismissible={desktopState.onboardingComplete}
+        themeId={desktopState.themeId}
+        connections={desktopState.providerConnections}
+        catalogs={models}
+        loadingModels={loadingModels}
+        defaultConnectionId={desktopState.defaultProviderConnectionId}
+        defaultModel={desktopState.defaultModel}
+        webEnabled={desktopState.webSearchEnabled}
+        webBackend={desktopState.webSearchBackend}
+        webKeyBackends={desktopState.webSearchKeyBackends}
+        subagent={desktopState.subagent}
+        onConnect={connectOnboardingProvider}
+        onManualModel={setOnboardingManualModel}
+        onTheme={(themeId) => void selectTheme(themeId)}
+        onWebEnabled={(enabled) => void setWebSearchEnabled(enabled)}
+        onWebBackend={(backend) => void setWebSearchBackend(backend)}
+        onWebKey={async (backend, apiKey) => setWebSearchApiKey(backend, apiKey)}
+        onSubagent={(profile) => void setSubagent(profile)}
+        onComplete={completeOnboarding}
+        onDismiss={() => setOnboardingOpen(false)}
+      />
+    );
+  }
+
   return (
     <main className={`app-shell platform-${window.desktop.platform}`}>
       <section
@@ -1717,6 +1827,7 @@ export function App(): JSX.Element {
             onTestMcpServer={(server): Promise<McpServerStatus> => window.desktop.testMcpServer(server)}
             onSystemPrompt={(prompt) => void setSystemPrompt(prompt)}
             onToolEnabled={(name, enabled) => void setToolEnabled(name, enabled)}
+            onOpenOnboarding={() => setOnboardingOpen(true)}
           />
         ) : view === "saved" ? (
           <Bookmarks

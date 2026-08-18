@@ -17,6 +17,7 @@ Snaffle is built for smaller models without making the experience smaller. It gi
 - **Transparent execution.** See the model's full input and output, active tool surface, tool calls, context, and execution details.
 - **Sandboxed out of the box.** Smaller models can make bigger mistakes, so a local-model-first harness should include a sandbox by default.
 - **Provider overflow.** Keep working when local inference capacity is occupied by routing delegated overflow to another provider while the main conversation stays on its selected model.
+- **Image understanding fallback.** Text-only models can automatically route images to a separately configured vision model without changing the main conversation model.
 - **Bring your own model.**
 - **A desktop-first harness.** Snaffle is designed from the ground up for a desktop workflow rather than treating the UI as a graphical client for a command-line server.
 - **Built for the person using it, too.** Persistent bookmarks and Keep Aside make it easy to return to important parts of long conversations without changing the model's context.

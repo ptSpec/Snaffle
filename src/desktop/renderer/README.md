@@ -19,4 +19,4 @@ Keep feature-specific UI and CSS together. Promote something to `components/` on
 - Use semantic theme variables rather than component-local literal colors.
 - Do not add a model protocol event when existing trace or persisted state can derive the UI.
 - Keep the conversation usable when either sidebar is collapsed and at smaller window sizes.
-- A future first-launch onboarding flow should be one localized screen that writes the same provider, theme, web, and subagent settings as the normal settings UI.
+- First-launch onboarding is one localized screen that writes the same provider, theme, web, and subagent settings as the normal settings UI.
