@@ -1,5 +1,10 @@
 export const MAX_RETRY_DELAY_MS = 45_000;
 
+export function canRetryStatus(status: number | undefined): boolean {
+  return status === undefined || status < 400 || status >= 500 ||
+    status === 408 || status === 409 || status === 425 || status === 429;
+}
+
 export function retryBackoffMs(retry: number, retryAfterMs = 0): number {
   const backoff = retry <= 2
     ? retry * 500

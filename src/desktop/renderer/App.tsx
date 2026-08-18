@@ -20,9 +20,16 @@ import {
   type DesktopSearchResult,
   type DesktopState,
   type DesktopThread,
+  type DesktopUpdateState,
   type SavedMessage,
 } from "../api.js";
-import type { ProviderCatalog, ProviderConnectionInput, ProviderStatus } from "../../providers/provider.js";
+import type {
+  ProviderAllowance,
+  ProviderCatalog,
+  ProviderConnectionInput,
+  ProviderStatus,
+  ReasoningEffort,
+} from "../../providers/provider.js";
 import type { CompactionMode } from "../../context/budget.js";
 import type { SubagentProfile, ThreadSubagentMode } from "../../agent/subagents/profile.js";
 import type { ContextReport } from "../../context/report.js";
@@ -35,7 +42,7 @@ import {
   type ModelToolSurface,
 } from "../../capabilities/surface.js";
 import { DEFAULT_MODEL_CONTEXT_LENGTH } from "../../providers/provider.js";
-import { providerProfile, splitModelVariant } from "../../providers/profiles.js";
+import { applyModelVariant, providerProfile, splitModelVariant } from "../../providers/profiles.js";
 import { DEFAULT_THEME, themeById, type Theme } from "../themes/index.js";
 import {
   CONVERSATION_FONT_BASE,
@@ -126,8 +133,11 @@ const initialState: DesktopState = {
   providerRetries: 4,
   subagent: {
     enabled: false,
+    modelMode: "main",
     providerConnectionId: "",
     model: "",
+    overflowProviderConnectionId: "",
+    overflowModel: "",
     maxSteps: 50,
   },
   imageUnderstanding: {
@@ -139,14 +149,23 @@ const initialState: DesktopState = {
   compactionThreshold: 65,
 };
 
+const initialUpdateState: DesktopUpdateState = {
+  status: "disabled",
+  currentVersion: "",
+  automatic: false,
+};
+
 export function App(): JSX.Element {
   const [desktopState, setDesktopState] = useState(initialState);
+  const [updateState, setUpdateState] = useState(initialUpdateState);
   const [stateLoaded, setStateLoaded] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [savedMessages, setSavedMessages] = useState<SavedMessage[] | null>(null);
   const [models, setModels] = useState<ProviderCatalog[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
+  const [selectedReasoningEffort, setSelectedReasoningEffort] = useState<ReasoningEffort | "">("");
   const [selectedProviderConnectionId, setSelectedProviderConnectionId] = useState("openrouter");
+  const [providerAllowances, setProviderAllowances] = useState<Record<string, ProviderAllowance | null>>({});
   const [task, setTask] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentPreview[]>([]);
   const [draggingAttachments, setDraggingAttachments] = useState(false);
@@ -167,6 +186,7 @@ export function App(): JSX.Element {
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("appearance");
   const [bookmarksPage, setBookmarksPage] = useState<BookmarksPage>("threads");
   const [sendOrbMotion, setSendOrbMotion] = useState<OrbMotion>("stopped");
+  const [providerWaits, setProviderWaits] = useState<Record<string, string>>({});
   const [contextReport, setContextReport] = useState<ContextReport | null>(null);
   const [contextRefresh, setContextRefresh] = useState(0);
   const [compactingContext, setCompactingContext] = useState(false);
@@ -177,6 +197,60 @@ export function App(): JSX.Element {
   const composerAdd = useRef<HTMLDetailsElement>(null);
   const searchOpenedAt = useRef(0);
   const terminalUnmountTimer = useRef<number | undefined>(undefined);
+  const runProviderConnections = useRef<Record<string, string>>({});
+
+  const refreshProviderAllowance = useCallback(async (connectionId: string): Promise<void> => {
+    try {
+      const allowance = await window.desktop.getProviderAllowance(connectionId);
+      setProviderAllowances((current) => ({ ...current, [connectionId]: allowance }));
+    } catch {
+      setProviderAllowances((current) => ({ ...current, [connectionId]: null }));
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void window.desktop.getUpdateState()
+      .then((state) => {
+        if (active) setUpdateState(state);
+      })
+      .catch((cause: unknown) => setError(errorMessage(cause)));
+    const unsubscribe = window.desktop.onUpdateState(setUpdateState);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
+
+  async function checkForUpdates(): Promise<void> {
+    try {
+      setError(null);
+      setUpdateState(await window.desktop.checkForUpdates());
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function applyUpdate(): Promise<void> {
+    try {
+      setError(null);
+      await window.desktop.applyUpdate();
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  useEffect(() => {
+    if (!stateLoaded) return;
+    const connection = desktopState.providerConnections.find(
+      (item) => item.id === selectedProviderConnectionId,
+    );
+    if (!connection || !providerProfile(connection.providerId).providesAllowance) return;
+    const timeout = window.setTimeout(() => {
+      void refreshProviderAllowance(connection.id);
+    }, 4500);
+    return () => window.clearTimeout(timeout);
+  }, [desktopState.providerConnections, refreshProviderAllowance, selectedProviderConnectionId, stateLoaded]);
 
   function showTerminal(): void {
     if (!desktopState.workspace) return;
@@ -436,7 +510,19 @@ export function App(): JSX.Element {
         if (activeThreadId.current === threadId) setTimeline(next);
       });
 
+      if (event.type === "provider.waiting") {
+        setProviderWaits((current) => ({
+          ...current,
+          [threadId]: `${event.connectionName} is busy · ${event.active} of ${event.limit} generations active`,
+        }));
+      }
+      if (event.type === "provider.ready") {
+        setProviderWaits((current) => withoutKey(current, threadId));
+      }
+
       if (event.type === "run.started") {
+        runProviderConnections.current[threadId] = event.providerConnectionId;
+        setProviderWaits((current) => withoutKey(current, threadId));
         setDesktopState((state) => ({
           ...state,
           runningThreadIds: [...new Set([...state.runningThreadIds, threadId])],
@@ -446,6 +532,10 @@ export function App(): JSX.Element {
         }));
       }
       if (event.type === "run.completed" || event.type === "run.failed") {
+        const connectionId = runProviderConnections.current[threadId];
+        delete runProviderConnections.current[threadId];
+        if (connectionId) void refreshProviderAllowance(connectionId);
+        setProviderWaits((current) => withoutKey(current, threadId));
         setDesktopState((state) => ({
           ...state,
           runningThreadIds: state.runningThreadIds.filter((id) => id !== threadId),
@@ -475,6 +565,7 @@ export function App(): JSX.Element {
         const selection = activeModel(state);
         setSelectedModel(selection.model);
         setSelectedProviderConnectionId(selection.providerConnectionId);
+        setSelectedReasoningEffort(selection.reasoningEffort);
         setOnboardingOpen(!state.onboardingComplete);
         void loadModels();
       })
@@ -491,7 +582,7 @@ export function App(): JSX.Element {
       unsubscribe();
       if (flushTimer !== undefined) window.clearTimeout(flushTimer);
     };
-  }, []);
+  }, [refreshProviderAllowance]);
 
   const selectedItem = useMemo(
     () => findTimelineItem(timeline, selectedItemId),
@@ -524,6 +615,22 @@ export function App(): JSX.Element {
   const selectedModelBase = splitModelVariant(selectedModel, selectedProfile?.modelVariants).baseModelId;
   const selectedProviderModel = selectedCatalog?.models.find((model) => model.id === selectedModel) ??
     selectedCatalog?.models.find((model) => model.id === selectedModelBase);
+
+  useEffect(() => {
+    if (!stateLoaded || !selectedModel || !selectedCatalog || selectedCatalog.error || selectedProviderModel) return;
+    const selection = splitModelVariant(selectedModel, selectedProfile?.modelVariants);
+    const repairedModel = uniqueCatalogModelMatch(selectedCatalog, selection.baseModelId);
+    if (!repairedModel) return;
+    selectModel(
+      selectedProviderConnectionId,
+      applyModelVariant(repairedModel, selection.variantId, selectedProfile?.modelVariants),
+    );
+  }, [models, selectedModel, selectedProviderConnectionId, stateLoaded]);
+
+  const effectiveReasoningEffort = selectedReasoningEffort &&
+    selectedProviderModel?.reasoning?.efforts.includes(selectedReasoningEffort)
+    ? selectedReasoningEffort
+    : "";
   const availableToolNames = desktopState.modelTools
     .filter((tool) => tool.available && tool.enabled)
     .map((tool) => tool.name);
@@ -559,6 +666,8 @@ export function App(): JSX.Element {
         ? "Select a model before sending."
         : selectedCatalog.error && selectedCatalog.models.length === 0
           ? "The selected provider connection is unavailable."
+        : !selectedProviderModel
+          ? "Select an available model before sending."
         : attachmentsTooLarge
           ? "Attachments are too large for the selected model context."
           : imageUnsupported && !imageUnderstandingReady
@@ -647,6 +756,7 @@ export function App(): JSX.Element {
       task: task.trim(),
       providerConnectionId: selectedProviderConnectionId,
       model: selectedModel,
+      ...(effectiveReasoningEffort ? { reasoningEffort: effectiveReasoningEffort } : {}),
       contextLength: selectedContextLength,
       imageInputSupported: selectedModalities?.includes("image") !== false,
       ...(pendingAttachments.length
@@ -667,10 +777,12 @@ export function App(): JSX.Element {
       ...state,
       runningThreadIds: [...new Set([...state.runningThreadIds, request.threadId])],
     }));
+    setProviderWaits((current) => withoutKey(current, request.threadId));
 
     try {
       await window.desktop.startRun(request);
     } catch (cause) {
+      setProviderWaits((current) => withoutKey(current, request.threadId));
       setDesktopState((state) => ({
         ...state,
         runningThreadIds: state.runningThreadIds.filter((id) => id !== request.threadId),
@@ -969,6 +1081,7 @@ export function App(): JSX.Element {
     const selection = activeModel(state);
     setSelectedModel(selection.model);
     setSelectedProviderConnectionId(selection.providerConnectionId);
+    setSelectedReasoningEffort(selection.reasoningEffort);
     setSelectedItemId(null);
     setTask(activeDraft(state));
     setPendingAttachments(
@@ -1198,12 +1311,47 @@ export function App(): JSX.Element {
   }
 
   function selectModel(providerConnectionId: string, model: string): void {
+    const nextCatalog = models.find((catalog) => catalog.connection.id === providerConnectionId);
+    const nextProfile = nextCatalog ? providerProfile(nextCatalog.connection.providerId) : undefined;
+    const sameModel = providerConnectionId === selectedProviderConnectionId &&
+      selectedModelBase === splitModelVariant(model, nextProfile?.modelVariants).baseModelId;
+    const reasoningEffort = sameModel ? effectiveReasoningEffort : "";
     setSelectedModel(model);
     setSelectedProviderConnectionId(providerConnectionId);
+    setSelectedReasoningEffort(reasoningEffort);
     const threadId = desktopState.activeThreadId;
-    setDesktopState((state) => setStateModel(state, threadId, providerConnectionId, model));
-    void window.desktop.setSelectedModel(threadId, providerConnectionId, model)
+    setDesktopState((state) => setStateModel(
+      state,
+      threadId,
+      providerConnectionId,
+      model,
+      reasoningEffort,
+    ));
+    void window.desktop.setSelectedModel(
+      threadId,
+      providerConnectionId,
+      model,
+      reasoningEffort || undefined,
+    )
       .catch((cause) => setError(errorMessage(cause)));
+  }
+
+  function selectReasoningEffort(reasoningEffort: ReasoningEffort | ""): void {
+    setSelectedReasoningEffort(reasoningEffort);
+    const threadId = desktopState.activeThreadId;
+    setDesktopState((state) => setStateModel(
+      state,
+      threadId,
+      selectedProviderConnectionId,
+      selectedModel,
+      reasoningEffort,
+    ));
+    void window.desktop.setSelectedModel(
+      threadId,
+      selectedProviderConnectionId,
+      selectedModel,
+      reasoningEffort || undefined,
+    ).catch((cause) => setError(errorMessage(cause)));
   }
 
   async function saveProviderConnection(input: ProviderConnectionInput): Promise<void> {
@@ -1301,6 +1449,7 @@ export function App(): JSX.Element {
       const selection = activeModel(state);
       setSelectedModel(selection.model);
       setSelectedProviderConnectionId(selection.providerConnectionId);
+      setSelectedReasoningEffort(selection.reasoningEffort);
       await loadModels();
     } catch (cause) {
       setError(errorMessage(cause));
@@ -1740,6 +1889,7 @@ export function App(): JSX.Element {
         <Sidebar
           state={desktopState}
           runningThreadIds={desktopState.runningThreadIds}
+          updateState={updateState}
           view={view}
           settingsPage={settingsPage}
           bookmarksPage={bookmarksPage}
@@ -1800,6 +1950,8 @@ export function App(): JSX.Element {
             runtimeMetadata={desktopState.runtimeMetadata}
             providerCatalogs={models}
             loadingProviderModels={loadingModels}
+            updateState={updateState}
+            activeRun={desktopState.runningThreadIds.length > 0}
             error={error}
             onResetAppearance={() => void resetAppearance()}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
@@ -1828,6 +1980,8 @@ export function App(): JSX.Element {
             onSystemPrompt={(prompt) => void setSystemPrompt(prompt)}
             onToolEnabled={(name, enabled) => void setToolEnabled(name, enabled)}
             onOpenOnboarding={() => setOnboardingOpen(true)}
+            onCheckForUpdates={() => void checkForUpdates()}
+            onApplyUpdate={() => void applyUpdate()}
           />
         ) : view === "saved" ? (
           <Bookmarks
@@ -1940,10 +2094,13 @@ export function App(): JSX.Element {
             composerAdd={composerAdd}
             dragging={draggingAttachments}
             running={running}
+            providerWait={desktopState.activeThreadId ? providerWaits[desktopState.activeThreadId] ?? null : null}
             pendingAttachmentCount={pendingAttachments.length}
             models={models}
             selectedProviderConnectionId={selectedProviderConnectionId}
             selectedModel={selectedModel}
+            reasoningEffort={effectiveReasoningEffort}
+            providerAllowance={providerAllowances[selectedProviderConnectionId]}
             toolSurface={toolSurface}
             activeToolNames={activeToolNames}
             availableToolNames={availableToolNames}
@@ -1967,6 +2124,8 @@ export function App(): JSX.Element {
             onPasteMarkdown={() => void pasteMarkdown()}
             onChooseAttachments={() => void chooseAttachments()}
             onModel={selectModel}
+            onReasoningEffort={selectReasoningEffort}
+            onProviderAllowance={() => void refreshProviderAllowance(selectedProviderConnectionId)}
             onToolSurface={(surface) => void setModelToolSurface(surface)}
             onCompact={() => void compactCurrentContext()}
             onUnsafe={(value) => void setThreadUnsafe(value)}
@@ -2136,13 +2295,18 @@ function activeDraft(state: DesktopState): string {
   return state.workspace?.threads.find((thread) => thread.id === state.activeThreadId)?.draft ?? "";
 }
 
-function activeModel(state: DesktopState): { providerConnectionId: string; model: string } {
+function activeModel(state: DesktopState): {
+  providerConnectionId: string;
+  model: string;
+  reasoningEffort: ReasoningEffort | "";
+} {
   const thread = state.workspace?.threads.find((thread) => thread.id === state.activeThreadId);
   return {
     providerConnectionId: thread?.model
       ? thread.providerConnectionId
       : state.defaultProviderConnectionId,
     model: thread?.model ?? state.defaultModel ?? "",
+    reasoningEffort: thread?.reasoningEffort ?? "",
   };
 }
 
@@ -2151,12 +2315,13 @@ function setStateModel(
   threadId: string | null,
   providerConnectionId: string,
   model: string,
+  reasoningEffort: ReasoningEffort | "" = "",
 ): DesktopState {
   const updateWorkspace = (workspace: DesktopState["workspace"]): DesktopState["workspace"] => workspace
     ? {
         ...workspace,
         threads: workspace.threads.map((thread) => thread.id === threadId
-          ? { ...thread, providerConnectionId, model }
+          ? { ...thread, providerConnectionId, model, reasoningEffort }
           : thread),
       }
     : null;
@@ -2186,6 +2351,13 @@ function withoutConversation(state: DesktopState): DesktopState {
     : state;
 }
 
+function withoutKey(values: Record<string, string>, key: string): Record<string, string> {
+  if (!(key in values)) return values;
+  const next = { ...values };
+  delete next[key];
+  return next;
+}
+
 function trimThreadTimelines(
   timelines: Map<string, TimelineItem[]>,
   activeId: string | null,
@@ -2213,4 +2385,15 @@ function nextMessageSequence(items: TimelineItem[]): number {
 function attachmentRef(attachment: AttachmentPreview): AttachmentRef {
   const { fingerprint: _fingerprint, thumbnail: _thumbnail, ...reference } = attachment;
   return reference;
+}
+
+function uniqueCatalogModelMatch(catalog: ProviderCatalog, unavailableModel: string): string | null {
+  const unavailableKey = modelLeafKey(unavailableModel);
+  if (!unavailableKey) return null;
+  const matches = catalog.models.filter((model) => modelLeafKey(model.id) === unavailableKey);
+  return matches.length === 1 ? matches[0]!.id : null;
+}
+
+function modelLeafKey(model: string): string {
+  return (model.split("/").at(-1) ?? model).toLowerCase().replace(/[^a-z0-9]/g, "");
 }

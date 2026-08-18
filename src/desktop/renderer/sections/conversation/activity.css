@@ -165,11 +165,6 @@
   width: fit-content;
 }
 
-.provider-fallback-row {
-  width: fit-content;
-  color: var(--text-muted);
-}
-
 .image-understanding-row {
   width: fit-content;
   padding: 2px 3px;

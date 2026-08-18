@@ -207,8 +207,29 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
+}
+
+select {
+  appearance: none;
+  min-width: 0;
+  height: 36px;
+  padding: 0 34px 0 10px;
+  color: var(--text-primary);
+  background:
+    linear-gradient(45deg, transparent 50%, var(--text-muted) 50%) calc(100% - 15px) calc(50% + 1px) / 5px 5px no-repeat,
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%) calc(100% - 10px) calc(50% + 1px) / 5px 5px no-repeat,
+    var(--input-background);
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  outline: none;
+  cursor: pointer;
+}
+
+select:focus {
+  border-color: var(--border-focus);
 }
 
 button {
@@ -217,6 +238,7 @@ button {
 
 button:disabled,
 input:disabled,
+select:disabled,
 textarea:disabled {
   cursor: not-allowed;
   opacity: 0.5;

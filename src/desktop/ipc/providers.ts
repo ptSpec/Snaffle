@@ -45,12 +45,15 @@ export function registerProviderIpc(options: {
       baseUrl: (input.baseUrl.trim() || stored.baseUrl).replace(/\/$/, ""),
       enabled: input.enabled,
       requestLimit: input.requestLimit,
-      fallbackProviderConnectionId: input.fallbackProviderConnectionId,
-      fallbackModel: input.fallbackModel,
       manualModels: input.manualModels,
       hasApiKey: Boolean(apiKey),
       ...(apiKey ? { apiKey } : {}),
     });
+  });
+
+  ipcMain.handle("desktop:get-provider-allowance", async (_event, rawId: unknown) => {
+    const status = await providerStatus(options.connections.resolve(parseId(rawId, "Provider connection")));
+    return status.allowance ?? null;
   });
 
   ipcMain.handle("desktop:save-provider-connection", async (
@@ -91,10 +94,6 @@ function parseProviderConnection(input: unknown): ProviderConnectionInput {
     requestLimit: Number.isInteger(value.requestLimit) && Number(value.requestLimit) >= 1 && Number(value.requestLimit) <= 16
       ? Number(value.requestLimit)
       : 1,
-    fallbackProviderConnectionId: typeof value.fallbackProviderConnectionId === "string"
-      ? value.fallbackProviderConnectionId
-      : "",
-    fallbackModel: typeof value.fallbackModel === "string" ? value.fallbackModel : "",
     manualModels: Array.isArray(value.manualModels)
       ? value.manualModels.map(parseProviderModel)
       : [],

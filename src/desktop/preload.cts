@@ -1,11 +1,12 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { CommandApprovalDecision } from "../protocol.js";
-import type { ProviderConnectionInput } from "../providers/provider.js";
+import type { ProviderConnectionInput, ReasoningEffort } from "../providers/provider.js";
 import type {
   DesktopApi,
   DesktopRunEvent,
   DesktopTerminalDataEvent,
   DesktopTerminalExitEvent,
+  DesktopUpdateState,
   GitFileContents,
   SaveMessageInput,
   StartRunInput,
@@ -20,6 +21,9 @@ import type { ModelToolSurface } from "../capabilities/surface.js";
 const api: DesktopApi = {
   platform: process.platform,
   getState: () => ipcRenderer.invoke("desktop:get-state"),
+  getUpdateState: () => ipcRenderer.invoke("desktop:get-update-state"),
+  checkForUpdates: () => ipcRenderer.invoke("desktop:check-for-updates"),
+  applyUpdate: () => ipcRenderer.invoke("desktop:apply-update"),
   completeOnboarding: () => ipcRenderer.invoke("desktop:complete-onboarding"),
   chooseWorkspace: () => ipcRenderer.invoke("desktop:choose-workspace"),
   selectWorkspace: (workspaceId: string) =>
@@ -45,14 +49,25 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:search-conversations", query),
   listProviderModels: () => ipcRenderer.invoke("desktop:list-provider-models"),
   getProviderStatus: (input: ProviderConnectionInput) => ipcRenderer.invoke("desktop:get-provider-status", input),
+  getProviderAllowance: (connectionId: string) => ipcRenderer.invoke("desktop:get-provider-allowance", connectionId),
   saveProviderConnection: (input: ProviderConnectionInput) => ipcRenderer.invoke("desktop:save-provider-connection", input),
   removeProviderConnection: (connectionId: string) => ipcRenderer.invoke("desktop:remove-provider-connection", connectionId),
   setMcpEnabled: (enabled: boolean) => ipcRenderer.invoke("desktop:set-mcp-enabled", enabled),
   saveMcpServer: (server: McpServerConfig) => ipcRenderer.invoke("desktop:save-mcp-server", server),
   removeMcpServer: (id: string) => ipcRenderer.invoke("desktop:remove-mcp-server", id),
   testMcpServer: (server: McpServerConfig) => ipcRenderer.invoke("desktop:test-mcp-server", server),
-  setSelectedModel: (threadId: string | null, connectionId: string, model: string) =>
-    ipcRenderer.invoke("desktop:set-selected-model", threadId, connectionId, model),
+  setSelectedModel: (
+    threadId: string | null,
+    connectionId: string,
+    model: string,
+    reasoningEffort?: ReasoningEffort,
+  ) => ipcRenderer.invoke(
+    "desktop:set-selected-model",
+    threadId,
+    connectionId,
+    model,
+    reasoningEffort ?? "",
+  ),
   chooseAttachments: () => ipcRenderer.invoke("desktop:choose-attachments"),
   importDroppedFiles: (files: File[]) =>
     ipcRenderer.invoke("desktop:import-dropped-files", files.map((file) => webUtils.getPathForFile(file))),
@@ -143,6 +158,11 @@ const api: DesktopApi = {
     const receiveEvent = (_event: Electron.IpcRendererEvent, event: DesktopRunEvent) => listener(event);
     ipcRenderer.on("desktop:run-event", receiveEvent);
     return () => ipcRenderer.removeListener("desktop:run-event", receiveEvent);
+  },
+  onUpdateState(listener: (state: DesktopUpdateState) => void): () => void {
+    const receiveEvent = (_event: Electron.IpcRendererEvent, state: DesktopUpdateState) => listener(state);
+    ipcRenderer.on("desktop:update-state", receiveEvent);
+    return () => ipcRenderer.removeListener("desktop:update-state", receiveEvent);
   },
   onTerminalData(listener: (event: DesktopTerminalDataEvent) => void): () => void {
     const receiveEvent = (_event: Electron.IpcRendererEvent, event: DesktopTerminalDataEvent) => listener(event);

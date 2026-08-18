@@ -79,10 +79,6 @@ export function TimelineEntry({
     );
   }
 
-  if (item.kind === "provider-fallback") {
-    return <div className="activity-row provider-fallback-row">↪ {item.text}</div>;
-  }
-
   if (item.kind === "image-understanding") {
     return (
       <button
@@ -559,10 +555,17 @@ function ReasoningEntry({
   item: Extract<TimelineItem, { kind: "reasoning" }>;
 }): JSX.Element {
   const [open, setOpen] = useState(item.streaming);
+  const [now, setNow] = useState(Date.now());
   const textRef = useRef<HTMLDivElement>(null);
   const followText = useRef(true);
 
   useEffect(() => setOpen(item.streaming), [item.streaming]);
+  useEffect(() => {
+    if (!item.retryAt) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, [item.retryAt]);
   useEffect(() => {
     if (item.streaming && open && followText.current && textRef.current) {
       textRef.current.scrollTop = textRef.current.scrollHeight;
@@ -576,7 +579,7 @@ function ReasoningEntry({
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary>
-        <span>{item.status ?? (item.streaming ? "Thinking…" : "Thinking")}</span>
+        <span>{reasoningStatus(item, now)}</span>
         {item.streaming ? <span className="activity-spinner" aria-hidden="true" /> : null}
       </summary>
       {item.text ? (
@@ -593,6 +596,18 @@ function ReasoningEntry({
       ) : null}
     </details>
   );
+}
+
+function reasoningStatus(
+  item: Extract<TimelineItem, { kind: "reasoning" }>,
+  now: number,
+): string {
+  if (item.status) return item.status;
+  if (item.retryAt) {
+    const seconds = Math.ceil((item.retryAt - now) / 1000);
+    return seconds > 0 ? `Retrying in ${seconds}s…` : "Retrying now…";
+  }
+  return item.streaming ? "Thinking…" : "Thinking";
 }
 
 function ContextEntry({ item }: { item: Extract<TimelineItem, { kind: "context" }> }): JSX.Element {

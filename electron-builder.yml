@@ -23,6 +23,11 @@ extraResources:
 
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 
+publish:
+  provider: github
+  owner: ptSpec
+  repo: Snaffle
+
 mac:
   icon: assets/logo.icns
   category: public.app-category.developer-tools

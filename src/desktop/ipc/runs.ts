@@ -19,7 +19,12 @@ import { projectContext } from "../../context/projection.js";
 import { estimateContextCharacters, estimateContextTokens } from "../../context/budget.js";
 import { probeNativeSandbox } from "../../execution/native/sandbox.js";
 import { LocalWorkspace, type CommandApprovalRequest } from "../../execution/workspace.js";
-import type { ModelProvider, ProviderConnection } from "../../providers/provider.js";
+import {
+  isReasoningEffort,
+  type ModelProvider,
+  type ProviderConnection,
+  type ReasoningEffort,
+} from "../../providers/provider.js";
 import type { CommandApprovalDecision, Message, RunEvent } from "../../protocol.js";
 import {
   withRecoveredPlan,
@@ -52,6 +57,7 @@ export function registerRunIpc(options: {
     connectionId: string,
     model: string,
     resolveAttachment: (attachment: AttachmentRef) => ReturnType<AttachmentStore["resolve"]>,
+    reasoningEffort?: ReasoningEffort,
   ) => ModelProvider;
   connection(connectionId: string): ProviderConnection;
   settings: () => {
@@ -132,7 +138,12 @@ export function registerRunIpc(options: {
     }
 
     const settings = options.settings();
-    await options.store.setThreadModel(input.threadId, input.providerConnectionId, input.model);
+    await options.store.setThreadModel(
+      input.threadId,
+      input.providerConnectionId,
+      input.model,
+      input.reasoningEffort ?? "",
+    );
     const controller = new AbortController();
     const threadId = input.threadId;
     const workspace = new LocalWorkspace(
@@ -154,7 +165,16 @@ export function registerRunIpc(options: {
       input.model,
       input.explicitlyActiveTools,
     );
-    const subagent = threadSubagent(settings.subagent, selectedThread.subagentMode);
+    const configuredSubagent = threadSubagent(settings.subagent, selectedThread.subagentMode);
+    const subagent = configuredSubagent
+      ? {
+          ...configuredSubagent,
+          providerConnectionId: configuredSubagent.modelMode === "main"
+            ? input.providerConnectionId
+            : configuredSubagent.providerConnectionId,
+          model: configuredSubagent.modelMode === "main" ? input.model : configuredSubagent.model,
+        }
+      : null;
     let capabilities = subagent && !settings.disabledTools.includes("delegate_task")
       ? activeCapabilities([
           ...baseCapabilities.tools,
@@ -178,6 +198,10 @@ export function registerRunIpc(options: {
                       model,
                       (attachment) => options.attachments.resolve(attachment),
                     ),
+                    {
+                      overflowConnectionId: subagent.overflowProviderConnectionId,
+                      overflowModel: subagent.overflowModel,
+                    },
                   ),
                   workspace,
                   signal: controller.signal,
@@ -358,21 +382,22 @@ export function registerRunIpc(options: {
           connectionId,
           model,
           (attachment) => options.attachments.resolve(attachment),
+          input.reasoningEffort,
         ),
+        {
+          foreground: true,
+          onWait: (connection, active) => options.sendEvent(threadId, {
+            type: "provider.waiting",
+            connectionName: connection.name,
+            active,
+            limit: connection.requestLimit,
+          }),
+          onReady: () => options.sendEvent(threadId, { type: "provider.ready" }),
+        },
       );
     } catch (error) {
       active.delete(threadId);
       throw error;
-    }
-    if (mainRoute.fallbackFromConnectionName) {
-      const primaryConnection = options.connection(input.providerConnectionId);
-      const fallbackConnection = options.connection(mainRoute.provider.connectionId);
-      options.sendEvent(threadId, {
-        type: "provider.fallback",
-        fromConnectionName: primaryConnection.name,
-        toConnectionName: fallbackConnection.name,
-        model: mainRoute.provider.model,
-      });
     }
     void runAgent({
       task: modelTask,
@@ -489,23 +514,58 @@ async function providerRoute(
   signal: AbortSignal,
   connection: (connectionId: string) => ProviderConnection,
   create: (connectionId: string, model: string) => ModelProvider,
+  routing: {
+    overflowConnectionId?: string;
+    overflowModel?: string;
+    foreground?: boolean;
+    onWait?: (connection: ProviderConnection, active: number) => void;
+    onReady?: () => void;
+  } = {},
 ): Promise<ProviderRoute> {
   const primary = connection(connectionId);
   const immediate = capacity.tryAcquire(connectionId, primary.requestLimit);
-  if (immediate) return createRoute(create, capacity, primary, model, immediate);
+  if (immediate) {
+    return createRoute(
+      create,
+      capacity,
+      primary,
+      model,
+      immediate,
+      {
+        ...(routing.foreground ? { foreground: true } : {}),
+        onWait: () => routing.onWait?.(primary, capacity.activeCount(connectionId)),
+        ...(routing.onReady ? { onReady: routing.onReady } : {}),
+      },
+    );
+  }
 
-  if (primary.fallbackProviderConnectionId && primary.fallbackModel) {
-    const fallback = connection(primary.fallbackProviderConnectionId);
+  if (routing.overflowConnectionId && routing.overflowModel && routing.overflowConnectionId !== connectionId) {
+    const fallback = connection(routing.overflowConnectionId);
     const release = await capacity.acquire(
       fallback.id,
       fallback.requestLimit,
       signal,
     );
-    return createRoute(create, capacity, fallback, primary.fallbackModel, release, primary.name);
+    return createRoute(create, capacity, fallback, routing.overflowModel, release, {
+      overflowFromConnectionName: primary.name,
+    });
   }
 
-  const release = await capacity.acquire(connectionId, primary.requestLimit, signal);
-  return createRoute(create, capacity, primary, model, release);
+  routing.onWait?.(primary, capacity.activeCount(connectionId));
+  const release = await capacity.acquire(connectionId, primary.requestLimit, signal, routing.foreground);
+  routing.onReady?.();
+  return createRoute(
+    create,
+    capacity,
+    primary,
+    model,
+    release,
+    {
+      ...(routing.foreground ? { foreground: true } : {}),
+      onWait: () => routing.onWait?.(primary, capacity.activeCount(connectionId)),
+      ...(routing.onReady ? { onReady: routing.onReady } : {}),
+    },
+  );
 }
 
 function createRoute(
@@ -514,14 +574,28 @@ function createRoute(
   connection: ProviderConnection,
   model: string,
   release: () => void,
-  fallbackFromConnectionName?: string,
+  options: {
+    overflowFromConnectionName?: string;
+    foreground?: boolean;
+    onWait?: () => void;
+    onReady?: () => void;
+  } = {},
 ): ProviderRoute {
   try {
-    const route = capacity.reserve(create(connection.id, model), connection.requestLimit, release);
+    const route = capacity.reserve(
+      create(connection.id, model),
+      connection.requestLimit,
+      release,
+      options.foreground,
+      options.onWait,
+      options.onReady,
+    );
     return {
       ...route,
       connectionName: connection.name,
-      ...(fallbackFromConnectionName ? { fallbackFromConnectionName } : {}),
+      ...(options.overflowFromConnectionName
+        ? { fallbackFromConnectionName: options.overflowFromConnectionName }
+        : {}),
     };
   } catch (error) {
     release();
@@ -547,6 +621,9 @@ function parseStartRunInput(input: unknown): StartRunInput {
   const explicitlyActiveTools = Array.isArray(value.explicitlyActiveTools)
     ? [...new Set(value.explicitlyActiveTools.filter((name): name is string => name === "use_skill"))]
     : [];
+  const reasoningEffort = isReasoningEffort(value.reasoningEffort)
+    ? value.reasoningEffort
+    : undefined;
   if (attachments.length > MAX_ATTACHMENTS) throw new Error(`Attach at most ${MAX_ATTACHMENTS} files`);
   if (!task && attachments.length === 0) throw new Error("Enter a task or attach a file before starting a run");
   if (task.length > 30000) throw new Error("Task is too long");
@@ -561,6 +638,7 @@ function parseStartRunInput(input: unknown): StartRunInput {
     model,
     contextLength,
     imageInputSupported,
+    ...(reasoningEffort ? { reasoningEffort } : {}),
     ...(attachments.length ? { attachments } : {}),
     ...(explicitlyActiveTools.length ? { explicitlyActiveTools } : {}),
   };

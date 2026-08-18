@@ -5,7 +5,11 @@ import type {
   RefObject,
 } from "react";
 import { useEffect, useRef } from "react";
-import type { ProviderCatalog } from "../../../../providers/provider.js";
+import type {
+  ProviderAllowance,
+  ProviderCatalog,
+  ReasoningEffort,
+} from "../../../../providers/provider.js";
 import { providerProfile } from "../../../../providers/profiles.js";
 import type { ContextReport } from "../../../../context/report.js";
 import { ThinkingOrb, type OrbMotion } from "../../components/thinking-orb.js";
@@ -21,10 +25,13 @@ export function Composer({
   composerAdd,
   dragging,
   running,
+  providerWait,
   pendingAttachmentCount,
   models,
   selectedProviderConnectionId,
   selectedModel,
+  reasoningEffort,
+  providerAllowance,
   toolSurface,
   activeToolNames,
   availableToolNames,
@@ -48,6 +55,8 @@ export function Composer({
   onPasteMarkdown,
   onChooseAttachments,
   onModel,
+  onReasoningEffort,
+  onProviderAllowance,
   onToolSurface,
   onCompact,
   onUnsafe,
@@ -125,14 +134,23 @@ export function Composer({
                 name: connection.name,
                 mark: visual.mark,
                 logo: visual.logo,
+                providesAllowance: Boolean(providerProfile(connection.providerId).providesAllowance),
                 variants: providerProfile(connection.providerId).modelVariants ?? [],
-                models: models.map((model) => ({ value: model.id, label: model.name })),
+                models: models.map((model) => ({
+                  value: model.id,
+                  label: model.name,
+                  ...(model.reasoning ? { reasoning: model.reasoning } : {}),
+                })),
               };
             })}
             placeholder={loadingModels ? "Loading models…" : "Select model"}
             searchPlaceholder="Search models…"
             disabled={loadingModels || !providerAvailable || running}
+            allowance={providerAllowance}
+            reasoningEffort={reasoningEffort}
+            onAllowance={onProviderAllowance}
             onChange={onModel}
+            onReasoningEffort={onReasoningEffort}
           />
           <ContextGauge
             report={contextReport}
@@ -187,6 +205,7 @@ export function Composer({
           <span className="send-button-symbol send-button-stop-symbol" aria-hidden="true" />
         </button>
       </div>
+      {providerWait ? <div className="provider-wait" role="status">{providerWait} · waiting for the next slot</div> : null}
       {error ? <div className="composer-error" role="alert">{error}</div> : null}
     </form>
   );
@@ -328,10 +347,13 @@ type ComposerProps = {
   composerAdd: RefObject<HTMLDetailsElement>;
   dragging: boolean;
   running: boolean;
+  providerWait: string | null;
   pendingAttachmentCount: number;
   models: ProviderCatalog[];
   selectedProviderConnectionId: string;
   selectedModel: string;
+  reasoningEffort: ReasoningEffort | "";
+  providerAllowance: ProviderAllowance | null | undefined;
   toolSurface: ModelToolSurface;
   activeToolNames: string[];
   availableToolNames: string[];
@@ -355,6 +377,8 @@ type ComposerProps = {
   onPasteMarkdown(): void;
   onChooseAttachments(): void;
   onModel(providerConnectionId: string, value: string): void;
+  onReasoningEffort(value: ReasoningEffort | ""): void;
+  onProviderAllowance(): void;
   onToolSurface(surface: ModelToolSurface): void;
   onCompact(): void;
   onUnsafe(value: boolean): void;

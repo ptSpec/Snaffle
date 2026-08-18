@@ -278,6 +278,7 @@ function emitModelEvent(
       attempt: event.attempt,
       maxRetries: event.maxRetries,
       message: event.message,
+      delayMs: event.delayMs,
     });
   }
   return emit(options, {

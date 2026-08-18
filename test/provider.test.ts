@@ -14,7 +14,7 @@ import {
 } from "../src/providers/registry.js";
 import { applyModelVariant, providerProfile, splitModelVariant } from "../src/providers/profiles.js";
 import type { ModelStreamEvent } from "../src/providers/provider.js";
-import { retryAfterMilliseconds, retryBackoffMs } from "../src/retry.js";
+import { canRetryStatus, retryAfterMilliseconds, retryBackoffMs } from "../src/retry.js";
 
 test("retry backoff stays short twice, then grows to 45 seconds", () => {
   assert.deepEqual([1, 2, 3, 4].map((retry) => retryBackoffMs(retry)), [500, 1_000, 15_000, 45_000]);
@@ -22,6 +22,9 @@ test("retry backoff stays short twice, then grows to 45 seconds", () => {
   assert.equal(retryBackoffMs(1, 60_000), 45_000);
   assert.equal(retryAfterMilliseconds("12"), 12_000);
   assert.equal(retryAfterMilliseconds("invalid"), 0);
+  assert.equal(canRetryStatus(400), false);
+  assert.equal(canRetryStatus(429), true);
+  assert.equal(canRetryStatus(500), true);
 });
 
 test("provider-declared model variants preserve the base model identity", () => {
@@ -59,8 +62,6 @@ test("local provider presets reuse the OpenAI-compatible runtime", () => {
       baseUrl: baseUrl!,
       enabled: true,
       requestLimit: 1,
-      fallbackProviderConnectionId: "",
-      fallbackModel: "",
       hasApiKey: false,
       manualModels: [],
     }, "local-model", {});
@@ -113,8 +114,6 @@ test("OpenCode Go discovers supported models and routes its two wire formats", a
     baseUrl: `http://127.0.0.1:${address.port}`,
     enabled: true,
     requestLimit: 1,
-    fallbackProviderConnectionId: "",
-    fallbackModel: "",
     hasApiKey: true,
     apiKey: "secret",
     manualModels: [],
@@ -348,8 +347,6 @@ test("a manual model can test successfully when discovery is unavailable", async
     baseUrl: `http://127.0.0.1:${address.port}/v1`,
     enabled: true,
     requestLimit: 1,
-    fallbackProviderConnectionId: "",
-    fallbackModel: "",
     hasApiKey: false,
     manualModels: [{
       id: "manual-model",
@@ -404,8 +401,6 @@ test("DeepSeek uses the shared model catalog and adds account balance", async (t
     baseUrl: `http://127.0.0.1:${address.port}`,
     enabled: true,
     requestLimit: 1,
-    fallbackProviderConnectionId: "",
-    fallbackModel: "",
     hasApiKey: true,
     apiKey: "secret",
     manualModels: [],
@@ -586,6 +581,7 @@ test("OpenAI-compatible provider streams text and assembles tool calls", async (
       type: "retry",
       attempt: 1,
       maxRetries: 2,
+      delayMs: 500,
       message:
         'Provider stream failed (502): Upstream error from Groq: Failed to parse tool call arguments as JSON\nProvider diagnostics: {"provider_name":"Groq","failed_generation":{"attempted_arguments":"{bad"}}; partial tool call: [{"name":"run_command","arguments":"{bad"}]',
     },

@@ -9,10 +9,9 @@ export type TimelineItem =
   | { id: string; kind: "error"; text: string; restoreSequence?: number }
   | { id: string; kind: "assistant"; text: string; streaming: boolean; intermediate?: boolean; reasoning?: string; toolCalls?: ToolCall[]; toolNames?: string[]; finishReason?: string; model?: string; providerId?: string; providerConnectionId?: string; usage?: Usage; durationMs?: number; sources?: SourceReference[]; sequence?: number; entryId?: string }
   | { id: string; kind: "activity-group"; items: TimelineItem[] }
-  | { id: string; kind: "reasoning"; step: number; text: string; streaming: boolean; status?: string | undefined }
+  | { id: string; kind: "reasoning"; step: number; text: string; streaming: boolean; status?: string | undefined; retryAt?: number | undefined }
   | { id: string; kind: "tool-preparing"; step: number; index: number; name: string; argumentChars: number; startedAt: number }
   | { id: string; kind: "retry"; step: number; attempt: number; maxRetries: number; text: string }
-  | { id: string; kind: "provider-fallback"; text: string }
   | {
       id: string;
       kind: "image-understanding";
@@ -81,18 +80,6 @@ export function addRunEvent(
         ...(event.usage ? { usage: event.usage } : {}),
         ...(event.durationMs === undefined ? {} : { durationMs: event.durationMs }),
         ...(event.question ? { question: event.question } : {}),
-      },
-    ]);
-    return;
-  }
-
-  if (event.type === "provider.fallback") {
-    setTimeline((items) => [
-      ...items,
-      {
-        id: newTimelineId(),
-        kind: "provider-fallback",
-        text: `${event.fromConnectionName} is busy · using ${event.model} through ${event.toConnectionName}`,
       },
     ]);
     return;
@@ -174,7 +161,7 @@ export function addRunEvent(
     setTimeline((items) =>
       items.map((item) =>
         item.kind === "reasoning" && item.step === event.step && item.streaming
-          ? { ...item, text: item.text + event.text, status: undefined }
+          ? { ...item, text: item.text + event.text, status: undefined, retryAt: undefined }
           : item,
       ),
     );
@@ -202,7 +189,14 @@ export function addRunEvent(
           maxRetries: event.maxRetries,
           text: event.message,
         },
-        { id: newTimelineId(), kind: "reasoning", step: event.step, text: "", streaming: true },
+        {
+          id: newTimelineId(),
+          kind: "reasoning",
+          step: event.step,
+          text: "",
+          streaming: true,
+          retryAt: Date.now() + event.delayMs,
+        },
       ];
     });
     return;
@@ -586,7 +580,6 @@ export function labelFor(kind: Exclude<TimelineItem["kind"], "tool">): string {
   if (kind === "reasoning") return "Thinking";
   if (kind === "tool-preparing") return "Tool call";
   if (kind === "retry") return "Model retry";
-  if (kind === "provider-fallback") return "Provider fallback";
   if (kind === "image-understanding") return "Image understanding";
   if (kind === "activity-group") return "Work details";
   if (kind === "context") return "Context";

@@ -56,6 +56,12 @@ export function AgentSettings({
     label: choice.modelName,
     detail: `${choice.connectionName} · ${choice.modelId}`,
   }));
+  const overflowChoices = modelChoices.filter((choice) => choice.connectionId !== subagent.providerConnectionId);
+  const overflowOptions = overflowChoices.map((choice) => ({
+    value: modelValue(choice.connectionId, choice.modelId),
+    label: choice.modelName,
+    detail: `${choice.connectionName} · ${choice.modelId}`,
+  }));
   const imageModelChoices = modelChoices.filter((choice) => choice.inputModalities?.includes("image"));
   const imageModelOptions = imageModelChoices.map((choice) => ({
     value: modelValue(choice.connectionId, choice.modelId),
@@ -69,6 +75,15 @@ export function AgentSettings({
       detail: selectedConnection?.name ?? "Saved model",
     });
   }
+  if (subagent.overflowModel && !overflowChoices.some((choice) =>
+    choice.connectionId === subagent.overflowProviderConnectionId && choice.modelId === subagent.overflowModel
+  )) {
+    overflowOptions.push({
+      value: modelValue(subagent.overflowProviderConnectionId, subagent.overflowModel),
+      label: subagent.overflowModel,
+      detail: "Saved overflow model",
+    });
+  }
 
   function update(change: Partial<SubagentProfile>): void {
     onSubagent({ ...subagent, ...change });
@@ -76,7 +91,22 @@ export function AgentSettings({
 
   function selectModel(value: string): void {
     const [connectionId, model] = value.split("\n");
-    update({ providerConnectionId: connectionId ?? "", model: model ?? "" });
+    update({
+      modelMode: "fixed",
+      providerConnectionId: connectionId ?? "",
+      model: model ?? "",
+      ...(connectionId === subagent.overflowProviderConnectionId
+        ? { overflowProviderConnectionId: "", overflowModel: "" }
+        : {}),
+    });
+  }
+
+  function selectOverflowModel(value: string): void {
+    const [overflowProviderConnectionId, overflowModel] = value.split("\n");
+    update({
+      overflowProviderConnectionId: overflowProviderConnectionId ?? "",
+      overflowModel: overflowModel ?? "",
+    });
   }
 
   function selectImageModel(value: string): void {
@@ -156,30 +186,83 @@ export function AgentSettings({
               onChange={(event) => update({ enabled: event.target.checked })}
             />
           </label>
+          <label className="setting-field">
+            <span>
+              <strong>Use another model</strong>
+              <small>Otherwise subagents follow the model selected in each conversation.</small>
+            </span>
+            <input
+              className="selection-checkbox"
+              type="checkbox"
+              checked={subagent.modelMode === "fixed"}
+              onChange={(event) => update(event.target.checked
+                ? { modelMode: "fixed" }
+                : { modelMode: "main", providerConnectionId: "", model: "" })}
+            />
+          </label>
           <div className="setting-field">
             <span>
-              <strong>Model</strong>
-              <small>The provider and model used for delegated tasks.</small>
+              <strong>Subagent model</strong>
+              <small>Used for every delegated task when the override is enabled.</small>
             </span>
             <SearchPicker
               value={modelValue(subagent.providerConnectionId, subagent.model)}
-              disabled={!modelChoices.length}
+              disabled={subagent.modelMode !== "fixed" || !modelChoices.length}
               className="subagent-model-picker"
-              placeholder={modelChoices.length ? "Select model" : "No models available"}
+              placeholder={subagent.modelMode === "main"
+                ? "Uses main conversation model"
+                : modelChoices.length ? "Select model" : "No models available"}
               searchPlaceholder="Search providers and models…"
               options={subagentModelOptions}
               onChange={selectModel}
             />
           </div>
-          {selectedConnection ? (
+          {subagent.modelMode === "fixed" && selectedConnection ? (
             <p className="subagent-routing-summary">
-              Subagents use {selectedChoice?.modelName ?? subagent.model} through {selectedConnection.name}. Up to{" "}
-              {selectedConnection.requestLimit} {selectedConnection.requestLimit === 1 ? "request" : "requests"} share this
-              connection across the app. Busy behavior and any fallback model are configured under Providers.
+              Subagents use {selectedChoice?.modelName ?? subagent.model} through {selectedConnection.name}. This connection allows{" "}
+              {selectedConnection.requestLimit} parallel {selectedConnection.requestLimit === 1 ? "generation" : "generations"} across Snaffle.{" "}
+              Change this limit in Provider settings. Busy behavior and any overflow model are configured below.
             </p>
           ) : null}
           <details className="subagent-advanced">
             <summary>Advanced</summary>
+            <label className="setting-field">
+              <span>
+                <strong>When busy</strong>
+                <small>Wait for a generation slot, or send additional delegated work through another connection.</small>
+              </span>
+              <select
+                value={subagent.overflowProviderConnectionId && subagent.overflowModel ? "overflow" : "wait"}
+                onChange={(event) => {
+                  const overflow = overflowChoices[0];
+                  update(event.target.value === "overflow" && overflow
+                    ? {
+                        overflowProviderConnectionId: overflow.connectionId,
+                        overflowModel: overflow.modelId,
+                      }
+                    : { overflowProviderConnectionId: "", overflowModel: "" });
+                }}
+              >
+                <option value="wait">Wait for availability</option>
+                <option value="overflow" disabled={!overflowChoices.length}>Use overflow model</option>
+              </select>
+            </label>
+            {subagent.overflowProviderConnectionId && subagent.overflowModel ? (
+              <div className="setting-field">
+                <span>
+                  <strong>Overflow model</strong>
+                  <small>Used only for delegated tasks that start while the selected model is full.</small>
+                </span>
+                <SearchPicker
+                  value={modelValue(subagent.overflowProviderConnectionId, subagent.overflowModel)}
+                  className="subagent-model-picker"
+                  placeholder="Select overflow model"
+                  searchPlaceholder="Search providers and models…"
+                  options={overflowOptions}
+                  onChange={selectOverflowModel}
+                />
+              </div>
+            ) : null}
             <NumberSetting
               label="Maximum subagent turns"
               description="Maximum turns for one delegated task, from 0 to 250. Zero disables delegation."

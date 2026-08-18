@@ -814,6 +814,15 @@ html[data-accented-theme="true"] .thread-row.selected .thread-fork-marker {
   transition: opacity 120ms ease;
 }
 
+.sidebar-update-dot {
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 5px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
 .sidebar-action:hover .sidebar-shortcut,
 .sidebar-action:focus-visible .sidebar-shortcut {
   opacity: 1;

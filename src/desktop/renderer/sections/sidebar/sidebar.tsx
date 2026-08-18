@@ -7,13 +7,13 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { PROJECT } from "../../../../identity.js";
-import type { DesktopState, DesktopThread, DesktopWorkspace } from "../../../api.js";
+import type { DesktopState, DesktopThread, DesktopUpdateState, DesktopWorkspace } from "../../../api.js";
 import type { BookmarksPage } from "../../screens/bookmarks/bookmarks.js";
 import { ThinkingOrb } from "../../components/thinking-orb.js";
 import { SidebarContextMenu, type SidebarContextMenuItem } from "./context-menu.js";
 
 export type AppView = "conversation" | "saved" | "search" | "settings";
-export type SettingsPage = "appearance" | "providers" | "editor" | "agent" | "model" | "context" | "web" | "mcp";
+export type SettingsPage = "appearance" | "providers" | "editor" | "agent" | "model" | "context" | "web" | "mcp" | "updates";
 
 type SidebarMenu =
   | { kind: "thread"; top: number; left: number; thread: DesktopThread; workspaceId: string }
@@ -24,6 +24,7 @@ export function Sidebar({
   runningThreadIds,
   view,
   settingsPage,
+  updateState,
   bookmarksPage,
   collapsed,
   beforeNavigate,
@@ -42,6 +43,7 @@ export function Sidebar({
   runningThreadIds: string[];
   view: AppView;
   settingsPage: SettingsPage;
+  updateState: DesktopUpdateState;
   bookmarksPage: BookmarksPage;
   collapsed: boolean;
   beforeNavigate: () => Promise<void>;
@@ -73,6 +75,7 @@ export function Sidebar({
   const threadList = useRef<HTMLDivElement>(null);
   const promotedWorkspaceId = useRef(state.workspace?.id);
   const isRunning = (threadId: string): boolean => runningThreadIds.includes(threadId);
+  const updatePending = ["available", "downloading", "ready"].includes(updateState.status);
   const threads = state.workspace?.threads ?? [];
   const promotedThread = threads.find((thread) => thread.id === promotedThreadId);
   const orderedThreads = promotedThread
@@ -443,6 +446,14 @@ export function Sidebar({
             >
               <span>MCP</span>
             </button>
+            <button
+              className={settingsPage === "updates" ? "sidebar-action active" : "sidebar-action"}
+              type="button"
+              onClick={() => onSettingsPage("updates")}
+            >
+              <span>Updates</span>
+              {updatePending ? <span className="sidebar-update-dot" aria-label="Update available" /> : null}
+            </button>
             <div className="settings-navigation-space" aria-hidden="true" />
           </>
         ) : view === "saved" ? (
@@ -681,6 +692,7 @@ export function Sidebar({
             >
               <span className="sidebar-settings-icon" aria-hidden="true">⚙</span>
               <span>Settings</span>
+              {updatePending ? <span className="sidebar-update-dot" aria-label="Update available" /> : null}
             </button>
           </>
         )}

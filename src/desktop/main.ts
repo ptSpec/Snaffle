@@ -45,6 +45,7 @@ import {
   DEFAULT_PROVIDER_RETRIES,
   DEFAULT_PROVIDER_TIMEOUT_MS,
 } from "../providers/openai-compatible.js";
+import { isReasoningEffort } from "../providers/provider.js";
 import type { RunEvent } from "../protocol.js";
 import { probeNativeSandbox } from "../execution/native/sandbox.js";
 import { defaultTools } from "../tools/built-ins.js";
@@ -91,6 +92,7 @@ import { applicationIcon, createDesktopWindow } from "./window.js";
 import { installDesktopMenu } from "./menu.js";
 import { configureDesktopIdentity, migrateLegacyUserData } from "./identity-migration.js";
 import { ProviderConnections } from "./provider-connections.js";
+import { registerUpdateIpc, type DesktopUpdates } from "./updates.js";
 import { SkillRegistry, skillTool } from "../extensions/skills/index.js";
 
 const userDataMigration = configureDesktopIdentity();
@@ -106,6 +108,7 @@ let runs: RunIpc;
 let contextCompactor: ContextCompactor;
 let providerConnections: ProviderConnections;
 let terminals: ReturnType<typeof registerTerminalIpc>;
+let updates: DesktopUpdates;
 const mcpManager = new McpManager();
 let configuredMcpServers: McpServerConfig[] = [];
 let activeTheme: Theme = DEFAULT_THEME;
@@ -168,6 +171,14 @@ async function start(): Promise<void> {
   providerTimeoutMinutes = validProviderTimeout(settings.providerTimeoutMinutes) ?? providerTimeoutMinutes;
   providerRetries = validProviderRetries(settings.providerRetries) ?? DEFAULT_PROVIDER_RETRIES;
   subagent = subagentProfile(settings.subagent);
+  const savedOverflow = legacyConnectionOverflow(settings.providerConnections, subagent.providerConnectionId);
+  if (!subagent.overflowProviderConnectionId && savedOverflow) {
+    subagent = {
+      ...subagent,
+      overflowProviderConnectionId: savedOverflow.connectionId,
+      overflowModel: savedOverflow.model,
+    };
+  }
   compactionMode = settings.compactionMode === "custom" ? "custom" : "automatic";
   customCompactionThreshold = validCompactionThreshold(settings.compactionThreshold) ?? DEFAULT_COMPACTION_THRESHOLD;
   selectedModel = typeof settings.selectedModel === "string" ? settings.selectedModel : DEVELOPMENT_MODEL;
@@ -181,12 +192,11 @@ async function start(): Promise<void> {
       deepseek: process.env.DEEPSEEK_API_KEY ?? "",
     },
     legacyRequestLimits(settings.subagent, subagent.providerConnectionId),
-    legacyFallbacks(settings.subagent, subagent.providerConnectionId),
   );
   configuredMcpServers = loadMcpSecrets(mcpServers(settings.mcpServers));
   mcpEnabled = settings.mcpEnabled !== false;
   mcpManager.configure(configuredMcpServers);
-  if (hasLegacySubagentRouting(settings.subagent)) {
+  if (hasLegacySubagentLimit(settings.subagent) || savedOverflow) {
     saveSettings({ providerConnections: providerConnections.serialize(), subagent });
   }
   try {
@@ -232,6 +242,7 @@ async function start(): Promise<void> {
   }
   registerIpc();
   createWindow();
+  updates.start();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -266,12 +277,13 @@ function registerIpc(): void {
     compactor: contextCompactor,
     state: desktopState,
     capabilities: currentCapabilities,
-    provider: (connectionId, model, resolveAttachment) => createProvider(
+    provider: (connectionId, model, resolveAttachment, reasoningEffort) => createProvider(
       providerConnections.resolve(connectionId),
       model,
       {
         streamIdleTimeoutMs: providerTimeoutMinutes * 60_000,
         maxRetries: providerRetries,
+        ...(reasoningEffort ? { reasoningEffort } : {}),
         resolveAttachment,
       },
     ),
@@ -316,6 +328,14 @@ function registerIpc(): void {
     state: desktopState,
   });
   terminals = registerTerminalIpc({ store, mainWindow: () => mainWindow });
+  updates = registerUpdateIpc({
+    send: (state) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.webContents.send("desktop:update-state", state);
+      }
+    },
+    canRestart: () => runs.runningThreadIds().length === 0,
+  });
   registerWorkspaceIpc({
     store,
     state: desktopState,
@@ -446,6 +466,7 @@ function registerIpc(): void {
     threadId: unknown,
     connectionValue: unknown,
     value: unknown,
+    reasoningValue: unknown,
   ): Promise<void> => {
     if (threadId !== null && (typeof threadId !== "string" || !threadId)) {
       throw new Error("Thread ID must be text");
@@ -453,7 +474,11 @@ function registerIpc(): void {
     const connectionId = parseId(connectionValue, "Provider connection");
     providerConnections.resolve(connectionId);
     if (typeof value !== "string") throw new Error("Model must be text");
-    if (threadId) await store.setThreadModel(threadId, connectionId, value);
+    if (reasoningValue !== "" && reasoningValue !== undefined && !isReasoningEffort(reasoningValue)) {
+      throw new Error("Invalid reasoning effort");
+    }
+    const reasoningEffort = isReasoningEffort(reasoningValue) ? reasoningValue : "";
+    if (threadId) await store.setThreadModel(threadId, connectionId, value, reasoningEffort);
     selectedProviderConnectionId = connectionId;
     selectedModel = value;
     saveSettings({ selectedModel, selectedProviderConnectionId });
@@ -499,7 +524,12 @@ function registerIpc(): void {
 
   ipcMain.handle("desktop:set-subagent", (_event, value: unknown): void => {
     const next = subagentProfile(value);
-    if (next.providerConnectionId) providerConnections.resolve(next.providerConnectionId);
+    if (next.modelMode === "fixed" && next.providerConnectionId) {
+      providerConnections.resolve(next.providerConnectionId);
+    }
+    if (next.overflowProviderConnectionId) {
+      providerConnections.resolve(next.overflowProviderConnectionId);
+    }
     subagent = next;
     saveSettings({ subagent });
   });
@@ -868,28 +898,25 @@ function hasLegacySubagentLimit(value: unknown): boolean {
     Number.isInteger((value as Record<string, unknown>).localConcurrency));
 }
 
-function hasLegacySubagentRouting(value: unknown): boolean {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const profile = value as Record<string, unknown>;
-  return hasLegacySubagentLimit(value) || typeof profile.overflowProviderConnectionId === "string";
-}
-
 function legacyRequestLimits(value: unknown, connectionId: string): Record<string, number> {
   if (!connectionId || !hasLegacySubagentLimit(value)) return {};
   const limit = Number((value as Record<string, unknown>).localConcurrency);
   return limit >= 1 && limit <= 16 ? { [connectionId]: limit } : {};
 }
 
-function legacyFallbacks(
+function legacyConnectionOverflow(
   value: unknown,
   connectionId: string,
-): Record<string, { connectionId: string; model: string }> {
-  if (!connectionId || !value || typeof value !== "object" || Array.isArray(value)) return {};
-  const profile = value as Record<string, unknown>;
-  if (typeof profile.overflowProviderConnectionId !== "string" ||
-      typeof profile.overflowModel !== "string" ||
-      !profile.overflowProviderConnectionId || !profile.overflowModel) return {};
-  return { [connectionId]: { connectionId: profile.overflowProviderConnectionId, model: profile.overflowModel } };
+): { connectionId: string; model: string } | null {
+  if (!connectionId || !Array.isArray(value)) return null;
+  const connection = value.find((item) => item && typeof item === "object" && !Array.isArray(item) &&
+    (item as Record<string, unknown>).id === connectionId) as Record<string, unknown> | undefined;
+  const overflowConnectionId = connection?.fallbackProviderConnectionId;
+  const overflowModel = connection?.fallbackModel;
+  return typeof overflowConnectionId === "string" && overflowConnectionId &&
+      typeof overflowModel === "string" && overflowModel
+    ? { connectionId: overflowConnectionId, model: overflowModel }
+    : null;
 }
 
 function parseId(value: unknown, label: string): string {
@@ -981,6 +1008,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  updates?.dispose();
   runs?.stopAll();
   terminals?.closeAll();
   void mcpManager.close();

@@ -1,9 +1,11 @@
 import type { AttachmentPreview, AttachmentRef } from "../attachments/types.js";
 import type {
   ProviderCatalog,
+  ProviderAllowance,
   ProviderConnection,
   ProviderConnectionInput,
   ProviderStatus,
+  ReasoningEffort,
 } from "../providers/provider.js";
 import type { CommandApprovalDecision, Message, RunEvent, ToolSpec } from "../protocol.js";
 import type { FontId } from "./typography.js";
@@ -17,8 +19,10 @@ import type { McpServerConfig, McpServerStatus } from "../mcp/types.js";
 import type { SkillSummary } from "../extensions/skills/types.js";
 import type { ImageUnderstandingProfile } from "../attachments/vision.js";
 import type { ModelToolSurface, ModelToolSurfaces } from "../capabilities/surface.js";
+import type { DesktopUpdateState } from "./updates.js";
 
 export type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents } from "../git/types.js";
+export type { DesktopUpdateState } from "./updates.js";
 
 export type DesktopThread = {
   id: string;
@@ -27,6 +31,7 @@ export type DesktopThread = {
   draft: string;
   model: string | null;
   providerConnectionId: string;
+  reasoningEffort: ReasoningEffort | "";
   bookmarked: boolean;
   sourceThreadId: string | null;
   sourceEntryId: string | null;
@@ -159,6 +164,7 @@ export type StartRunInput = {
   task: string;
   model: string;
   providerConnectionId: string;
+  reasoningEffort?: ReasoningEffort;
   contextLength: number;
   imageInputSupported: boolean;
   attachments?: AttachmentRef[];
@@ -183,6 +189,9 @@ export type DesktopTerminalExitEvent = {
 export interface DesktopApi {
   platform: string;
   getState(): Promise<DesktopState>;
+  getUpdateState(): Promise<DesktopUpdateState>;
+  checkForUpdates(): Promise<DesktopUpdateState>;
+  applyUpdate(): Promise<void>;
   completeOnboarding(): Promise<void>;
   chooseWorkspace(): Promise<DesktopState | null>;
   selectWorkspace(workspaceId: string): Promise<DesktopState>;
@@ -198,13 +207,19 @@ export interface DesktopApi {
   searchConversations(query: string): Promise<DesktopSearchResult[]>;
   listProviderModels(): Promise<ProviderCatalog[]>;
   getProviderStatus(input: ProviderConnectionInput): Promise<ProviderStatus>;
+  getProviderAllowance(connectionId: string): Promise<ProviderAllowance | null>;
   saveProviderConnection(input: ProviderConnectionInput): Promise<DesktopState>;
   removeProviderConnection(connectionId: string): Promise<DesktopState>;
   setMcpEnabled(enabled: boolean): Promise<DesktopState>;
   saveMcpServer(server: McpServerConfig): Promise<DesktopState>;
   removeMcpServer(id: string): Promise<DesktopState>;
   testMcpServer(server: McpServerConfig): Promise<McpServerStatus>;
-  setSelectedModel(threadId: string | null, connectionId: string, model: string): Promise<void>;
+  setSelectedModel(
+    threadId: string | null,
+    connectionId: string,
+    model: string,
+    reasoningEffort?: ReasoningEffort,
+  ): Promise<void>;
   chooseAttachments(): Promise<AttachmentPreview[]>;
   importDroppedFiles(files: File[]): Promise<AttachmentPreview[]>;
   importClipboardImage(): Promise<AttachmentPreview>;
@@ -259,6 +274,7 @@ export interface DesktopApi {
   resizeTerminal(workspaceId: string, columns: number, rows: number): Promise<void>;
   closeTerminal(workspaceId: string): Promise<void>;
   onRunEvent(listener: (event: DesktopRunEvent) => void): () => void;
+  onUpdateState(listener: (state: DesktopUpdateState) => void): () => void;
   onTerminalData(listener: (event: DesktopTerminalDataEvent) => void): () => void;
   onTerminalExit(listener: (event: DesktopTerminalExitEvent) => void): () => void;
 }
