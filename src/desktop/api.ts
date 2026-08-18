@@ -99,6 +99,7 @@ export type KeptAsideMessage = {
 export const MAX_KEPT_ASIDE_MESSAGES = 3;
 
 export type DesktopState = {
+  onboardingComplete: boolean;
   workspace: DesktopWorkspace | null;
   workspaces: DesktopWorkspace[];
   activeThreadId: string | null;
@@ -182,6 +183,7 @@ export type DesktopTerminalExitEvent = {
 export interface DesktopApi {
   platform: string;
   getState(): Promise<DesktopState>;
+  completeOnboarding(): Promise<void>;
   chooseWorkspace(): Promise<DesktopState | null>;
   selectWorkspace(workspaceId: string): Promise<DesktopState>;
   createThread(workspaceId: string): Promise<DesktopState>;

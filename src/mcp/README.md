@@ -5,9 +5,14 @@ The model searches the cached catalogs only when it needs an external capability
 then calls the selected tool through the same broker. This keeps large MCP tool
 collections out of every model request.
 
+## Start here
+
 - `types.ts` owns the small persisted server configuration.
+- `import.ts` parses supported external configuration shapes into review drafts.
 - `manager.ts` owns transports, negotiated connections, catalogs, and execution.
 - `tool.ts` adapts the manager to Snaffle's ordinary tool interface.
+
+## Behavior and invariants
 
 Local servers may receive environment variables; remote servers may receive
 arbitrary HTTP headers. Individual values can be marked secret, which stores

@@ -20,6 +20,7 @@ import type { ModelToolSurface } from "../capabilities/surface.js";
 const api: DesktopApi = {
   platform: process.platform,
   getState: () => ipcRenderer.invoke("desktop:get-state"),
+  completeOnboarding: () => ipcRenderer.invoke("desktop:complete-onboarding"),
   chooseWorkspace: () => ipcRenderer.invoke("desktop:choose-workspace"),
   selectWorkspace: (workspaceId: string) =>
     ipcRenderer.invoke("desktop:select-workspace", workspaceId),
