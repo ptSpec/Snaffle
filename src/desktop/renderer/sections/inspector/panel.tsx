@@ -43,10 +43,26 @@ export function InspectorPanel({
 }): JSX.Element {
   const contentRef = useRef<HTMLDivElement>(null);
   const overviewScrollTop = useRef(0);
+  const followLiveRun = useRef(true);
+  const wasRunning = useRef(false);
 
   useLayoutEffect(() => {
     if (!selectedItem && contentRef.current) contentRef.current.scrollTop = overviewScrollTop.current;
   }, [selectedItem]);
+
+  useLayoutEffect(() => {
+    if (running && !wasRunning.current) followLiveRun.current = true;
+    wasRunning.current = running;
+    if (running && !selectedItem && tab === "inspect" && followLiveRun.current && contentRef.current) {
+      contentRef.current.scrollTop = contentRef.current.scrollHeight;
+    }
+  }, [running, selectedItem, tab, timeline]);
+
+  function trackOverviewScroll(): void {
+    const content = contentRef.current;
+    if (!content || !running || selectedItem || tab !== "inspect") return;
+    followLiveRun.current = content.scrollHeight - content.scrollTop - content.clientHeight < 48;
+  }
 
   const selectFromOverview = (id: string): void => {
     overviewScrollTop.current = contentRef.current?.scrollTop ?? 0;
@@ -66,7 +82,7 @@ export function InspectorPanel({
       </div>
 
       {tab === "inspect" ? (
-        <div className="inspector-content" ref={contentRef}>
+        <div className="inspector-content" ref={contentRef} onScroll={trackOverviewScroll}>
           {selectedItem ? (
             <div className="inspector-view inspector-view-detail">
               <button className="execution-back" type="button" onClick={() => onSelect(null)}>

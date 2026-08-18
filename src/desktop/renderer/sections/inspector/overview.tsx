@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   SubagentActivity,
   SubagentProfileName,
@@ -44,8 +44,13 @@ export function ExecutionOverview({
 }): JSX.Element {
   const [disclosureCommand, setDisclosureCommand] = useState<{ id: number; open: boolean } | null>(null);
   const turns = executionTurns(timeline);
+  const latestTurnId = turns.at(-1)?.id;
   const threadUsage = sumUsage(turns.map((turn) => turn.usage));
   const completeCacheData = turns.every((turn) => !(turn.usage.inputTokens ?? 0) || turn.cacheAvailable);
+
+  useEffect(() => {
+    if (running) setDisclosureCommand(null);
+  }, [latestTurnId, running]);
 
   return (
     <div className="execution-overview">
@@ -136,6 +141,7 @@ function TurnOverview({
   disclosureCommand: { id: number; open: boolean } | null;
 }): JSX.Element {
   const [open, setOpen] = useState(running);
+  const userControlled = useRef(false);
   const items = flatten(turn.items);
   const events = executionEvents(items);
   const tools = events.flatMap((event) => event.type === "tool" ? [event.item] : []);
@@ -155,15 +161,19 @@ function TurnOverview({
   const usage = turn.usage;
 
   useEffect(() => {
-    if (running) setOpen(true);
+    if (!userControlled.current) setOpen(running);
   }, [running]);
 
   useEffect(() => {
-    if (disclosureCommand) setOpen(disclosureCommand.open);
+    if (disclosureCommand) {
+      userControlled.current = true;
+      setOpen(disclosureCommand.open);
+    }
   }, [disclosureCommand]);
 
   function toggleOpen(): void {
-    if (!running) setOpen((current) => !current);
+    userControlled.current = true;
+    setOpen((current) => !current);
     onNavigate(turn.id);
   }
 
