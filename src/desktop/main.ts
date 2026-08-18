@@ -136,6 +136,7 @@ let disabledTools: string[] = [];
 let modelToolSurfaces: ModelToolSurfaces = {};
 let mcpEnabled = true;
 let imageUnderstanding: ImageUnderstandingProfile = imageUnderstandingProfile(undefined);
+let onboardingComplete = true;
 
 
 async function start(): Promise<void> {
@@ -143,6 +144,12 @@ async function start(): Promise<void> {
   migrateLegacyUserData(userDataMigration);
   installDesktopMenu(development);
   const settings = loadSettings(settingsPath());
+  onboardingComplete = typeof settings.onboardingComplete === "boolean"
+    ? settings.onboardingComplete
+    : Object.keys(settings).length > 0;
+  if (typeof settings.onboardingComplete !== "boolean") {
+    saveSettings({ onboardingComplete });
+  }
   activeTheme =
     typeof settings.themeId === "string"
       ? themeById(settings.themeId) ?? DEFAULT_THEME
@@ -324,6 +331,10 @@ function registerIpc(): void {
   registerSavedMessageIpc(store, desktopState);
   registerSearchIpc(store);
   ipcMain.handle("desktop:get-state", (): Promise<DesktopState> => desktopState());
+  ipcMain.handle("desktop:complete-onboarding", (): void => {
+    onboardingComplete = true;
+    saveSettings({ onboardingComplete });
+  });
 
   ipcMain.handle("desktop:get-context-report", async (
     _event,
@@ -606,6 +617,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     state.workspaces.find((item) => item.id === state.activeWorkspaceId) ?? null;
   const activeThread = workspace?.threads.find((thread) => thread.id === state.activeThreadId);
   return {
+    onboardingComplete,
     workspace,
     workspaces: state.workspaces,
     activeThreadId: state.activeThreadId,

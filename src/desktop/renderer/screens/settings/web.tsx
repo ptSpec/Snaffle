@@ -108,7 +108,7 @@ export function WebSettings({
   );
 }
 
-const WEB_BACKENDS: {
+export const WEB_BACKENDS: {
   id: WebSearchBackend;
   label: string;
   description: string;

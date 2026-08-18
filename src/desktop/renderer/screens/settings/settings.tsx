@@ -84,6 +84,7 @@ export function Settings({
   onTestMcpServer,
   onSystemPrompt,
   onToolEnabled,
+  onOpenOnboarding,
 }: {
   page: SettingsPage;
   themeId: string;
@@ -144,6 +145,7 @@ export function Settings({
   onTestMcpServer(server: McpServerConfig): Promise<McpServerStatus>;
   onSystemPrompt(prompt: string): void;
   onToolEnabled(name: string, enabled: boolean): void;
+  onOpenOnboarding(): void;
 }): JSX.Element {
   const themePicker = useRef<HTMLDetailsElement>(null);
 
@@ -361,6 +363,14 @@ export function Settings({
             />
           </section>
         </div>
+
+        <section className="setup-again">
+          <span>
+            <strong>Setup guide</strong>
+            <small>Review your model, theme, web, and subagent choices without resetting anything.</small>
+          </span>
+          <button type="button" onClick={onOpenOnboarding}>Run setup again</button>
+        </section>
 
         {error ? <p className="settings-error">{error}</p> : null}
       </div>
