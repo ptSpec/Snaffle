@@ -7,12 +7,8 @@ import type {
 } from "../../../../providers/provider.js";
 import { applyModelVariant, splitModelVariant } from "../../../../providers/profiles.js";
 
-// Temporary visual QA. Remove after the allowance treatment is approved.
-const PREVIEW_OPENCODE_ALLOWANCE = true;
-
 export type ModelProvider = {
   id: string;
-  providerType: string;
   name: string;
   mark?: ReactNode;
   logo?: boolean;
@@ -102,8 +98,7 @@ export function ModelPicker({
     setVariantOpen(false);
   }
 
-  const displayedAllowance = developmentAllowance(selectedProvider?.providerType, allowance);
-  const allowanceSeverity = providerAllowanceSeverity(displayedAllowance);
+  const allowanceSeverity = providerAllowanceSeverity(allowance);
   const providerMarkClass = [
     "model-provider-mark",
     selectedProvider?.logo ? "logo" : "",
@@ -116,7 +111,7 @@ export function ModelPicker({
         <button
           className={providerMarkClass}
           type="button"
-          title={providerAllowanceTitle(selectedProvider.name, displayedAllowance)}
+          title={providerAllowanceTitle(selectedProvider.name, allowance)}
           aria-label={`${selectedProvider.name} allowance`}
           aria-expanded={allowanceOpen}
           onClick={() => {
@@ -234,9 +229,9 @@ export function ModelPicker({
             <strong>{selectedProvider.name} allowance</strong>
             <small>Current usage across this connection&apos;s limits.</small>
           </div>
-          {displayedAllowance === undefined ? <p>Checking allowance…</p> : null}
-          {displayedAllowance === null ? <p>Allowance is currently unavailable.</p> : null}
-          {displayedAllowance?.items.map((item) => (
+          {allowance === undefined ? <p>Checking allowance…</p> : null}
+          {allowance === null ? <p>Allowance is currently unavailable.</p> : null}
+          {allowance?.items.map((item) => (
             <AllowanceRow item={item} key={item.label} />
           ))}
         </FloatingMenu>
@@ -309,23 +304,6 @@ function AllowanceRow({ item }: { item: ProviderAllowanceItem }): JSX.Element {
       ) : null}
     </div>
   );
-}
-
-function developmentAllowance(
-  providerType: string | undefined,
-  allowance: ProviderAllowance | null | undefined,
-): ProviderAllowance | null | undefined {
-  if (!PREVIEW_OPENCODE_ALLOWANCE || providerType !== "opencode-go" || !allowance) return allowance;
-  const preview = [35, 62, 99];
-  return {
-    items: allowance.items.map((item, index) => {
-      const usedPercent = preview[index] ?? item.usedPercent;
-      return {
-        ...item,
-        ...(usedPercent === undefined ? {} : { usedPercent }),
-      };
-    }),
-  };
 }
 
 function providerAllowanceSeverity(allowance?: ProviderAllowance | null): "warning" | "critical" | "" {

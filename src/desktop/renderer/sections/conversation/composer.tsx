@@ -125,7 +125,6 @@ export function Composer({
               const visual = providerVisual(connection.baseUrl, connection.providerId);
               return {
                 id: connection.id,
-                providerType: connection.providerId,
                 name: connection.name,
                 mark: visual.mark,
                 logo: visual.logo,
