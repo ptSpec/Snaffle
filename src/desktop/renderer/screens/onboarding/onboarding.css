@@ -253,34 +253,18 @@
   height: 38px;
   padding: 0 11px;
   color: var(--text-primary);
-  background: var(--input-background);
   border: 1px solid var(--border-default);
   border-radius: 9px;
   outline: none;
 }
 
+.onboarding-field input,
+.onboarding-key-row input {
+  background: var(--input-background);
+}
+
 .onboarding-field select {
-  appearance: none;
-  padding-right: 34px;
-}
-
-.onboarding-field label:has(> select),
-label.onboarding-field:has(> select) {
-  position: relative;
-}
-
-.onboarding-field label:has(> select)::after,
-label.onboarding-field:has(> select)::after {
-  position: absolute;
-  right: 15px;
-  bottom: 16px;
-  width: 7px;
-  height: 7px;
-  content: "";
-  pointer-events: none;
-  border-right: 2px solid var(--text-muted);
-  border-bottom: 2px solid var(--text-muted);
-  transform: rotate(45deg);
+  padding: 0 34px 0 11px;
 }
 
 .onboarding-field input:focus,

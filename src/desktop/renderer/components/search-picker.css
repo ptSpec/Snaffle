@@ -10,10 +10,12 @@
   gap: 12px;
   width: 100%;
   min-width: 0;
+  height: 36px;
+  padding: 0 10px;
   color: var(--text-strong);
   text-align: left;
-  background: transparent;
-  border: 1px solid transparent;
+  background: var(--input-background);
+  border: 1px solid var(--border-default);
   border-radius: 7px;
 }
 
@@ -21,6 +23,11 @@
 .search-picker-trigger[aria-expanded="true"] {
   background: var(--hover-background);
   border-color: var(--border-default);
+}
+
+.search-picker-trigger:focus-visible {
+  border-color: var(--border-focus);
+  outline: none;
 }
 
 .search-picker-trigger > span {
