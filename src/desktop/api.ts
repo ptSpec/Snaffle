@@ -5,6 +5,7 @@ import type {
   ProviderConnection,
   ProviderConnectionInput,
   ProviderStatus,
+  ReasoningEffort,
 } from "../providers/provider.js";
 import type { CommandApprovalDecision, Message, RunEvent, ToolSpec } from "../protocol.js";
 import type { FontId } from "./typography.js";
@@ -28,6 +29,7 @@ export type DesktopThread = {
   draft: string;
   model: string | null;
   providerConnectionId: string;
+  reasoningEffort: ReasoningEffort | "";
   bookmarked: boolean;
   sourceThreadId: string | null;
   sourceEntryId: string | null;
@@ -160,6 +162,7 @@ export type StartRunInput = {
   task: string;
   model: string;
   providerConnectionId: string;
+  reasoningEffort?: ReasoningEffort;
   contextLength: number;
   imageInputSupported: boolean;
   attachments?: AttachmentRef[];
@@ -206,7 +209,12 @@ export interface DesktopApi {
   saveMcpServer(server: McpServerConfig): Promise<DesktopState>;
   removeMcpServer(id: string): Promise<DesktopState>;
   testMcpServer(server: McpServerConfig): Promise<McpServerStatus>;
-  setSelectedModel(threadId: string | null, connectionId: string, model: string): Promise<void>;
+  setSelectedModel(
+    threadId: string | null,
+    connectionId: string,
+    model: string,
+    reasoningEffort?: ReasoningEffort,
+  ): Promise<void>;
   chooseAttachments(): Promise<AttachmentPreview[]>;
   importDroppedFiles(files: File[]): Promise<AttachmentPreview[]>;
   importClipboardImage(): Promise<AttachmentPreview>;

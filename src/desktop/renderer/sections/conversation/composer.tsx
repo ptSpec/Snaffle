@@ -5,7 +5,11 @@ import type {
   RefObject,
 } from "react";
 import { useEffect, useRef } from "react";
-import type { ProviderAllowance, ProviderCatalog } from "../../../../providers/provider.js";
+import type {
+  ProviderAllowance,
+  ProviderCatalog,
+  ReasoningEffort,
+} from "../../../../providers/provider.js";
 import { providerProfile } from "../../../../providers/profiles.js";
 import type { ContextReport } from "../../../../context/report.js";
 import { ThinkingOrb, type OrbMotion } from "../../components/thinking-orb.js";
@@ -26,6 +30,7 @@ export function Composer({
   models,
   selectedProviderConnectionId,
   selectedModel,
+  reasoningEffort,
   providerAllowance,
   toolSurface,
   activeToolNames,
@@ -50,6 +55,7 @@ export function Composer({
   onPasteMarkdown,
   onChooseAttachments,
   onModel,
+  onReasoningEffort,
   onProviderAllowance,
   onToolSurface,
   onCompact,
@@ -130,15 +136,21 @@ export function Composer({
                 logo: visual.logo,
                 providesAllowance: Boolean(providerProfile(connection.providerId).providesAllowance),
                 variants: providerProfile(connection.providerId).modelVariants ?? [],
-                models: models.map((model) => ({ value: model.id, label: model.name })),
+                models: models.map((model) => ({
+                  value: model.id,
+                  label: model.name,
+                  ...(model.reasoning ? { reasoning: model.reasoning } : {}),
+                })),
               };
             })}
             placeholder={loadingModels ? "Loading models…" : "Select model"}
             searchPlaceholder="Search models…"
             disabled={loadingModels || !providerAvailable || running}
             allowance={providerAllowance}
+            reasoningEffort={reasoningEffort}
             onAllowance={onProviderAllowance}
             onChange={onModel}
+            onReasoningEffort={onReasoningEffort}
           />
           <ContextGauge
             report={contextReport}
@@ -340,6 +352,7 @@ type ComposerProps = {
   models: ProviderCatalog[];
   selectedProviderConnectionId: string;
   selectedModel: string;
+  reasoningEffort: ReasoningEffort | "";
   providerAllowance: ProviderAllowance | null | undefined;
   toolSurface: ModelToolSurface;
   activeToolNames: string[];
@@ -364,6 +377,7 @@ type ComposerProps = {
   onPasteMarkdown(): void;
   onChooseAttachments(): void;
   onModel(providerConnectionId: string, value: string): void;
+  onReasoningEffort(value: ReasoningEffort | ""): void;
   onProviderAllowance(): void;
   onToolSurface(surface: ModelToolSurface): void;
   onCompact(): void;

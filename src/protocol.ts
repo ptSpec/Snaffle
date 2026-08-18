@@ -124,7 +124,7 @@ export type RunEvent =
   | { type: "model.delta"; step: number; text: string }
   | { type: "model.reasoning.delta"; step: number; text: string }
   | { type: "model.tool.delta"; step: number; index: number; name: string; argumentChars: number }
-  | { type: "model.retry"; step: number; attempt: number; maxRetries: number; message: string }
+  | { type: "model.retry"; step: number; attempt: number; maxRetries: number; message: string; delayMs: number }
   | { type: "permission.requested"; id: string; command: string; cwd: string; reason: string }
   | { type: "permission.resolved"; id: string; decision: CommandApprovalDecision }
   | { type: "model.completed"; step: number; sequence: number; model: string; providerId: string; providerConnectionId: string; durationMs: number; response: ModelResponse }

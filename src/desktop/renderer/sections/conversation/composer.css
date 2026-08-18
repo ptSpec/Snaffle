@@ -639,6 +639,22 @@ html[data-appearance="light"] .model-provider-mark.logo.allowance-critical::afte
   box-shadow: 0 10px 30px rgb(0 0 0 / 24%);
 }
 
+.model-option-group + .model-option-group {
+  margin-top: 5px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--border-default) 55%, transparent);
+}
+
+.model-option-group > strong {
+  display: block;
+  padding: 3px 9px 4px;
+  color: var(--text-muted);
+  font-size: calc(9px * var(--interface-font-scale));
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .provider-allowance-menu {
   position: fixed;
   z-index: 32;

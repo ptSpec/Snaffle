@@ -4,6 +4,22 @@ import type { Message, ModelResponse, ToolSpec } from "../protocol.js";
 export const DEFAULT_MODEL_CONTEXT_LENGTH = 128_000;
 export const DEFAULT_PROVIDER_REQUEST_LIMIT = 1;
 
+export const REASONING_EFFORTS = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
+
+export type ReasoningEffort = typeof REASONING_EFFORTS[number];
+
+export type ProviderModelReasoning = {
+  efforts: ReasoningEffort[];
+};
+
 export type ProviderModel = {
   id: string;
   name: string;
@@ -11,6 +27,7 @@ export type ProviderModel = {
   inputModalities: string[];
   promptPrice?: string | null;
   completionPrice?: string | null;
+  reasoning?: ProviderModelReasoning;
 };
 
 export type ProviderConnection = {
@@ -67,8 +84,13 @@ export type ProviderCatalog = {
 export type ProviderRuntimeOptions = {
   streamIdleTimeoutMs?: number;
   maxRetries?: number;
+  reasoningEffort?: ReasoningEffort;
   resolveAttachment?: (attachment: AttachmentRef) => Promise<ResolvedAttachment>;
 };
+
+export function isReasoningEffort(value: unknown): value is ReasoningEffort {
+  return typeof value === "string" && REASONING_EFFORTS.includes(value as ReasoningEffort);
+}
 
 export type ProviderProfile = {
   id: string;
@@ -100,7 +122,7 @@ export type ModelStreamEvent =
   | { type: "text.delta"; text: string }
   | { type: "reasoning.delta"; text: string }
   | { type: "tool.delta"; index: number; name: string; argumentChars: number }
-  | { type: "retry"; attempt: number; maxRetries: number; message: string };
+  | { type: "retry"; attempt: number; maxRetries: number; message: string; delayMs: number };
 
 export interface ModelProvider {
   readonly model: string;

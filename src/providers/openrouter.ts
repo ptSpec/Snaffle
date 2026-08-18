@@ -2,8 +2,10 @@ import type { AttachmentRef, ResolvedAttachment } from "../attachments/types.js"
 import { OpenAICompatibleProvider } from "./openai-compatible.js";
 import {
   DEFAULT_MODEL_CONTEXT_LENGTH,
+  isReasoningEffort,
   type ProviderAllowanceItem,
   type ProviderModel,
+  type ProviderModelReasoning,
   type ProviderStatus,
 } from "./provider.js";
 
@@ -111,7 +113,24 @@ export async function listOpenRouterModels(
     promptPrice: model.pricing?.prompt ?? null,
     completionPrice: model.pricing?.completion ?? null,
     inputModalities: model.architecture?.input_modalities ?? ["text"],
+    ...openRouterReasoning(model),
   }));
+}
+
+function openRouterReasoning(
+  model: OpenRouterModelResponse,
+): { reasoning: ProviderModelReasoning } | Record<string, never> {
+  if (!model.supported_parameters?.some((parameter) =>
+    parameter === "reasoning" || parameter === "reasoning_effort"
+  )) return {};
+
+  const supported = model.reasoning?.supported_efforts?.filter(isReasoningEffort) ?? [];
+  const efforts = [
+    ...(model.reasoning?.mandatory === true ? [] : ["none" as const]),
+    ...supported,
+  ];
+  const unique = [...new Set(efforts)];
+  return unique.length ? { reasoning: { efforts: unique } } : {};
 }
 
 function supportsTools(model: OpenRouterModelResponse): boolean {
@@ -127,6 +146,10 @@ type OpenRouterModelResponse = {
     completion?: string;
   };
   supported_parameters?: string[];
+  reasoning?: {
+    mandatory?: boolean;
+    supported_efforts?: string[];
+  };
   architecture?: {
     input_modalities?: string[];
   };

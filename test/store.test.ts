@@ -172,7 +172,7 @@ test("forking a thread copies history through one message and preserves its sour
 
   await store.addWorkspace(root, "example");
   const sourceThreadId = (await store.state()).activeThreadId!;
-  await store.setThreadModel(sourceThreadId, "test", "test/model");
+  await store.setThreadModel(sourceThreadId, "test", "test/model", "high");
   await store.saveMessages(sourceThreadId, [
     { role: "system", content: "system" },
     { role: "user", content: "first" },
@@ -192,6 +192,7 @@ test("forking a thread copies history through one message and preserves its sour
   assert.equal(fork.sourceEntryId, sourceEntryId);
   assert.equal(fork.branchLabel, null);
   assert.equal(fork.model, "test/model");
+  assert.equal(fork.reasoningEffort, "high");
   assert.deepEqual((await store.messages(forkThreadId)).map((message) => message.content), [
     "system",
     "first",

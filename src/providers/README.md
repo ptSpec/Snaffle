@@ -22,6 +22,8 @@ Most hosted and local servers need no new provider code. llama.cpp, Ollama, LM S
 
 Add a definition only when a provider has a useful native capability, such as OpenRouter's catalog and allowance or DeepSeek's catalog and account balance. Normalize trustworthy provider allowance data through `ProviderStatus`; the UI must not infer quotas from ordinary request usage. If a future provider uses another inference protocol, implement its adapter here and register its small definition in `registry.ts`.
 
+Models may advertise normalized reasoning efforts through `ProviderModel.reasoning`. The composer shows only efforts the selected model is known to support; Default omits the setting entirely. Provider adapters translate a selected effort to their wire format. OpenCode Go keeps its live catalog authoritative and optionally enriches compatible models from Models.dev, degrading to no reasoning selector when that metadata is unavailable.
+
 Keep provider retry, stream parsing, catalog discovery, and usage normalization here. Keep agent behavior, tools, UI, and analytics provider-neutral. Secrets remain in the Electron main process and must not cross into the renderer.
 
 ## Capacity scheduling

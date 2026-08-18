@@ -3,7 +3,9 @@ import { createPortal } from "react-dom";
 import type {
   ProviderAllowance,
   ProviderAllowanceItem,
+  ProviderModelReasoning,
   ProviderModelVariant,
+  ReasoningEffort,
 } from "../../../../providers/provider.js";
 import { applyModelVariant, splitModelVariant } from "../../../../providers/profiles.js";
 
@@ -14,7 +16,11 @@ export type ModelProvider = {
   logo?: boolean;
   providesAllowance?: boolean;
   variants?: ProviderModelVariant[];
-  models: Array<{ value: string; label: string }>;
+  models: Array<{
+    value: string;
+    label: string;
+    reasoning?: ProviderModelReasoning;
+  }>;
 };
 
 export function ModelPicker({
@@ -25,8 +31,10 @@ export function ModelPicker({
   searchPlaceholder,
   disabled,
   allowance,
+  reasoningEffort,
   onAllowance,
   onChange,
+  onReasoningEffort,
 }: {
   value: string;
   providerId: string;
@@ -35,8 +43,10 @@ export function ModelPicker({
   searchPlaceholder: string;
   disabled?: boolean;
   allowance: ProviderAllowance | null | undefined;
+  reasoningEffort: ReasoningEffort | "";
   onAllowance(): void;
   onChange(providerId: string, value: string): void;
+  onReasoningEffort(value: ReasoningEffort | ""): void;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
   const [variantOpen, setVariantOpen] = useState(false);
@@ -49,8 +59,12 @@ export function ModelPicker({
   const selectedProvider = providers.find((provider) => provider.id === selectedProviderId)
     ?? providers[0];
   const selection = splitModelVariant(value, selectedProvider?.variants);
+  const selectedModel = selectedProvider?.models.find((model) => model.value === value) ??
+    selectedProvider?.models.find((model) => model.value === selection.baseModelId);
   const selectedVariant = selectedProvider?.variants?.find((variant) => variant.id === selection.variantId);
   const showVariants = Boolean(value && selection.routable && selectedProvider?.variants?.length);
+  const showReasoning = Boolean(selectedModel?.reasoning?.efforts.length);
+  const showOptions = showVariants || showReasoning;
   const showProviders = providers.length > 1;
   const matches = useMemo(() => {
     const search = query.trim().toLowerCase();
@@ -65,8 +79,8 @@ export function ModelPicker({
   }, [activeIndex]);
 
   useEffect(() => {
-    if (!showVariants) setVariantOpen(false);
-  }, [showVariants]);
+    if (!showOptions) setVariantOpen(false);
+  }, [showOptions]);
 
   useEffect(() => {
     if (!open && !variantOpen && !allowanceOpen) return;
@@ -170,8 +184,7 @@ export function ModelPicker({
               if (event.key !== "Enter") return;
               event.preventDefault();
               const match = matches[activeIndex];
-              const next = match?.value ?? query.trim();
-              if (next) choose(match?.provider.id ?? selectedProvider?.id ?? "", next);
+              if (match) choose(match.provider.id, match.value);
             }}
             placeholder={searchPlaceholder}
             aria-label={searchPlaceholder}
@@ -236,41 +249,87 @@ export function ModelPicker({
           ))}
         </FloatingMenu>
       ) : null}
-      <div className={showVariants ? "model-variant-picker visible" : "model-variant-picker"}>
+      <div className={showOptions ? "model-variant-picker visible" : "model-variant-picker"}>
           <button
             className="model-variant-trigger"
             type="button"
-            disabled={disabled || !showVariants}
-            title="Model routing"
-            aria-label={`Model routing: ${selectedVariant?.label ?? "Default"}`}
+            disabled={disabled || !showOptions}
+            title="Model options"
+            aria-label={`Model options: ${modelOptionLabel(reasoningEffort, selectedVariant?.label)}`}
             aria-expanded={variantOpen}
-            aria-hidden={!showVariants}
+            aria-hidden={!showOptions}
             onClick={() => {
               setOpen(false);
               setAllowanceOpen(false);
               setVariantOpen((current) => !current);
             }}
           >
-            <span>{selectedVariant?.label ?? "Default"}</span><PickerCaret />
+            <span>{modelOptionLabel(reasoningEffort, selectedVariant?.label)}</span><PickerCaret />
           </button>
-          {showVariants && variantOpen ? (
+          {showOptions && variantOpen ? (
             <FloatingMenu anchor={root} align="right" className="model-variant-menu">
-              {selectedProvider?.variants?.map((variant) => (
-                <button
-                  className={variant.id === selection.variantId ? "active" : ""}
-                  type="button"
-                  key={variant.id || "default"}
-                  onClick={() => chooseVariant(variant.id)}
-                >
-                  <span>{variant.label}</span>
-                  <small>{variant.description}</small>
-                </button>
-              ))}
+              {showReasoning ? (
+                <div className="model-option-group">
+                  <strong>Reasoning</strong>
+                  <button
+                    className={reasoningEffort ? "" : "active"}
+                    type="button"
+                    onClick={() => { onReasoningEffort(""); setVariantOpen(false); }}
+                  >
+                    <span>Default</span>
+                    <small>Use the model or provider default.</small>
+                  </button>
+                  {selectedModel?.reasoning?.efforts.map((effort) => (
+                    <button
+                      className={effort === reasoningEffort ? "active" : ""}
+                      type="button"
+                      key={effort}
+                      onClick={() => { onReasoningEffort(effort); setVariantOpen(false); }}
+                    >
+                      <span>{reasoningLabel(effort)}</span>
+                      <small>{reasoningDescription(effort)}</small>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {showVariants ? (
+                <div className="model-option-group">
+                  {showReasoning ? <strong>Routing</strong> : null}
+                  {selectedProvider?.variants?.map((variant) => (
+                    <button
+                      className={variant.id === selection.variantId ? "active" : ""}
+                      type="button"
+                      key={variant.id || "default"}
+                      onClick={() => chooseVariant(variant.id)}
+                    >
+                      <span>{variant.label}</span>
+                      <small>{variant.description}</small>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </FloatingMenu>
           ) : null}
       </div>
     </div>
   );
+}
+
+function modelOptionLabel(effort: ReasoningEffort | "", variant?: string): string {
+  const reasoning = effort ? reasoningLabel(effort) : "";
+  const routing = variant && variant !== "Default" ? variant : "";
+  return [reasoning, routing].filter(Boolean).join(" · ") || "Default";
+}
+
+function reasoningLabel(effort: ReasoningEffort): string {
+  if (effort === "none") return "Off";
+  if (effort === "xhigh") return "Extra high";
+  return `${effort[0]!.toUpperCase()}${effort.slice(1)}`;
+}
+
+function reasoningDescription(effort: ReasoningEffort): string {
+  if (effort === "none") return "Disable model reasoning for this conversation.";
+  return `Use ${reasoningLabel(effort).toLowerCase()} reasoning effort.`;
 }
 
 function AllowanceRow({ item }: { item: ProviderAllowanceItem }): JSX.Element {

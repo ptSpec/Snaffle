@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import type { Message } from "../protocol.js";
 import type { ThreadSubagentMode } from "../agent/subagents/profile.js";
 import type { PlanItem } from "../tools/plan.js";
+import type { ReasoningEffort } from "../providers/provider.js";
 import { ContextStore } from "../context/store.js";
 import type { DesktopEntry, DesktopSearchResult, DesktopThread, DesktopWorkspace } from "./api.js";
 import { AsideStore } from "./aside-store.js";
@@ -53,6 +54,7 @@ export class DesktopStore {
           draft TEXT NOT NULL DEFAULT '',
           model TEXT,
           provider_connection_id TEXT NOT NULL DEFAULT 'openrouter',
+          reasoning_effort TEXT NOT NULL DEFAULT '',
           bookmarked INTEGER NOT NULL DEFAULT 0,
           source_thread_id TEXT,
           source_entry_id TEXT,
@@ -113,6 +115,11 @@ export class DesktopStore {
     if (!threadColumns.has("provider_connection_id")) {
       await this.database.execute(
         "ALTER TABLE threads ADD COLUMN provider_connection_id TEXT NOT NULL DEFAULT 'openrouter'",
+      );
+    }
+    if (!threadColumns.has("reasoning_effort")) {
+      await this.database.execute(
+        "ALTER TABLE threads ADD COLUMN reasoning_effort TEXT NOT NULL DEFAULT ''",
       );
     }
     if (!threadColumns.has("source_thread_id")) {
@@ -259,7 +266,8 @@ export class DesktopStore {
     fallbackProviderConnectionId = "openrouter",
   ): Promise<void> {
     const source = await this.database.execute({
-      sql: `SELECT t.workspace_id, t.title, t.model, t.provider_connection_id, t.subagent_mode,
+      sql: `SELECT t.workspace_id, t.title, t.model, t.provider_connection_id, t.reasoning_effort,
+          t.subagent_mode,
           e.id AS source_entry_id
         FROM threads t
         JOIN entries e ON e.thread_id = t.id
@@ -283,16 +291,18 @@ export class DesktopStore {
       [
         {
           sql: `INSERT INTO threads(
-              id, workspace_id, title, model, provider_connection_id, source_thread_id, source_entry_id, branch_label,
+              id, workspace_id, title, model, provider_connection_id, reasoning_effort,
+              source_thread_id, source_entry_id, branch_label,
               subagent_mode,
               created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           args: [
             threadId,
             workspaceId,
             title,
             rowOptionalText(sourceRow, "model") ?? fallbackModel ?? null,
             rowOptionalText(sourceRow, "provider_connection_id") ?? fallbackProviderConnectionId,
+            rowOptionalText(sourceRow, "reasoning_effort") ?? "",
             sourceThreadId,
             rowText(sourceRow, "source_entry_id"),
             label,
@@ -365,10 +375,16 @@ export class DesktopStore {
     return mode === "enabled" || mode === "disabled" ? mode : "inherit";
   }
 
-  async setThreadModel(threadId: string, providerConnectionId: string, model: string): Promise<void> {
+  async setThreadModel(
+    threadId: string,
+    providerConnectionId: string,
+    model: string,
+    reasoningEffort: ReasoningEffort | "" = "",
+  ): Promise<void> {
     const result = await this.database.execute({
-      sql: "UPDATE threads SET provider_connection_id = ?, model = ? WHERE id = ?",
-      args: [providerConnectionId, model, threadId],
+      sql: `UPDATE threads SET provider_connection_id = ?, model = ?, reasoning_effort = ?
+        WHERE id = ?`,
+      args: [providerConnectionId, model, reasoningEffort, threadId],
     });
     if (result.rowsAffected === 0) throw new Error("Thread no longer exists");
   }
@@ -708,6 +724,7 @@ function threadFromRow(row: Row): DesktopThread {
     draft: rowText(row, "draft"),
     model: rowOptionalText(row, "model"),
     providerConnectionId: rowText(row, "provider_connection_id"),
+    reasoningEffort: reasoningEffort(rowOptionalText(row, "reasoning_effort")),
     bookmarked: rowNumber(row, "bookmarked") === 1,
     sourceThreadId: rowOptionalText(row, "source_thread_id"),
     sourceEntryId: rowOptionalText(row, "source_entry_id"),
@@ -715,6 +732,11 @@ function threadFromRow(row: Row): DesktopThread {
     subagentMode: threadMode(rowText(row, "subagent_mode")),
     updatedAt: rowNumber(row, "updated_at"),
   };
+}
+
+function reasoningEffort(value: string | null): ReasoningEffort | "" {
+  return value === "none" || value === "minimal" || value === "low" || value === "medium" ||
+    value === "high" || value === "xhigh" || value === "max" ? value : "";
 }
 
 function threadMode(value: string): ThreadSubagentMode {

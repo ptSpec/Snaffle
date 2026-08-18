@@ -7,16 +7,20 @@ import {
   listOpenAICompatibleModels,
   testOpenAICompatibleModel,
 } from "./openai-compatible.js";
-import type {
-  ModelProvider,
-  ProviderAllowanceItem,
-  ProviderModel,
-  ProviderRuntimeOptions,
-  ProviderStatus,
-  ResolvedProviderConnection,
+import {
+  isReasoningEffort,
+  type ModelProvider,
+  type ProviderAllowanceItem,
+  type ProviderModel,
+  type ProviderRuntimeOptions,
+  type ProviderStatus,
+  type ReasoningEffort,
+  type ResolvedProviderConnection,
 } from "./provider.js";
 
 const LUNA_MODEL = "gpt-5.6-luna";
+const MODELS_DEV_URL = "https://models.dev/api.json";
+let capabilityRequest: Promise<Map<string, ReasoningEffort[]>> | undefined;
 
 export function createOpenCodeGoProvider(
   connection: ResolvedProviderConnection,
@@ -30,6 +34,7 @@ export function createOpenCodeGoProvider(
     providerId: connection.providerId,
     connectionId: connection.id,
     ...(connection.apiKey ? { apiKey: connection.apiKey } : {}),
+    reasoningFormat: "standard" as const,
     ...options,
   };
   return usesMessagesApi(modelId)
@@ -46,7 +51,53 @@ export async function listOpenCodeGoModels(
     connection.apiKey,
     signal,
   );
-  return models.filter((model) => bareModelId(model.id) !== LUNA_MODEL);
+  const available = models.filter((model) => bareModelId(model.id) !== LUNA_MODEL);
+  if (new URL(connection.baseUrl).hostname !== "opencode.ai") return available;
+  let reasoning = new Map<string, ReasoningEffort[]>();
+  try {
+    reasoning = await openCodeGoReasoning();
+  } catch {
+    // Model discovery remains useful when the optional capability catalog is unavailable.
+  }
+  return available.map((model) => {
+    const efforts = reasoning.get(bareModelId(model.id));
+    return efforts?.length && !usesMessagesApi(model.id)
+      ? { ...model, reasoning: { efforts } }
+      : model;
+  });
+}
+
+async function openCodeGoReasoning(): Promise<Map<string, ReasoningEffort[]>> {
+  capabilityRequest ??= fetch(MODELS_DEV_URL, {
+    signal: AbortSignal.timeout(5_000),
+  }).then(async (response) => {
+    if (!response.ok) throw new Error(`Models.dev request failed (${response.status})`);
+    const body = await response.json() as Record<string, unknown>;
+    const provider = record(body["opencode-go"]);
+    const models = record(provider?.models);
+    const result = new Map<string, ReasoningEffort[]>();
+    for (const [id, rawModel] of Object.entries(models ?? {})) {
+      const model = record(rawModel);
+      const options = Array.isArray(model?.reasoning_options)
+        ? model.reasoning_options as unknown[]
+        : [];
+      const efforts = options.flatMap((option) => {
+        const value = record(option);
+        return value?.type === "effort" && Array.isArray(value.values)
+          ? value.values.filter(isReasoningEffort)
+          : [];
+      });
+      if (efforts.length) result.set(id, [...new Set(efforts)]);
+    }
+    return result;
+  });
+  return capabilityRequest;
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
 }
 
 export async function getOpenCodeGoStatus(

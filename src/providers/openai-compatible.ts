@@ -1,19 +1,22 @@
 import type { AttachmentRef, ResolvedAttachment } from "../attachments/types.js";
 import { PROJECT } from "../identity.js";
 import type { Message, ModelResponse, ToolCall, ToolSpec } from "../protocol.js";
-import { retryAfterMilliseconds, retryBackoffMs, waitForRetry } from "../retry.js";
+import { canRetryStatus, retryAfterMilliseconds, retryBackoffMs, waitForRetry } from "../retry.js";
 import { healToolInput } from "../tools/input.js";
 import {
   DEFAULT_MODEL_CONTEXT_LENGTH,
   type ModelProvider,
   type ModelStreamEvent,
   type ProviderModel,
+  type ReasoningEffort,
 } from "./provider.js";
 
 const MAX_STREAM_BUFFER_CHARS = 8 * 1024 * 1024;
 const MAX_STREAM_FIELD_CHARS = 4 * 1024 * 1024;
 export const DEFAULT_PROVIDER_TIMEOUT_MS = 3 * 60 * 1000;
 export const DEFAULT_PROVIDER_RETRIES = 4;
+
+export type ReasoningRequestFormat = "standard" | "openrouter" | "deepseek";
 
 export type OpenAICompatibleOptions = {
   baseUrl: string;
@@ -26,6 +29,8 @@ export type OpenAICompatibleOptions = {
   temperature?: number;
   seed?: number;
   sendParallelToolCalls?: boolean;
+  reasoningEffort?: ReasoningEffort;
+  reasoningFormat?: ReasoningRequestFormat;
   resolveAttachment?: (attachment: AttachmentRef) => Promise<ResolvedAttachment>;
 };
 
@@ -40,6 +45,8 @@ export class OpenAICompatibleProvider implements ModelProvider {
   private readonly temperature: number | undefined;
   private readonly seed: number | undefined;
   private readonly sendParallelToolCalls: boolean;
+  private readonly reasoningEffort: ReasoningEffort | undefined;
+  private readonly reasoningFormat: ReasoningRequestFormat;
   private readonly resolveAttachment: OpenAICompatibleOptions["resolveAttachment"];
 
   constructor(options: OpenAICompatibleOptions) {
@@ -53,6 +60,8 @@ export class OpenAICompatibleProvider implements ModelProvider {
     this.temperature = options.temperature;
     this.seed = options.seed;
     this.sendParallelToolCalls = options.sendParallelToolCalls ?? true;
+    this.reasoningEffort = options.reasoningEffort;
+    this.reasoningFormat = options.reasoningFormat ?? "standard";
     this.resolveAttachment = options.resolveAttachment;
   }
 
@@ -95,6 +104,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
             stream_options: { include_usage: true },
             ...(this.temperature === undefined ? {} : { temperature: this.temperature }),
             ...(this.seed === undefined ? {} : { seed: this.seed }),
+            ...reasoningRequest(this.reasoningEffort, this.reasoningFormat),
           }),
           signal,
         });
@@ -114,7 +124,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
         emptyResponse = true;
         throw new Error("Model returned neither a final answer nor a tool call.");
       } catch (error) {
-        if (signal.aborted || isAuthFailure(status)) throw error;
+        if (signal.aborted || !canRetryStatus(status)) throw error;
         if (attempt === maxRetries) {
           if (emptyResponse) {
             throw new Error(`Model returned an empty final response after ${maxRetries + 1} attempts`);
@@ -125,14 +135,29 @@ export class OpenAICompatibleProvider implements ModelProvider {
 
         const nextAttempt = attempt + 1;
         const message = error instanceof Error ? error.message : String(error);
-        await onEvent?.({ type: "retry", attempt: nextAttempt, maxRetries, message });
+        const delayMs = retryBackoffMs(nextAttempt, retryAfterMs);
+        await onEvent?.({ type: "retry", attempt: nextAttempt, maxRetries, message, delayMs });
         requestMessages = addRetryReminder(messages, message);
-        await waitForRetry(retryBackoffMs(nextAttempt, retryAfterMs), signal);
+        await waitForRetry(delayMs, signal);
       }
     }
 
     throw new Error("Provider retry loop ended unexpectedly");
   }
+}
+
+function reasoningRequest(
+  effort: ReasoningEffort | undefined,
+  format: ReasoningRequestFormat,
+): Record<string, unknown> {
+  if (!effort) return {};
+  if (format === "openrouter") return { reasoning: { effort } };
+  if (format === "deepseek") {
+    return effort === "none"
+      ? { thinking: { type: "disabled" } }
+      : { thinking: { type: "enabled" }, reasoning_effort: effort };
+  }
+  return { reasoning_effort: effort };
 }
 
 export async function listOpenAICompatibleModels(
@@ -197,10 +222,6 @@ async function responseError(operation: string, response: Response): Promise<Err
 function requiredBody(response: Response): ReadableStream<Uint8Array> {
   if (!response.body) throw new Error("Provider returned an empty stream");
   return response.body;
-}
-
-function isAuthFailure(status: number | undefined): boolean {
-  return status === 401 || status === 402 || status === 403;
 }
 
 function addRetryReminder(messages: Message[], failure: string): Message[] {

@@ -45,6 +45,7 @@ import {
   DEFAULT_PROVIDER_RETRIES,
   DEFAULT_PROVIDER_TIMEOUT_MS,
 } from "../providers/openai-compatible.js";
+import { isReasoningEffort } from "../providers/provider.js";
 import type { RunEvent } from "../protocol.js";
 import { probeNativeSandbox } from "../execution/native/sandbox.js";
 import { defaultTools } from "../tools/built-ins.js";
@@ -273,12 +274,13 @@ function registerIpc(): void {
     compactor: contextCompactor,
     state: desktopState,
     capabilities: currentCapabilities,
-    provider: (connectionId, model, resolveAttachment) => createProvider(
+    provider: (connectionId, model, resolveAttachment, reasoningEffort) => createProvider(
       providerConnections.resolve(connectionId),
       model,
       {
         streamIdleTimeoutMs: providerTimeoutMinutes * 60_000,
         maxRetries: providerRetries,
+        ...(reasoningEffort ? { reasoningEffort } : {}),
         resolveAttachment,
       },
     ),
@@ -453,6 +455,7 @@ function registerIpc(): void {
     threadId: unknown,
     connectionValue: unknown,
     value: unknown,
+    reasoningValue: unknown,
   ): Promise<void> => {
     if (threadId !== null && (typeof threadId !== "string" || !threadId)) {
       throw new Error("Thread ID must be text");
@@ -460,7 +463,11 @@ function registerIpc(): void {
     const connectionId = parseId(connectionValue, "Provider connection");
     providerConnections.resolve(connectionId);
     if (typeof value !== "string") throw new Error("Model must be text");
-    if (threadId) await store.setThreadModel(threadId, connectionId, value);
+    if (reasoningValue !== "" && reasoningValue !== undefined && !isReasoningEffort(reasoningValue)) {
+      throw new Error("Invalid reasoning effort");
+    }
+    const reasoningEffort = isReasoningEffort(reasoningValue) ? reasoningValue : "";
+    if (threadId) await store.setThreadModel(threadId, connectionId, value, reasoningEffort);
     selectedProviderConnectionId = connectionId;
     selectedModel = value;
     saveSettings({ selectedModel, selectedProviderConnectionId });

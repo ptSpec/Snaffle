@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { CommandApprovalDecision } from "../protocol.js";
-import type { ProviderConnectionInput } from "../providers/provider.js";
+import type { ProviderConnectionInput, ReasoningEffort } from "../providers/provider.js";
 import type {
   DesktopApi,
   DesktopRunEvent,
@@ -52,8 +52,18 @@ const api: DesktopApi = {
   saveMcpServer: (server: McpServerConfig) => ipcRenderer.invoke("desktop:save-mcp-server", server),
   removeMcpServer: (id: string) => ipcRenderer.invoke("desktop:remove-mcp-server", id),
   testMcpServer: (server: McpServerConfig) => ipcRenderer.invoke("desktop:test-mcp-server", server),
-  setSelectedModel: (threadId: string | null, connectionId: string, model: string) =>
-    ipcRenderer.invoke("desktop:set-selected-model", threadId, connectionId, model),
+  setSelectedModel: (
+    threadId: string | null,
+    connectionId: string,
+    model: string,
+    reasoningEffort?: ReasoningEffort,
+  ) => ipcRenderer.invoke(
+    "desktop:set-selected-model",
+    threadId,
+    connectionId,
+    model,
+    reasoningEffort ?? "",
+  ),
   chooseAttachments: () => ipcRenderer.invoke("desktop:choose-attachments"),
   importDroppedFiles: (files: File[]) =>
     ipcRenderer.invoke("desktop:import-dropped-files", files.map((file) => webUtils.getPathForFile(file))),
