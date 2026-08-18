@@ -2,6 +2,7 @@ import type { AttachmentRef, ResolvedAttachment } from "../attachments/types.js"
 import { OpenAICompatibleProvider } from "./openai-compatible.js";
 import {
   DEFAULT_MODEL_CONTEXT_LENGTH,
+  type ProviderAllowanceItem,
   type ProviderModel,
   type ProviderStatus,
 } from "./provider.js";
@@ -47,17 +48,43 @@ export async function getOpenRouterStatus(apiKey: string, signal?: AbortSignal):
   if (!response.ok) throw new Error(`OpenRouter key request failed (${response.status})`);
   const body = await response.json() as { data?: Record<string, unknown> };
   const data = body.data ?? {};
+  const limit = numberValue(data.limit);
   const remaining = numberValue(data.limit_remaining);
   const usage = numberValue(data.usage);
+  const reset = typeof data.limit_reset === "string" ? data.limit_reset : undefined;
   const details = [
     ...(remaining === undefined ? [] : [{ label: "Remaining", value: `$${remaining.toFixed(2)}` }]),
     ...(usage === undefined ? [] : [{ label: "Usage", value: `$${usage.toFixed(2)}` }]),
   ];
-  return { message: "Connected", ...(details.length ? { details } : {}) };
+  const allowance = openRouterAllowance(limit, remaining, usage, reset);
+  return {
+    message: "Connected",
+    ...(details.length ? { details } : {}),
+    ...(allowance ? { allowance: { items: [allowance] } } : {}),
+  };
 }
 
 function numberValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function openRouterAllowance(
+  limit: number | undefined,
+  remaining: number | undefined,
+  usage: number | undefined,
+  reset: string | undefined,
+): ProviderAllowanceItem | null {
+  if (remaining === undefined && usage === undefined) return null;
+  const usedPercent = limit && remaining !== undefined
+    ? Math.min(100, Math.max(0, ((limit - remaining) / limit) * 100))
+    : undefined;
+  return {
+    label: "API key",
+    ...(usedPercent === undefined ? {} : { usedPercent }),
+    ...(usage === undefined ? {} : { used: `$${usage.toFixed(2)} used` }),
+    ...(remaining === undefined ? {} : { remaining: `$${remaining.toFixed(2)} left` }),
+    ...(reset ? { reset: `${reset[0]!.toUpperCase()}${reset.slice(1)} reset` } : {}),
+  };
 }
 
 export async function listOpenRouterModels(

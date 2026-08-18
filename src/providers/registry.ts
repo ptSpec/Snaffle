@@ -11,6 +11,7 @@ import {
 import { getDeepSeekStatus } from "./deepseek.js";
 import {
   createOpenCodeGoProvider,
+  getOpenCodeGoStatus,
   listOpenCodeGoModels,
   testOpenCodeGoModel,
 } from "./opencode-go.js";
@@ -61,6 +62,7 @@ const definitions: ProviderDefinition[] = [
     ...providerProfile("opencode-go"),
     create: createOpenCodeGoProvider,
     listModels: listOpenCodeGoModels,
+    getStatus: getOpenCodeGoStatus,
     testModel: testOpenCodeGoModel,
   },
   openAICompatibleDefinition("llama-cpp"),

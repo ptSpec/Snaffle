@@ -51,6 +51,11 @@ export function registerProviderIpc(options: {
     });
   });
 
+  ipcMain.handle("desktop:get-provider-allowance", async (_event, rawId: unknown) => {
+    const status = await providerStatus(options.connections.resolve(parseId(rawId, "Provider connection")));
+    return status.allowance ?? null;
+  });
+
   ipcMain.handle("desktop:save-provider-connection", async (
     _event,
     rawInput: unknown,

@@ -9,8 +9,10 @@ import {
 } from "./openai-compatible.js";
 import type {
   ModelProvider,
+  ProviderAllowanceItem,
   ProviderModel,
   ProviderRuntimeOptions,
+  ProviderStatus,
   ResolvedProviderConnection,
 } from "./provider.js";
 
@@ -47,6 +49,31 @@ export async function listOpenCodeGoModels(
   return models.filter((model) => bareModelId(model.id) !== LUNA_MODEL);
 }
 
+export async function getOpenCodeGoStatus(
+  connection: ResolvedProviderConnection,
+  signal?: AbortSignal,
+): Promise<ProviderStatus> {
+  const response = await fetch(`${connection.baseUrl.replace(/\/$/, "")}/usage`, {
+    headers: connection.apiKey ? { authorization: `Bearer ${connection.apiKey}` } : {},
+    ...(signal ? { signal } : {}),
+  });
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(`OpenCode Go usage request failed (${response.status})`);
+  }
+  if (!response.ok) return { message: "Connected" };
+
+  const body = await response.json() as { usage?: Record<string, unknown> };
+  const items = [
+    allowanceItem("5-hour", body.usage?.rolling),
+    allowanceItem("Weekly", body.usage?.weekly),
+    allowanceItem("Monthly", body.usage?.monthly),
+  ].filter((item): item is ProviderAllowanceItem => item !== null);
+  return {
+    message: "Connected",
+    ...(items.length ? { allowance: { items } } : {}),
+  };
+}
+
 export function testOpenCodeGoModel(
   connection: ResolvedProviderConnection,
   modelId: string,
@@ -71,4 +98,15 @@ function rejectLuna(modelId: string): void {
   if (bareModelId(modelId) === LUNA_MODEL) {
     throw new Error("GPT-5.6 Luna requires the Responses API and is not available through OpenCode Go yet");
   }
+}
+
+function allowanceItem(label: string, raw: unknown): ProviderAllowanceItem | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  if (typeof value.percent !== "number" || !Number.isFinite(value.percent)) return null;
+  return {
+    label,
+    usedPercent: Math.min(100, Math.max(0, value.percent)),
+    ...(typeof value.resetsAt === "string" ? { resetsAt: value.resetsAt } : {}),
+  };
 }

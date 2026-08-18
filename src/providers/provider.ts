@@ -35,6 +35,20 @@ export type ResolvedProviderConnection = ProviderConnection & {
 export type ProviderStatus = {
   message: string;
   details?: Array<{ label: string; value: string }>;
+  allowance?: ProviderAllowance;
+};
+
+export type ProviderAllowance = {
+  items: ProviderAllowanceItem[];
+};
+
+export type ProviderAllowanceItem = {
+  label: string;
+  usedPercent?: number;
+  used?: string;
+  remaining?: string;
+  resetsAt?: string;
+  reset?: string;
 };
 
 export type ProviderModelVariant = {
@@ -67,6 +81,7 @@ export type ProviderProfile = {
   defaultRequestLimit?: number;
   defaultContextLength?: number;
   sendParallelToolCalls?: boolean;
+  providesAllowance?: boolean;
   modelVariants?: ProviderModelVariant[];
 };
 

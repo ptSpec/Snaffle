@@ -22,7 +22,12 @@ import {
   type DesktopThread,
   type SavedMessage,
 } from "../api.js";
-import type { ProviderCatalog, ProviderConnectionInput, ProviderStatus } from "../../providers/provider.js";
+import type {
+  ProviderAllowance,
+  ProviderCatalog,
+  ProviderConnectionInput,
+  ProviderStatus,
+} from "../../providers/provider.js";
 import type { CompactionMode } from "../../context/budget.js";
 import type { SubagentProfile, ThreadSubagentMode } from "../../agent/subagents/profile.js";
 import type { ContextReport } from "../../context/report.js";
@@ -150,6 +155,7 @@ export function App(): JSX.Element {
   const [models, setModels] = useState<ProviderCatalog[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [selectedProviderConnectionId, setSelectedProviderConnectionId] = useState("openrouter");
+  const [providerAllowances, setProviderAllowances] = useState<Record<string, ProviderAllowance | null>>({});
   const [task, setTask] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentPreview[]>([]);
   const [draggingAttachments, setDraggingAttachments] = useState(false);
@@ -181,6 +187,28 @@ export function App(): JSX.Element {
   const composerAdd = useRef<HTMLDetailsElement>(null);
   const searchOpenedAt = useRef(0);
   const terminalUnmountTimer = useRef<number | undefined>(undefined);
+  const runProviderConnections = useRef<Record<string, string>>({});
+
+  const refreshProviderAllowance = useCallback(async (connectionId: string): Promise<void> => {
+    try {
+      const allowance = await window.desktop.getProviderAllowance(connectionId);
+      setProviderAllowances((current) => ({ ...current, [connectionId]: allowance }));
+    } catch {
+      setProviderAllowances((current) => ({ ...current, [connectionId]: null }));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!stateLoaded) return;
+    const connection = desktopState.providerConnections.find(
+      (item) => item.id === selectedProviderConnectionId,
+    );
+    if (!connection || !providerProfile(connection.providerId).providesAllowance) return;
+    const timeout = window.setTimeout(() => {
+      void refreshProviderAllowance(connection.id);
+    }, 4500);
+    return () => window.clearTimeout(timeout);
+  }, [desktopState.providerConnections, refreshProviderAllowance, selectedProviderConnectionId, stateLoaded]);
 
   function showTerminal(): void {
     if (!desktopState.workspace) return;
@@ -451,6 +479,7 @@ export function App(): JSX.Element {
       }
 
       if (event.type === "run.started") {
+        runProviderConnections.current[threadId] = event.providerConnectionId;
         setProviderWaits((current) => withoutKey(current, threadId));
         setDesktopState((state) => ({
           ...state,
@@ -461,6 +490,9 @@ export function App(): JSX.Element {
         }));
       }
       if (event.type === "run.completed" || event.type === "run.failed") {
+        const connectionId = runProviderConnections.current[threadId];
+        delete runProviderConnections.current[threadId];
+        if (connectionId) void refreshProviderAllowance(connectionId);
         setProviderWaits((current) => withoutKey(current, threadId));
         setDesktopState((state) => ({
           ...state,
@@ -507,7 +539,7 @@ export function App(): JSX.Element {
       unsubscribe();
       if (flushTimer !== undefined) window.clearTimeout(flushTimer);
     };
-  }, []);
+  }, [refreshProviderAllowance]);
 
   const selectedItem = useMemo(
     () => findTimelineItem(timeline, selectedItemId),
@@ -1963,6 +1995,7 @@ export function App(): JSX.Element {
             models={models}
             selectedProviderConnectionId={selectedProviderConnectionId}
             selectedModel={selectedModel}
+            providerAllowance={providerAllowances[selectedProviderConnectionId]}
             toolSurface={toolSurface}
             activeToolNames={activeToolNames}
             availableToolNames={availableToolNames}
@@ -1986,6 +2019,7 @@ export function App(): JSX.Element {
             onPasteMarkdown={() => void pasteMarkdown()}
             onChooseAttachments={() => void chooseAttachments()}
             onModel={selectModel}
+            onProviderAllowance={() => void refreshProviderAllowance(selectedProviderConnectionId)}
             onToolSurface={(surface) => void setModelToolSurface(surface)}
             onCompact={() => void compactCurrentContext()}
             onUnsafe={(value) => void setThreadUnsafe(value)}

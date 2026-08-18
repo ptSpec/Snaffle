@@ -33,6 +33,7 @@ export const PROVIDER_PROFILES: ProviderProfile[] = [
     baseUrlHint: "OpenRouter uses its official API endpoint.",
     fixedBaseUrl: true,
     defaultRequestLimit: 8,
+    providesAllowance: true,
     modelVariants: OPENROUTER_MODEL_VARIANTS,
   },
   {
@@ -56,6 +57,7 @@ export const PROVIDER_PROFILES: ProviderProfile[] = [
     baseUrlHint: "OpenCode Go uses its official subscription endpoint.",
     fixedBaseUrl: true,
     defaultRequestLimit: 8,
+    providesAllowance: true,
   },
   {
     id: "llama-cpp",

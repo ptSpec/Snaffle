@@ -1,6 +1,7 @@
 import type { AttachmentPreview, AttachmentRef } from "../attachments/types.js";
 import type {
   ProviderCatalog,
+  ProviderAllowance,
   ProviderConnection,
   ProviderConnectionInput,
   ProviderStatus,
@@ -198,6 +199,7 @@ export interface DesktopApi {
   searchConversations(query: string): Promise<DesktopSearchResult[]>;
   listProviderModels(): Promise<ProviderCatalog[]>;
   getProviderStatus(input: ProviderConnectionInput): Promise<ProviderStatus>;
+  getProviderAllowance(connectionId: string): Promise<ProviderAllowance | null>;
   saveProviderConnection(input: ProviderConnectionInput): Promise<DesktopState>;
   removeProviderConnection(connectionId: string): Promise<DesktopState>;
   setMcpEnabled(enabled: boolean): Promise<DesktopState>;

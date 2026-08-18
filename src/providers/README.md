@@ -20,7 +20,7 @@ The design has three small pieces:
 
 Most hosted and local servers need no new provider code. llama.cpp, Ollama, LM Studio, oMLX, MLX-LM, and Unsloth Studio are named presets over the same OpenAI-compatible runtime. Other servers can use an OpenAI-compatible or Anthropic-compatible connection in Settings, then use model discovery or enter manual models if `/models` is unavailable. Each wire protocol lives in its own adapter.
 
-Add a definition only when a provider has a useful native capability, such as OpenRouter's catalog and key status or DeepSeek's catalog and account balance. If a future provider uses another inference protocol, implement its adapter here and register its small definition in `registry.ts`.
+Add a definition only when a provider has a useful native capability, such as OpenRouter's catalog and allowance or DeepSeek's catalog and account balance. Normalize trustworthy provider allowance data through `ProviderStatus`; the UI must not infer quotas from ordinary request usage. If a future provider uses another inference protocol, implement its adapter here and register its small definition in `registry.ts`.
 
 Keep provider retry, stream parsing, catalog discovery, and usage normalization here. Keep agent behavior, tools, UI, and analytics provider-neutral. Secrets remain in the Electron main process and must not cross into the renderer.
 

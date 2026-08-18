@@ -1,13 +1,22 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import type { ProviderModelVariant } from "../../../../providers/provider.js";
+import type {
+  ProviderAllowance,
+  ProviderAllowanceItem,
+  ProviderModelVariant,
+} from "../../../../providers/provider.js";
 import { applyModelVariant, splitModelVariant } from "../../../../providers/profiles.js";
+
+// Temporary visual QA. Remove after the allowance treatment is approved.
+const PREVIEW_OPENCODE_ALLOWANCE = true;
 
 export type ModelProvider = {
   id: string;
+  providerType: string;
   name: string;
   mark?: ReactNode;
   logo?: boolean;
+  providesAllowance?: boolean;
   variants?: ProviderModelVariant[];
   models: Array<{ value: string; label: string }>;
 };
@@ -19,6 +28,8 @@ export function ModelPicker({
   placeholder,
   searchPlaceholder,
   disabled,
+  allowance,
+  onAllowance,
   onChange,
 }: {
   value: string;
@@ -27,10 +38,13 @@ export function ModelPicker({
   placeholder: string;
   searchPlaceholder: string;
   disabled?: boolean;
+  allowance: ProviderAllowance | null | undefined;
+  onAllowance(): void;
   onChange(providerId: string, value: string): void;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
   const [variantOpen, setVariantOpen] = useState(false);
+  const [allowanceOpen, setAllowanceOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [providerId, setProviderId] = useState("all");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -59,16 +73,17 @@ export function ModelPicker({
   }, [showVariants]);
 
   useEffect(() => {
-    if (!open && !variantOpen) return;
+    if (!open && !variantOpen && !allowanceOpen) return;
     const close = (event: PointerEvent): void => {
       if (!root.current?.contains(event.target as Node)) {
         setOpen(false);
         setVariantOpen(false);
+        setAllowanceOpen(false);
       }
     };
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
-  }, [open, variantOpen]);
+  }, [allowanceOpen, open, variantOpen]);
 
   function choose(providerId: string, next: string): void {
     const preserveVariant = providerId === selectedProvider?.id ? selection.variantId : "";
@@ -76,6 +91,7 @@ export function ModelPicker({
     onChange(providerId, applyModelVariant(next, preserveVariant, provider?.variants));
     setOpen(false);
     setVariantOpen(false);
+    setAllowanceOpen(false);
     setQuery("");
     setActiveIndex(0);
   }
@@ -86,14 +102,34 @@ export function ModelPicker({
     setVariantOpen(false);
   }
 
+  const displayedAllowance = developmentAllowance(selectedProvider?.providerType, allowance);
+  const allowanceSeverity = providerAllowanceSeverity(displayedAllowance);
+  const providerMarkClass = [
+    "model-provider-mark",
+    selectedProvider?.logo ? "logo" : "",
+    allowanceSeverity ? `allowance-${allowanceSeverity}` : "",
+  ].filter(Boolean).join(" ");
+
   return (
     <div className="model-picker" ref={root}>
-      {selectedProvider?.mark ? (
-        <span
-          className={selectedProvider.logo ? "model-provider-mark logo" : "model-provider-mark"}
-          title={selectedProvider.name}
-          aria-label={selectedProvider.name}
+      {selectedProvider?.mark ? selectedProvider.providesAllowance ? (
+        <button
+          className={providerMarkClass}
+          type="button"
+          title={providerAllowanceTitle(selectedProvider.name, displayedAllowance)}
+          aria-label={`${selectedProvider.name} allowance`}
+          aria-expanded={allowanceOpen}
+          onClick={() => {
+            setOpen(false);
+            setVariantOpen(false);
+            setAllowanceOpen((current) => !current);
+            onAllowance();
+          }}
         >
+          {selectedProvider.mark}
+        </button>
+      ) : (
+        <span className={providerMarkClass} title={selectedProvider.name} aria-label={selectedProvider.name}>
           {selectedProvider.mark}
         </span>
       ) : null}
@@ -106,6 +142,7 @@ export function ModelPicker({
           setProviderId("all");
           setActiveIndex(0);
           setVariantOpen(false);
+          setAllowanceOpen(false);
           setOpen((current) => !current);
         }}
         aria-expanded={open}
@@ -191,6 +228,19 @@ export function ModelPicker({
           </div>
         </FloatingMenu>
       ) : null}
+      {selectedProvider?.providesAllowance && allowanceOpen ? (
+        <FloatingMenu anchor={root} align="left" className="provider-allowance-menu">
+          <div className="provider-allowance-heading">
+            <strong>{selectedProvider.name} allowance</strong>
+            <small>Current usage across this connection&apos;s limits.</small>
+          </div>
+          {displayedAllowance === undefined ? <p>Checking allowance…</p> : null}
+          {displayedAllowance === null ? <p>Allowance is currently unavailable.</p> : null}
+          {displayedAllowance?.items.map((item) => (
+            <AllowanceRow item={item} key={item.label} />
+          ))}
+        </FloatingMenu>
+      ) : null}
       <div className={showVariants ? "model-variant-picker visible" : "model-variant-picker"}>
           <button
             className="model-variant-trigger"
@@ -202,6 +252,7 @@ export function ModelPicker({
             aria-hidden={!showVariants}
             onClick={() => {
               setOpen(false);
+              setAllowanceOpen(false);
               setVariantOpen((current) => !current);
             }}
           >
@@ -225,6 +276,102 @@ export function ModelPicker({
       </div>
     </div>
   );
+}
+
+function AllowanceRow({ item }: { item: ProviderAllowanceItem }): JSX.Element {
+  const remainingPercent = item.usedPercent === undefined
+    ? undefined
+    : Math.max(0, Math.round(100 - item.usedPercent));
+  const filledSegments = item.usedPercent === undefined
+    ? 0
+    : Math.round(item.usedPercent / 5);
+  const severity = itemAllowanceSeverity(item);
+  const reset = item.resetsAt ? formatReset(item.resetsAt) : item.reset;
+  return (
+    <div className={`provider-allowance-row ${severity}`}>
+      <div className="provider-allowance-label">
+        <strong>{item.label}</strong>
+        <span>{item.remaining ?? (remainingPercent === undefined ? item.used : `${remainingPercent}% left`)}</span>
+      </div>
+      {item.usedPercent === undefined ? null : (
+        <div className="provider-allowance-segments" aria-label={`${item.label}: ${remainingPercent}% left`}>
+          {Array.from({ length: 20 }, (_, index) => (
+            <span
+              className={index < filledSegments ? "used" : ""}
+              key={index}
+              style={{ animationDelay: `${index * 22}ms` }}
+            />
+          ))}
+        </div>
+      )}
+      {item.used || reset ? (
+        <small>{[item.used, reset].filter(Boolean).join(" · ")}</small>
+      ) : null}
+    </div>
+  );
+}
+
+function developmentAllowance(
+  providerType: string | undefined,
+  allowance: ProviderAllowance | null | undefined,
+): ProviderAllowance | null | undefined {
+  if (!PREVIEW_OPENCODE_ALLOWANCE || providerType !== "opencode-go" || !allowance) return allowance;
+  const preview = [35, 62, 99];
+  return {
+    items: allowance.items.map((item, index) => {
+      const usedPercent = preview[index] ?? item.usedPercent;
+      return {
+        ...item,
+        ...(usedPercent === undefined ? {} : { usedPercent }),
+      };
+    }),
+  };
+}
+
+function providerAllowanceSeverity(allowance?: ProviderAllowance | null): "warning" | "critical" | "" {
+  const values = allowance?.items.flatMap((item) =>
+    item.usedPercent === undefined ? [] : [item.usedPercent]
+  ) ?? [];
+  const highest = values.length ? Math.max(...values) : 0;
+  if (highest >= 96) return "critical";
+  if (highest >= 90) return "warning";
+  return "";
+}
+
+function itemAllowanceSeverity(item: ProviderAllowanceItem): "warning" | "critical" | "" {
+  if (item.usedPercent !== undefined && item.usedPercent >= 96) return "critical";
+  if (item.usedPercent !== undefined && item.usedPercent >= 90) return "warning";
+  return "";
+}
+
+function providerAllowanceTitle(name: string, allowance?: ProviderAllowance | null): string {
+  if (!allowance?.items.length) return `${name} allowance`;
+  const tightest = allowance.items
+    .filter((item) => item.usedPercent !== undefined)
+    .sort((left, right) => (right.usedPercent ?? 0) - (left.usedPercent ?? 0))[0];
+  if (tightest?.usedPercent !== undefined) {
+    return `${tightest.label}: ${Math.max(0, Math.round(100 - tightest.usedPercent))}% left`;
+  }
+  const summary = allowance.items[0]?.remaining ?? allowance.items[0]?.used;
+  return summary ? `${name}: ${summary}` : `${name} allowance`;
+}
+
+function formatReset(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const milliseconds = date.getTime() - Date.now();
+  if (milliseconds > 0 && milliseconds < 48 * 60 * 60 * 1000) {
+    const minutes = Math.max(1, Math.round(milliseconds / 60000));
+    const hours = Math.floor(minutes / 60);
+    const remainder = minutes % 60;
+    return hours ? `resets in ${hours}h${remainder ? ` ${remainder}m` : ""}` : `resets in ${minutes}m`;
+  }
+  return `resets ${new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date)}`;
 }
 
 function FloatingMenu({
