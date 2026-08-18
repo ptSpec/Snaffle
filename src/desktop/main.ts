@@ -92,6 +92,7 @@ import { applicationIcon, createDesktopWindow } from "./window.js";
 import { installDesktopMenu } from "./menu.js";
 import { configureDesktopIdentity, migrateLegacyUserData } from "./identity-migration.js";
 import { ProviderConnections } from "./provider-connections.js";
+import { registerUpdateIpc, type DesktopUpdates } from "./updates.js";
 import { SkillRegistry, skillTool } from "../extensions/skills/index.js";
 
 const userDataMigration = configureDesktopIdentity();
@@ -107,6 +108,7 @@ let runs: RunIpc;
 let contextCompactor: ContextCompactor;
 let providerConnections: ProviderConnections;
 let terminals: ReturnType<typeof registerTerminalIpc>;
+let updates: DesktopUpdates;
 const mcpManager = new McpManager();
 let configuredMcpServers: McpServerConfig[] = [];
 let activeTheme: Theme = DEFAULT_THEME;
@@ -240,6 +242,7 @@ async function start(): Promise<void> {
   }
   registerIpc();
   createWindow();
+  updates.start();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -325,6 +328,14 @@ function registerIpc(): void {
     state: desktopState,
   });
   terminals = registerTerminalIpc({ store, mainWindow: () => mainWindow });
+  updates = registerUpdateIpc({
+    send: (state) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.webContents.send("desktop:update-state", state);
+      }
+    },
+    canRestart: () => runs.runningThreadIds().length === 0,
+  });
   registerWorkspaceIpc({
     store,
     state: desktopState,
@@ -997,6 +1008,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  updates?.dispose();
   runs?.stopAll();
   terminals?.closeAll();
   void mcpManager.close();

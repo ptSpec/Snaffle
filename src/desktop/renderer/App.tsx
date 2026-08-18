@@ -20,6 +20,7 @@ import {
   type DesktopSearchResult,
   type DesktopState,
   type DesktopThread,
+  type DesktopUpdateState,
   type SavedMessage,
 } from "../api.js";
 import type {
@@ -148,8 +149,15 @@ const initialState: DesktopState = {
   compactionThreshold: 65,
 };
 
+const initialUpdateState: DesktopUpdateState = {
+  status: "disabled",
+  currentVersion: "",
+  automatic: false,
+};
+
 export function App(): JSX.Element {
   const [desktopState, setDesktopState] = useState(initialState);
+  const [updateState, setUpdateState] = useState(initialUpdateState);
   const [stateLoaded, setStateLoaded] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [savedMessages, setSavedMessages] = useState<SavedMessage[] | null>(null);
@@ -199,6 +207,38 @@ export function App(): JSX.Element {
       setProviderAllowances((current) => ({ ...current, [connectionId]: null }));
     }
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    void window.desktop.getUpdateState()
+      .then((state) => {
+        if (active) setUpdateState(state);
+      })
+      .catch((cause: unknown) => setError(errorMessage(cause)));
+    const unsubscribe = window.desktop.onUpdateState(setUpdateState);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
+
+  async function checkForUpdates(): Promise<void> {
+    try {
+      setError(null);
+      setUpdateState(await window.desktop.checkForUpdates());
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function applyUpdate(): Promise<void> {
+    try {
+      setError(null);
+      await window.desktop.applyUpdate();
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
 
   useEffect(() => {
     if (!stateLoaded) return;
@@ -1849,6 +1889,7 @@ export function App(): JSX.Element {
         <Sidebar
           state={desktopState}
           runningThreadIds={desktopState.runningThreadIds}
+          updateState={updateState}
           view={view}
           settingsPage={settingsPage}
           bookmarksPage={bookmarksPage}
@@ -1909,6 +1950,8 @@ export function App(): JSX.Element {
             runtimeMetadata={desktopState.runtimeMetadata}
             providerCatalogs={models}
             loadingProviderModels={loadingModels}
+            updateState={updateState}
+            activeRun={desktopState.runningThreadIds.length > 0}
             error={error}
             onResetAppearance={() => void resetAppearance()}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
@@ -1937,6 +1980,8 @@ export function App(): JSX.Element {
             onSystemPrompt={(prompt) => void setSystemPrompt(prompt)}
             onToolEnabled={(name, enabled) => void setToolEnabled(name, enabled)}
             onOpenOnboarding={() => setOnboardingOpen(true)}
+            onCheckForUpdates={() => void checkForUpdates()}
+            onApplyUpdate={() => void applyUpdate()}
           />
         ) : view === "saved" ? (
           <Bookmarks

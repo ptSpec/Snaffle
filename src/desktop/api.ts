@@ -19,8 +19,10 @@ import type { McpServerConfig, McpServerStatus } from "../mcp/types.js";
 import type { SkillSummary } from "../extensions/skills/types.js";
 import type { ImageUnderstandingProfile } from "../attachments/vision.js";
 import type { ModelToolSurface, ModelToolSurfaces } from "../capabilities/surface.js";
+import type { DesktopUpdateState } from "./updates.js";
 
 export type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents } from "../git/types.js";
+export type { DesktopUpdateState } from "./updates.js";
 
 export type DesktopThread = {
   id: string;
@@ -187,6 +189,9 @@ export type DesktopTerminalExitEvent = {
 export interface DesktopApi {
   platform: string;
   getState(): Promise<DesktopState>;
+  getUpdateState(): Promise<DesktopUpdateState>;
+  checkForUpdates(): Promise<DesktopUpdateState>;
+  applyUpdate(): Promise<void>;
   completeOnboarding(): Promise<void>;
   chooseWorkspace(): Promise<DesktopState | null>;
   selectWorkspace(workspaceId: string): Promise<DesktopState>;
@@ -269,6 +274,7 @@ export interface DesktopApi {
   resizeTerminal(workspaceId: string, columns: number, rows: number): Promise<void>;
   closeTerminal(workspaceId: string): Promise<void>;
   onRunEvent(listener: (event: DesktopRunEvent) => void): () => void;
+  onUpdateState(listener: (state: DesktopUpdateState) => void): () => void;
   onTerminalData(listener: (event: DesktopTerminalDataEvent) => void): () => void;
   onTerminalExit(listener: (event: DesktopTerminalExitEvent) => void): () => void;
 }

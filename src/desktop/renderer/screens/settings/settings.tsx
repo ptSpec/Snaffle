@@ -8,7 +8,7 @@ import type { CompactionMode } from "../../../../context/budget.js";
 import type { SubagentProfile } from "../../../../agent/subagents/profile.js";
 import type { ImageUnderstandingProfile } from "../../../../attachments/vision.js";
 import type { McpServerConfig, McpServerStatus } from "../../../../mcp/types.js";
-import type { ModelToolSetting } from "../../../api.js";
+import type { DesktopUpdateState, ModelToolSetting } from "../../../api.js";
 import type {
   ProviderCatalog,
   ProviderConnection,
@@ -23,6 +23,7 @@ import { ProviderSettings } from "./providers.js";
 import { WebSettings } from "./web.js";
 import { McpSettings } from "./mcp.js";
 import { ModelSettings } from "./model.js";
+import { UpdateSettings } from "./updates.js";
 
 export function Settings({
   page,
@@ -57,6 +58,8 @@ export function Settings({
   runtimeMetadata,
   providerCatalogs,
   loadingProviderModels,
+  updateState,
+  activeRun,
   error,
   onResetAppearance,
   onSelectTheme,
@@ -85,6 +88,8 @@ export function Settings({
   onSystemPrompt,
   onToolEnabled,
   onOpenOnboarding,
+  onCheckForUpdates,
+  onApplyUpdate,
 }: {
   page: SettingsPage;
   themeId: string;
@@ -118,6 +123,8 @@ export function Settings({
   runtimeMetadata: string;
   providerCatalogs: ProviderCatalog[];
   loadingProviderModels: boolean;
+  updateState: DesktopUpdateState;
+  activeRun: boolean;
   error: string | null;
   onResetAppearance: () => void;
   onSelectTheme: (themeId: string) => void;
@@ -146,6 +153,8 @@ export function Settings({
   onSystemPrompt(prompt: string): void;
   onToolEnabled(name: string, enabled: boolean): void;
   onOpenOnboarding(): void;
+  onCheckForUpdates(): void;
+  onApplyUpdate(): void;
 }): JSX.Element {
   const themePicker = useRef<HTMLDetailsElement>(null);
 
@@ -170,6 +179,17 @@ export function Settings({
         onSave={onSaveProvider}
         onRemove={onRemoveProvider}
         onTest={onTestProvider}
+      />
+    );
+  }
+
+  if (page === "updates") {
+    return (
+      <UpdateSettings
+        state={updateState}
+        activeRun={activeRun}
+        onCheck={onCheckForUpdates}
+        onApply={onApplyUpdate}
       />
     );
   }

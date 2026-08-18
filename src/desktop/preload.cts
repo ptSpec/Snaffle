@@ -6,6 +6,7 @@ import type {
   DesktopRunEvent,
   DesktopTerminalDataEvent,
   DesktopTerminalExitEvent,
+  DesktopUpdateState,
   GitFileContents,
   SaveMessageInput,
   StartRunInput,
@@ -20,6 +21,9 @@ import type { ModelToolSurface } from "../capabilities/surface.js";
 const api: DesktopApi = {
   platform: process.platform,
   getState: () => ipcRenderer.invoke("desktop:get-state"),
+  getUpdateState: () => ipcRenderer.invoke("desktop:get-update-state"),
+  checkForUpdates: () => ipcRenderer.invoke("desktop:check-for-updates"),
+  applyUpdate: () => ipcRenderer.invoke("desktop:apply-update"),
   completeOnboarding: () => ipcRenderer.invoke("desktop:complete-onboarding"),
   chooseWorkspace: () => ipcRenderer.invoke("desktop:choose-workspace"),
   selectWorkspace: (workspaceId: string) =>
@@ -154,6 +158,11 @@ const api: DesktopApi = {
     const receiveEvent = (_event: Electron.IpcRendererEvent, event: DesktopRunEvent) => listener(event);
     ipcRenderer.on("desktop:run-event", receiveEvent);
     return () => ipcRenderer.removeListener("desktop:run-event", receiveEvent);
+  },
+  onUpdateState(listener: (state: DesktopUpdateState) => void): () => void {
+    const receiveEvent = (_event: Electron.IpcRendererEvent, state: DesktopUpdateState) => listener(state);
+    ipcRenderer.on("desktop:update-state", receiveEvent);
+    return () => ipcRenderer.removeListener("desktop:update-state", receiveEvent);
   },
   onTerminalData(listener: (event: DesktopTerminalDataEvent) => void): () => void {
     const receiveEvent = (_event: Electron.IpcRendererEvent, event: DesktopTerminalDataEvent) => listener(event);
