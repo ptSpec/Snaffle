@@ -39,22 +39,61 @@
   white-space: pre;
 }
 
+.git-hover-preview pre code {
+  display: inline-block;
+  min-width: 100%;
+}
+
 .git-hover-preview pre span {
   display: block;
   min-height: 1.45em;
   padding: 0 9px;
 }
 
-.git-hover-preview .added {
-  color: var(--diff-added-text);
-  background: var(--diff-added-background);
-  border-left: 3px solid var(--diff-added-text);
+.git-hover-preview .added,
+.git-hover-preview .removed {
+  color: var(--code-text);
+  background: transparent;
 }
 
 .git-hover-preview .removed {
-  color: var(--diff-removed-text);
-  background: var(--diff-removed-background);
-  border-left: 3px solid var(--diff-removed-text);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--diff-removed-text) 58%, transparent);
+  text-decoration-thickness: 1px;
+}
+
+.git-hover-preview .added::before,
+.git-hover-preview .added::after,
+.git-hover-preview .removed::before,
+.git-hover-preview .removed::after {
+  position: sticky;
+  width: 3px;
+  height: 1.45em;
+  content: "";
+}
+
+.git-hover-preview .added::before,
+.git-hover-preview .removed::before {
+  left: 0;
+  float: left;
+  margin-left: -9px;
+}
+
+.git-hover-preview .added::after,
+.git-hover-preview .removed::after {
+  right: 0;
+  float: right;
+  margin-right: -9px;
+}
+
+.git-hover-preview .added::before,
+.git-hover-preview .added::after {
+  background: var(--diff-added-text);
+}
+
+.git-hover-preview .removed::before,
+.git-hover-preview .removed::after {
+  background: var(--diff-removed-text);
 }
 
 .git-hover-preview .hunk {

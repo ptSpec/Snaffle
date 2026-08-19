@@ -25,5 +25,6 @@ export const darkTheme = {
     "code-string": "#a5d6ff",
     "code-number": "#79c0ff",
     "code-type": "#ffa657",
+    "code-tag": "#b9836b",
   },
 } satisfies Theme;

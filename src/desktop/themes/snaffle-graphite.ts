@@ -26,5 +26,6 @@ export const snaffleGraphiteTheme = {
     "code-string": "#a8c47f",
     "code-number": "#d69abe",
     "code-type": "#82b8d1",
+    "code-tag": "#b9836b",
   },
 } satisfies Theme;

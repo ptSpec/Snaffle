@@ -34,7 +34,7 @@ export function webSearchTool(options: WebSearchOptions): Tool | undefined {
 
   return {
     name: "web_search",
-    description: "Search the public web when a direct URL is not known. Results include source URLs; cite relevant sources inline immediately after the supported text without surrounding brackets, parentheses, or citation numbers. Depending on configuration, search may use a free local backend or a paid provider.",
+    description: "Search the public web when a direct URL is not known. Results include source URLs; cite relevant sources inline immediately after the supported text without surrounding brackets, parentheses, or citation numbers. Snaffle renders recognized sources as pills. Depending on configuration, search may use a free local backend or a paid provider.",
     inputSchema: {
       type: "object",
       properties: {

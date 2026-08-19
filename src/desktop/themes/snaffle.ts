@@ -2,7 +2,9 @@ import { PROJECT } from "../../identity.js";
 import type { Theme } from "./contract.js";
 import { darkTheme } from "./dark.js";
 
-const SNAFFLE_YELLOW = "#feff00";
+const SNAFFLE_YELLOW = "#cbcb12";
+const SNAFFLE_BACKGROUND = "#1e1f22";
+const SNAFFLE_PANEL = "#27282b";
 
 export const snaffleTheme = {
   ...darkTheme,
@@ -11,9 +13,14 @@ export const snaffleTheme = {
   accented: true,
   colors: {
     ...darkTheme.colors,
-    panel: "#2b2b2b",
+    background: SNAFFLE_BACKGROUND,
+    panel: SNAFFLE_PANEL,
+    surface: SNAFFLE_PANEL,
+    border: "#37383b",
     primary: SNAFFLE_YELLOW,
-    "primary-text": "#181818",
+    "primary-text": SNAFFLE_BACKGROUND,
     brand: SNAFFLE_YELLOW,
+    "brand-detail": SNAFFLE_BACKGROUND,
+    "code-background": SNAFFLE_BACKGROUND,
   },
 } satisfies Theme;
