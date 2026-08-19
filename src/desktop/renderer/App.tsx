@@ -194,6 +194,7 @@ export function App(): JSX.Element {
   const [explicitlyActiveTools, setExplicitlyActiveTools] = useState<string[]>([]);
   const taskInput = useRef<HTMLTextAreaElement>(null);
   const timelineView = useRef<HTMLDivElement>(null);
+  const timelineScrollTop = useRef(0);
   const executionMode = useRef<HTMLDetailsElement>(null);
   const composerAdd = useRef<HTMLDetailsElement>(null);
   const searchOpenedAt = useRef(0);
@@ -379,6 +380,15 @@ export function App(): JSX.Element {
       setShowJumpToLatest(false);
     }
   }, [timeline]);
+
+  useLayoutEffect(() => {
+    if (view !== "conversation") return;
+    const timeline = timelineView.current;
+    if (!timeline) return;
+    timeline.scrollTop = followTimeline.current
+      ? timeline.scrollHeight
+      : timelineScrollTop.current;
+  }, [view]);
 
   useEffect(() => {
     if (view === "conversation") {
@@ -2021,6 +2031,7 @@ export function App(): JSX.Element {
               aria-live="polite"
               onScroll={(event) => {
                 const view = event.currentTarget;
+                timelineScrollTop.current = view.scrollTop;
                 const distanceFromBottom = view.scrollHeight - view.scrollTop - view.clientHeight;
                 const following = distanceFromBottom < 80;
                 followTimeline.current = following;

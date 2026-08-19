@@ -615,6 +615,10 @@
   border-radius: 7px;
 }
 
+html[data-appearance="dark"] .markdown-content .code-block {
+  border-color: transparent;
+}
+
 .code-block-actions {
   position: absolute;
   z-index: 1;
@@ -757,10 +761,15 @@
 
 .hljs-string,
 .hljs-regexp,
-.hljs-attribute,
 .hljs-template-tag,
 .hljs-template-variable {
   color: var(--syntax-string);
+}
+
+.hljs-name,
+.hljs-attr,
+.hljs-attribute {
+  color: var(--syntax-tag);
 }
 
 .hljs-number,
