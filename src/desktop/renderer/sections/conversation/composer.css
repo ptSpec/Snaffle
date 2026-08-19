@@ -1008,6 +1008,10 @@ html[data-appearance="light"] .model-provider-mark.logo.allowance-critical::afte
   box-shadow: 0 8px 30px rgb(0 0 0 / 24%);
 }
 
+.execution-mode:not(.unsafe) .execution-details {
+  width: min(390px, calc(100vw - 32px));
+}
+
 .execution-details strong {
   color: var(--text-primary);
   font-size: calc(12px * var(--interface-font-scale));
@@ -1016,6 +1020,253 @@ html[data-appearance="light"] .model-provider-mark.logo.allowance-critical::afte
 .execution-details p {
   margin: 6px 0 4px;
   line-height: 1.4;
+}
+
+.sandbox-access {
+  padding: 10px 0;
+  margin: 8px 0;
+  border-top: 1px solid color-mix(in srgb, var(--border-default) 65%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-default) 65%, transparent);
+}
+
+.sandbox-access-heading,
+.sandbox-location,
+.sandbox-location-actions {
+  display: flex;
+  align-items: center;
+}
+
+.sandbox-access-heading {
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-primary);
+  font-size: calc(11px * var(--interface-font-scale));
+  font-weight: 650;
+}
+
+.sandbox-access-heading small,
+.sandbox-access-empty,
+.sandbox-location-copy small {
+  color: var(--text-muted);
+  font-size: calc(10px * var(--interface-font-scale));
+  font-weight: 400;
+}
+
+.sandbox-access-empty {
+  display: block;
+  margin-top: 7px;
+}
+
+.sandbox-location-list {
+  display: grid;
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.sandbox-location {
+  min-width: 0;
+  gap: 8px;
+  padding: 7px 8px;
+  background: var(--control-background);
+  border: 1px solid color-mix(in srgb, var(--border-default) 75%, transparent);
+  border-radius: 9px;
+}
+
+.sandbox-location-icon {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  transform: rotate(-22deg);
+}
+
+.sandbox-location-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.sandbox-location-copy code,
+.sandbox-location-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sandbox-location-copy code {
+  color: var(--text-primary);
+  background: transparent;
+  font-size: calc(10.5px * var(--interface-font-scale));
+}
+
+.sandbox-location-remove {
+  display: grid;
+  place-items: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  padding: 0 0 2px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font-size: 18px;
+}
+
+.sandbox-location-remove:hover {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
+.sandbox-add-location {
+  width: 100%;
+  min-height: 31px;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px dashed var(--border-default);
+  border-radius: 9px;
+  font: inherit;
+}
+
+.sandbox-add-location:hover {
+  color: var(--text-primary);
+  background: var(--hover-background);
+  border-color: var(--border-focus);
+}
+
+.sandbox-location-form {
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+  margin-top: 8px;
+  background: var(--control-background);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+}
+
+.sandbox-location-form label {
+  display: grid;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: calc(10px * var(--interface-font-scale));
+  font-weight: 600;
+}
+
+.sandbox-location-form input {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  color: var(--text-primary);
+  background: var(--input-background);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 400;
+}
+
+.sandbox-location-form input:focus {
+  border-color: var(--border-focus);
+  outline: none;
+}
+
+.sandbox-location-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  color: var(--text-secondary);
+  background: var(--input-background);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 400;
+  text-align: left;
+}
+
+.sandbox-location-picker span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sandbox-location-picker span:last-child {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.sandbox-location-picker:hover {
+  color: var(--text-primary);
+  border-color: var(--border-focus);
+}
+
+.sandbox-location-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  padding: 3px;
+  background: var(--input-background);
+  border: 1px solid color-mix(in srgb, var(--border-default) 75%, transparent);
+  border-radius: 9px;
+}
+
+.sandbox-location-scope {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.sandbox-location-options button,
+.sandbox-location-actions button {
+  min-height: 29px;
+  padding: 5px 8px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font: inherit;
+}
+
+.sandbox-location-options button:hover,
+.sandbox-location-options button.selected {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
+.sandbox-location-options button.selected {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-focus) 65%, transparent);
+}
+
+.sandbox-location-actions {
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.sandbox-location-actions button:hover {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
+.sandbox-location-actions button.primary {
+  color: var(--brand-mark-detail);
+  background: var(--primary);
+}
+
+.sandbox-location-actions button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.sandbox-access-unavailable {
+  display: block;
+  padding: 9px 0;
+  margin: 8px 0;
+  color: var(--text-muted);
+  border-top: 1px solid color-mix(in srgb, var(--border-default) 65%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-default) 65%, transparent);
 }
 
 .host-toggle input {

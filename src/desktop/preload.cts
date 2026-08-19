@@ -17,6 +17,7 @@ import type { SubagentProfile, ThreadSubagentMode } from "../agent/subagents/pro
 import type { McpServerConfig } from "../mcp/types.js";
 import type { ImageUnderstandingProfile } from "../attachments/vision.js";
 import type { ModelToolSurface } from "../capabilities/surface.js";
+import type { SandboxAccessInput } from "../execution/access.js";
 
 const api: DesktopApi = {
   platform: process.platform,
@@ -86,6 +87,11 @@ const api: DesktopApi = {
   stopRun: (threadId: string) => ipcRenderer.invoke("desktop:stop-run", threadId),
   setThreadUnsafe: (threadId: string, unsafe: boolean) =>
     ipcRenderer.invoke("desktop:set-thread-unsafe", threadId, unsafe),
+  chooseSandboxFolder: () => ipcRenderer.invoke("desktop:choose-sandbox-folder"),
+  addSandboxAccess: (threadId: string, input: SandboxAccessInput) =>
+    ipcRenderer.invoke("desktop:add-sandbox-access", threadId, input),
+  removeSandboxAccess: (threadId: string, grantId: string) =>
+    ipcRenderer.invoke("desktop:remove-sandbox-access", threadId, grantId),
   resolveCommandApproval: (id: string, decision: CommandApprovalDecision) =>
     ipcRenderer.invoke("desktop:resolve-command-approval", id, decision),
   setTheme: (themeId: string) => ipcRenderer.invoke("desktop:set-theme", themeId),

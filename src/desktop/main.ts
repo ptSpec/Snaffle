@@ -47,6 +47,7 @@ import {
 } from "../providers/openai-compatible.js";
 import { isReasoningEffort } from "../providers/provider.js";
 import type { RunEvent } from "../protocol.js";
+import { globalSandboxAccess, mergeSandboxAccess } from "../execution/access.js";
 import { probeNativeSandbox } from "../execution/native/sandbox.js";
 import { defaultTools } from "../tools/built-ins.js";
 import { McpManager } from "../mcp/manager.js";
@@ -501,6 +502,17 @@ function registerIpc(): void {
     return result.canceled ? null : result.filePaths[0] ?? null;
   });
 
+  ipcMain.handle("desktop:choose-sandbox-folder", async (): Promise<string | null> => {
+    if (process.platform === "win32") {
+      throw new Error("Additional sandbox folders are available on macOS and Linux");
+    }
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      title: "Choose a folder to allow",
+      properties: ["openDirectory"],
+    });
+    return result.canceled ? null : result.filePaths[0] ?? null;
+  });
+
   ipcMain.handle("desktop:set-max-steps", (_event, value: unknown): void => {
     const next = validMaxSteps(value);
     if (next === undefined) throw new Error("Maximum turns must be an integer from 1 to 200");
@@ -682,6 +694,12 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     ),
     runningThreadIds: runs.runningThreadIds(),
     unsafeThreadIds: runs.unsafeThreadIds(),
+    sandboxAccess: mergeSandboxAccess(
+      await globalSandboxAccess(),
+      workspace && state.activeThreadId
+        ? await store.sandboxAccess(workspace.id, state.activeThreadId)
+        : [],
+    ),
     defaultModel: selectedModel || null,
     defaultProviderConnectionId: selectedProviderConnectionId,
     restrictedHostAvailable: sandbox.available,

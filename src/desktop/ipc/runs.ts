@@ -1,5 +1,7 @@
 import { ipcMain } from "electron";
 import { randomUUID } from "node:crypto";
+import { realpath, stat } from "node:fs/promises";
+import path from "node:path";
 import { runAgent } from "../../agent/loop.js";
 import { threadSubagent, type SubagentProfile } from "../../agent/subagents/profile.js";
 import { ProviderCapacity } from "../../agent/subagents/capacity.js";
@@ -31,6 +33,13 @@ import {
   type PlanItem,
 } from "../../tools/plan.js";
 import type { DesktopState, StartRunInput } from "../api.js";
+import {
+  addGlobalSandboxAccess,
+  globalSandboxAccess,
+  mergeSandboxAccess,
+  removeGlobalSandboxAccess,
+  type SandboxAccessInput,
+} from "../../execution/access.js";
 import type { DesktopStore } from "../store.js";
 
 export type RunIpc = {
@@ -146,10 +155,17 @@ export function registerRunIpc(options: {
     );
     const controller = new AbortController();
     const threadId = input.threadId;
+    const sandboxAccess = unrestricted
+      ? []
+      : mergeSandboxAccess(
+          await globalSandboxAccess(),
+          await options.store.sandboxAccess(selectedWorkspace.id, threadId),
+        );
     const workspace = new LocalWorkspace(
       selectedWorkspace.path,
       unrestricted ? "unsafe" : "restricted",
       (request) => requestApproval(threadId, request),
+      sandboxAccess,
     );
     const run = {
       controller,
@@ -474,6 +490,62 @@ export function registerRunIpc(options: {
     return options.state(false);
   });
 
+  ipcMain.handle("desktop:add-sandbox-access", async (
+    _event,
+    rawThreadId: unknown,
+    rawInput: unknown,
+  ): Promise<DesktopState> => {
+    if (process.platform !== "darwin" && process.platform !== "linux") {
+      throw new Error("Additional sandbox folders are available on macOS and Linux");
+    }
+    const threadId = id(rawThreadId, "Thread");
+    if (active.has(threadId)) throw new Error("Sandbox access cannot change during a run");
+    const state = await options.store.state();
+    const workspace = state.workspaces.find((item) =>
+      item.threads.some((thread) => thread.id === threadId));
+    if (!workspace) throw new Error("The selected thread no longer exists");
+    const input = await sandboxAccessInput(rawInput, workspace.path);
+    const existing = mergeSandboxAccess(
+      await globalSandboxAccess(),
+      await options.store.sandboxAccess(workspace.id, threadId),
+    );
+    const samePath = existing.find((grant) => grant.path === input.path);
+    if (samePath && samePath.scope !== input.scope) {
+      throw new Error(`This folder is already allowed for ${sandboxScopeLabel(samePath.scope)}; remove it before changing scope`);
+    }
+    if (!existing.some((grant) => grant.path === input.path) && existing.length >= 8) {
+      throw new Error("Add at most 8 additional sandbox folders");
+    }
+    if (input.scope === "global") {
+      await addGlobalSandboxAccess(input);
+    } else {
+      await options.store.addSandboxAccess(workspace.id, threadId, input);
+    }
+    return options.state(false);
+  });
+
+  ipcMain.handle("desktop:remove-sandbox-access", async (
+    _event,
+    rawThreadId: unknown,
+    rawGrantId: unknown,
+  ): Promise<DesktopState> => {
+    const threadId = id(rawThreadId, "Thread");
+    if (active.has(threadId)) throw new Error("Sandbox access cannot change during a run");
+    const state = await options.store.state();
+    const workspace = state.workspaces.find((item) =>
+      item.threads.some((thread) => thread.id === threadId));
+    if (!workspace) throw new Error("The selected thread no longer exists");
+    const grantId = id(rawGrantId, "Sandbox grant");
+    const grant = mergeSandboxAccess(
+      await globalSandboxAccess(),
+      await options.store.sandboxAccess(workspace.id, threadId),
+    ).find((item) => item.id === grantId);
+    if (!grant) return options.state(false);
+    if (grant.scope === "global") await removeGlobalSandboxAccess(grant.path);
+    else await options.store.removeSandboxAccess(workspace.id, threadId, grantId);
+    return options.state(false);
+  });
+
   ipcMain.handle("desktop:resolve-command-approval", async (
     _event,
     rawId: unknown,
@@ -706,7 +778,36 @@ function approvalDecision(value: unknown): CommandApprovalDecision {
   throw new Error("Invalid approval decision");
 }
 
+async function sandboxAccessInput(value: unknown, workspacePath: string): Promise<SandboxAccessInput> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Sandbox access must be an object");
+  }
+  const input = value as Record<string, unknown>;
+  const requestedPath = typeof input.path === "string" ? input.path.trim() : "";
+  if (!path.isAbsolute(requestedPath)) throw new Error("Choose an absolute folder path");
+  const canonicalPath = await realpath(requestedPath);
+  if (!(await stat(canonicalPath)).isDirectory()) throw new Error("Sandbox access must point to a folder");
+  if (canonicalPath === path.parse(canonicalPath).root) {
+    throw new Error("Choose a specific folder instead of the filesystem root");
+  }
+  const relative = path.relative(await realpath(workspacePath), canonicalPath);
+  if (!relative || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))) {
+    throw new Error("This folder is already available inside the workspace");
+  }
+  if (input.scope !== "thread" && input.scope !== "workspace" && input.scope !== "global") {
+    throw new Error("Choose thread, workspace, or global access");
+  }
+  if (typeof input.writable !== "boolean") throw new Error("Folder access must be read only or read and write");
+  return { path: canonicalPath, writable: input.writable, scope: input.scope };
+}
+
 function id(value: unknown, label: string): string {
   if (typeof value !== "string" || !value) throw new Error(`${label} ID must be text`);
   return value;
+}
+
+function sandboxScopeLabel(scope: "thread" | "workspace" | "global"): string {
+  if (scope === "thread") return "this thread";
+  if (scope === "workspace") return "this workspace";
+  return "all workspaces";
 }
