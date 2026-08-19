@@ -895,7 +895,7 @@ function steeringMessage(value: unknown): string {
 }
 
 function approvalDecision(value: unknown): Exclude<CommandApprovalDecision, "sandbox"> {
-  if (value === "deny" || value === "once" || value === "thread") return value;
+  if (value === "deny" || value === "once" || value === "response" || value === "thread") return value;
   throw new Error("Invalid approval decision");
 }
 

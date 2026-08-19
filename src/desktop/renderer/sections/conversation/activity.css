@@ -182,7 +182,7 @@
 }
 
 .approval-card {
-  width: min(620px, 100%);
+  width: min(760px, 100%);
   margin: 4px 0 12px;
   padding: 12px;
   color: var(--text-secondary);
@@ -299,9 +299,16 @@
   gap: 6px;
 }
 
+.approval-host-access button {
+  color: var(--text-secondary);
+  background: var(--hover-background);
+  border-color: var(--border-default);
+}
+
 .approval-host-access span {
   margin-right: auto;
-  color: var(--text-muted);
+  color: var(--text-secondary);
+  font-weight: 600;
 }
 
 .approval-result {
@@ -312,6 +319,7 @@
 }
 
 .approval-result.once,
+.approval-result.response,
 .approval-result.thread,
 .approval-result.sandbox {
   color: var(--status-success-text);

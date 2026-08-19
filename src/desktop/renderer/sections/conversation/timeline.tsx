@@ -331,6 +331,8 @@ function ApprovalEntry({
       ? "Extra access denied"
       : item.decision === "once"
         ? "Extra access allowed once"
+        : item.decision === "response"
+          ? "Unrestricted access allowed for this response"
         : item.decision === "sandbox"
           ? "Folder added; command retried in the sandbox"
           : "Extra access allowed for this thread";
@@ -347,7 +349,7 @@ function ApprovalEntry({
     ? "Restricted mode blocks network access. You can allow this command to run with your normal user access."
     : folders.length
       ? `Allow ${writable ? "read and write" : "read"} access ${scopeLabel} and retry inside the sandbox.`
-      : "Snaffle could not determine which folder this command needs. Choose it to retry inside the sandbox.";
+      : "Snaffle could not identify the required folder. Choose one to retry inside the sandbox, or use Allow once to run this command outside it.";
 
   async function chooseFolder(add = false): Promise<void> {
     const selected = await onChooseSandboxFolder?.();
@@ -380,11 +382,14 @@ function ApprovalEntry({
       <div className="approval-actions">
         {folders.length && canGrantFolders ? (
           <button type="button" className="primary" disabled={granting} onClick={() => void grantFolders()}>
-            {granting ? "Adding…" : folders.length === 1 ? "Allow folder" : `Allow ${folders.length} folders`}
+            {granting ? "Adding…" : "Add to sandbox"}
           </button>
         ) : null}
-        {canGrantFolders ? (
-          <button type="button" onClick={() => void chooseFolder()}>{folders.length ? "Choose different" : "Choose folder"}</button>
+        {canGrantFolders && !folders.length ? (
+          <button type="button" onClick={() => void chooseFolder()}>Choose folder</button>
+        ) : null}
+        {!networkRequest ? (
+          <button type="button" onClick={() => onResolve?.(item.id, "once")}>Allow once</button>
         ) : null}
         {!networkRequest ? (
           <button type="button" aria-expanded={optionsOpen} onClick={() => setOptionsOpen((open) => !open)}>Options</button>
@@ -393,7 +398,7 @@ function ApprovalEntry({
         {networkRequest ? (
           <>
             <button type="button" onClick={() => onResolve?.(item.id, "once")}>Allow once</button>
-            <button type="button" onClick={() => onResolve?.(item.id, "thread")}>Allow for this thread</button>
+            <button type="button" onClick={() => onResolve?.(item.id, "thread")}>Unrestricted for this thread</button>
           </>
         ) : null}
       </div>
@@ -414,9 +419,9 @@ function ApprovalEntry({
             </>
           ) : null}
           <div className="approval-host-access">
-            <span>Run outside the sandbox</span>
-            <button type="button" onClick={() => onResolve?.(item.id, "once")}>Allow once</button>
-            <button type="button" onClick={() => onResolve?.(item.id, "thread")}>Allow for this thread</button>
+            <span>Disable sandbox</span>
+            <button type="button" onClick={() => onResolve?.(item.id, "response")}>Unrestricted for this response</button>
+            <button type="button" onClick={() => onResolve?.(item.id, "thread")}>Unrestricted for this thread</button>
           </div>
         </div>
       ) : null}

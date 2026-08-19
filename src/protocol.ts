@@ -68,7 +68,7 @@ export type Usage = {
 
 export type ProviderState = Record<string, unknown>;
 
-export type CommandApprovalDecision = "deny" | "once" | "thread" | "sandbox";
+export type CommandApprovalDecision = "deny" | "once" | "response" | "thread" | "sandbox";
 
 export type ModelResponse = {
   text: string;

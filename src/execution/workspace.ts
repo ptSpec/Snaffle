@@ -210,7 +210,7 @@ export class LocalWorkspace implements Workspace {
         );
         return { ...retried, approval: decision };
       }
-      if (decision === "thread") this.commandExecution = "unsafe";
+      if (decision === "response" || decision === "thread") this.commandExecution = "unsafe";
       const retried = await this.runUnsafe(command, commandCwd, timeoutMs, signal);
       return { ...retried, approval: decision };
     }

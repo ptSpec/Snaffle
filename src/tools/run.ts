@@ -33,6 +33,8 @@ export const runTool: Tool = {
     const header = [
       result.approval === "thread"
         ? "permission: user allowed unrestricted commands for this thread"
+        : result.approval === "response"
+          ? "permission: user allowed unrestricted commands for this response"
         : result.approval === "once"
           ? "permission: user allowed this command once"
           : "",
