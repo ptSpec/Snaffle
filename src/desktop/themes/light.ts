@@ -25,5 +25,6 @@ export const lightTheme = {
     "code-string": "#0a3069",
     "code-number": "#0550ae",
     "code-type": "#953800",
+    "code-tag": "#8f4f36",
   },
 } satisfies Theme;

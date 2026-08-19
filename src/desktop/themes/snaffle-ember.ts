@@ -26,5 +26,6 @@ export const snaffleEmberTheme = {
     "code-string": "#a7c080",
     "code-number": "#d699b6",
     "code-type": "#7fb4ca",
+    "code-tag": "#c58b6d",
   },
 } satisfies Theme;

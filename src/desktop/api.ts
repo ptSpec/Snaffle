@@ -20,6 +20,9 @@ import type { SkillSummary } from "../extensions/skills/types.js";
 import type { ImageUnderstandingProfile } from "../attachments/vision.js";
 import type { ModelToolSurface, ModelToolSurfaces } from "../capabilities/surface.js";
 import type { DesktopUpdateState } from "./updates.js";
+import type { SandboxAccessGrant, SandboxAccessInput } from "../execution/access.js";
+
+export type { SandboxAccessGrant, SandboxAccessInput } from "../execution/access.js";
 
 export type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents } from "../git/types.js";
 export type { DesktopUpdateState } from "./updates.js";
@@ -130,6 +133,7 @@ export type DesktopState = {
   webSearchKeyBackends: KetchSearchBackend[];
   runningThreadIds: string[];
   unsafeThreadIds: string[];
+  sandboxAccess: SandboxAccessGrant[];
   defaultModel: string | null;
   defaultProviderConnectionId: string;
   restrictedHostAvailable: boolean;
@@ -186,6 +190,15 @@ export type DesktopTerminalExitEvent = {
   exitCode: number;
 };
 
+export type CodeSelectionInput = {
+  path: string;
+  ranges: Array<{
+    fromLine: number;
+    toLine: number;
+    text: string;
+  }>;
+};
+
 export interface DesktopApi {
   platform: string;
   getState(): Promise<DesktopState>;
@@ -224,6 +237,7 @@ export interface DesktopApi {
   importDroppedFiles(files: File[]): Promise<AttachmentPreview[]>;
   importClipboardImage(): Promise<AttachmentPreview>;
   importTerminalOutput(workspaceId: string, output: string): Promise<AttachmentPreview>;
+  importCodeSelection(input: CodeSelectionInput): Promise<AttachmentPreview>;
   readClipboardText(): Promise<string>;
   readClipboardHtml(): Promise<string>;
   removeAttachment(id: string): Promise<void>;
@@ -232,6 +246,9 @@ export interface DesktopApi {
   steerRun(threadId: string, message: string): Promise<boolean>;
   stopRun(threadId: string): Promise<boolean>;
   setThreadUnsafe(threadId: string, unsafe: boolean): Promise<DesktopState>;
+  chooseSandboxFolder(): Promise<string | null>;
+  addSandboxAccess(threadId: string, input: SandboxAccessInput): Promise<DesktopState>;
+  removeSandboxAccess(threadId: string, grantId: string): Promise<DesktopState>;
   resolveCommandApproval(id: string, decision: CommandApprovalDecision): Promise<DesktopState>;
   setTheme(themeId: string): Promise<void>;
   setTypography(interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId): Promise<void>;

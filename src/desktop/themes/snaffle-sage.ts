@@ -26,5 +26,6 @@ export const snaffleSageTheme = {
     "code-string": "#336f58",
     "code-number": "#76578f",
     "code-type": "#3e6680",
+    "code-tag": "#8a553f",
   },
 } satisfies Theme;

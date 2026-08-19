@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type CSSProperties } from "react";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import {
   HighlightStyle,
@@ -7,11 +7,13 @@ import {
   indentOnInput,
   syntaxHighlighting,
 } from "@codemirror/language";
-import { unifiedMergeView } from "@codemirror/merge";
-import { EditorState, type Extension } from "@codemirror/state";
+import { getChunks, getOriginalDoc, unifiedMergeView, type Chunk } from "@codemirror/merge";
+import { EditorState, RangeSetBuilder, type Extension } from "@codemirror/state";
 import {
   EditorView,
+  GutterMarker,
   drawSelection,
+  gutter,
   highlightActiveLine,
   highlightActiveLineGutter,
   highlightSpecialChars,
@@ -22,24 +24,41 @@ import { tags } from "@lezer/highlight";
 import "./editor.css";
 
 export type GitEditorHandle = { value(): string };
+export type GitCodeSelection = {
+  fromLine: number;
+  toLine: number;
+  text: string;
+};
+
+type SelectionAction = {
+  ranges: GitCodeSelection[];
+  left: number;
+  top: number;
+};
 
 const GitEditor = forwardRef<GitEditorHandle, {
   path: string;
   current: string;
   original: string;
+  askDisabled: boolean;
   onDirty(): void;
   onSave(value: string): void;
+  onAskSelection(ranges: GitCodeSelection[]): void;
 }>(function GitEditor({
   path,
   current,
   original,
+  askDisabled,
   onDirty,
   onSave,
+  onAskSelection,
 }, ref): JSX.Element {
+  const root = useRef<HTMLDivElement>(null);
   const parent = useRef<HTMLDivElement>(null);
   const editor = useRef<EditorView>();
-  const handlers = useRef({ onDirty, onSave });
-  handlers.current = { onDirty, onSave };
+  const [selectionAction, setSelectionAction] = useState<SelectionAction | null>(null);
+  const handlers = useRef({ onDirty, onSave, onAskSelection });
+  handlers.current = { onDirty, onSave, onAskSelection };
 
   useImperativeHandle(ref, () => ({
     value: () => editor.current?.state.doc.toString() ?? current,
@@ -60,6 +79,7 @@ const GitEditor = forwardRef<GitEditorHandle, {
             highlightActiveLineGutter(),
             highlightSpecialChars(),
             history(),
+            EditorState.allowMultipleSelections.of(true),
             drawSelection(),
             indentOnInput(),
             bracketMatching(),
@@ -80,8 +100,12 @@ const GitEditor = forwardRef<GitEditorHandle, {
               allowInlineDiffs: true,
               ...(current === original ? {} : { collapseUnchanged: { margin: 3, minSize: 6 } }),
             }),
+            rightDiffGutter,
             EditorView.updateListener.of((update) => {
               if (update.docChanged) handlers.current.onDirty();
+              if (update.docChanged || update.selectionSet || update.viewportChanged || update.geometryChanged) {
+                showSelectionAction(update.view, root.current, setSelectionAction);
+              }
             }),
             editorTheme,
             language,
@@ -98,10 +122,111 @@ const GitEditor = forwardRef<GitEditorHandle, {
     };
   }, [current, original, path]);
 
-  return <div className="git-editor" ref={parent} />;
+  return (
+    <div className="git-editor" ref={root}>
+      <div className="git-editor-host" ref={parent} />
+      {selectionAction ? (
+        <button
+          className="git-editor-ask"
+          type="button"
+          disabled={askDisabled}
+          title={askDisabled ? "Save this file before asking about the selection" : "Attach selected code to the conversation"}
+          style={{ left: selectionAction.left, top: selectionAction.top } as CSSProperties}
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => handlers.current.onAskSelection(selectionAction.ranges)}
+        >Ask Snaffle</button>
+      ) : null}
+    </div>
+  );
 });
 
 export default GitEditor;
+
+function showSelectionAction(
+  view: EditorView,
+  root: HTMLDivElement | null,
+  show: (action: SelectionAction | null) => void,
+): void {
+  if (!root) return;
+  const ranges = view.state.selection.ranges.filter((range) => !range.empty);
+  const last = ranges.at(-1);
+  if (!last) {
+    show(null);
+    return;
+  }
+  const coordinates = view.coordsAtPos(last.to);
+  if (!coordinates) {
+    show(null);
+    return;
+  }
+
+  const bounds = root.getBoundingClientRect();
+  const buttonWidth = 98;
+  const below = coordinates.bottom - bounds.top + 6;
+  const top = below + 32 < bounds.height ? below : coordinates.top - bounds.top - 34;
+  show({
+    ranges: ranges.map((range) => {
+      const finalPosition = Math.max(range.from, range.to - 1);
+      return {
+        fromLine: view.state.doc.lineAt(range.from).number,
+        toLine: view.state.doc.lineAt(finalPosition).number,
+        text: view.state.doc.sliceString(range.from, range.to),
+      };
+    }),
+    left: Math.max(8, Math.min(coordinates.left - bounds.left, bounds.width - buttonWidth - 8)),
+    top: Math.max(8, top),
+  });
+}
+
+const addedGutterMarker = new class extends GutterMarker {
+  elementClass = "cm-changedLineGutter";
+}();
+
+const removedGutterMarker = new class extends GutterMarker {
+  elementClass = "cm-deletedLineGutter";
+}();
+
+const modifiedGutterMarker = new class extends GutterMarker {
+  elementClass = "cm-inlineChangedLineGutter";
+}();
+
+const rightDiffGutter = gutter({
+  class: "cm-changeGutter cm-changeGutter-right",
+  side: "after",
+  markers(view) {
+    const builder = new RangeSetBuilder<GutterMarker>();
+    const chunks = getChunks(view.state)?.chunks ?? [];
+    for (const chunk of chunks) {
+      if (chunk.fromB === chunk.toB) continue;
+      const marker = displaysInline(view.state, chunk) ? modifiedGutterMarker : addedGutterMarker;
+      for (let line = view.state.doc.lineAt(chunk.fromB);;) {
+        builder.add(line.from, line.from, marker);
+        if (line.to >= chunk.endB) break;
+        line = view.state.doc.lineAt(line.to + 1);
+      }
+    }
+    return builder.finish();
+  },
+  widgetMarker(view, widget) {
+    return widget.toDOM(view).classList.contains("cm-deletedChunk") ? removedGutterMarker : null;
+  },
+});
+
+function displaysInline(state: EditorState, chunk: Chunk): boolean {
+  const original = getOriginalDoc(state);
+  const originalLines = original.lineAt(chunk.endA).number - original.lineAt(chunk.fromA).number + 1;
+  const currentLines = state.doc.lineAt(chunk.endB).number - state.doc.lineAt(chunk.fromB).number + 1;
+  if (originalLines !== currentLines || originalLines >= 10) return false;
+
+  let deletedCharacters = 0;
+  for (const change of chunk.changes) {
+    if (change.fromA === change.toA) continue;
+    deletedCharacters += change.toA - change.fromA;
+    const deleted = original.sliceString(chunk.fromA + change.fromA, chunk.fromA + change.toA);
+    if (deleted.includes("\n")) return false;
+  }
+  return deletedCharacters < chunk.endA - chunk.fromA - originalLines * 2;
+}
 
 const editorTheme = EditorView.theme({
   "&": {
@@ -135,15 +260,28 @@ const editorTheme = EditorView.theme({
   },
   ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "var(--hover-background)" },
   "&.cm-merge-b .cm-changedLine": {
-    backgroundColor: "color-mix(in srgb, var(--diff-added-text) 16%, var(--code-background))",
+    backgroundColor: "transparent",
   },
   ".cm-deletedChunk": {
-    backgroundColor: "color-mix(in srgb, var(--diff-removed-text) 16%, var(--code-background))",
+    backgroundColor: "transparent",
   },
+  ".cm-inlineChangedLine": { backgroundColor: "transparent" },
   ".cm-deletedChunk, .cm-deletedChunk *": { userSelect: "text" },
   ".cm-deletedChunk ::selection": { backgroundColor: "var(--editor-selection-background)" },
+  ".cm-deletedLine del, &.cm-merge-b del.cm-deletedText": {
+    textDecoration: "line-through",
+    textDecorationColor: "color-mix(in srgb, var(--diff-removed-text) 58%, transparent)",
+    textDecorationThickness: "1px",
+  },
+  "&.cm-merge-b .cm-deletedText": { background: "none" },
+  "&.cm-merge-b .cm-changedText, &.cm-merge-b .cm-insertedLine": {
+    background: "linear-gradient(color-mix(in srgb, var(--diff-added-text) 68%, transparent), color-mix(in srgb, var(--diff-added-text) 68%, transparent)) bottom / 100% 2px no-repeat",
+  },
   "&.cm-merge-b .cm-changedLineGutter": { background: "var(--diff-added-text)" },
   ".cm-deletedLineGutter": { background: "var(--diff-removed-text)" },
+  ".cm-inlineChangedLineGutter": { background: "var(--syntax-type)" },
+  ".cm-changeGutter-right": { width: "4px", paddingLeft: "0" },
+  ".cm-changeGutter-right .cm-gutterElement": { minWidth: "4px" },
   ".cm-collapsedLines": {
     color: "var(--text-muted)",
     background: "color-mix(in srgb, var(--text-faint) 12%, var(--code-background))",

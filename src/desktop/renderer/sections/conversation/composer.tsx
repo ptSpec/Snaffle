@@ -4,7 +4,7 @@ import type {
   FormEvent,
   RefObject,
 } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   ProviderAllowance,
   ProviderCatalog,
@@ -17,6 +17,7 @@ import { ContextGauge } from "./context-gauge.js";
 import { ModelPicker } from "./model-picker.js";
 import { providerVisual } from "./provider-mark.js";
 import { customToolChoices, type ModelToolSurface } from "../../../../capabilities/surface.js";
+import type { SandboxAccessGrant, SandboxAccessInput } from "../../../../execution/access.js";
 
 export function Composer({
   task,
@@ -42,6 +43,7 @@ export function Composer({
   compactingContext,
   unsafe,
   restrictedDetail,
+  sandboxAccess,
   orbMotion,
   blocker,
   error,
@@ -60,9 +62,32 @@ export function Composer({
   onToolSurface,
   onCompact,
   onUnsafe,
+  onChooseSandboxLocation,
+  onAddSandboxAccess,
+  onRemoveSandboxAccess,
   onStop,
   onSlashCommand,
 }: ComposerProps): JSX.Element {
+  const [addingSandboxLocation, setAddingSandboxLocation] = useState(false);
+  const [sandboxPath, setSandboxPath] = useState("");
+  const [sandboxWritable, setSandboxWritable] = useState(false);
+  const [sandboxScope, setSandboxScope] = useState<SandboxAccessInput["scope"]>("global");
+
+  async function chooseSandboxLocation(): Promise<void> {
+    const location = await onChooseSandboxLocation();
+    if (location) setSandboxPath(location);
+  }
+
+  function addSandboxLocation(): void {
+    const location = sandboxPath.trim();
+    if (!location) return;
+    onAddSandboxAccess({ path: location, writable: sandboxWritable, scope: sandboxScope });
+    setSandboxPath("");
+    setSandboxWritable(false);
+    setSandboxScope("global");
+    setAddingSandboxLocation(false);
+  }
+
   return (
     <form
       className={dragging ? "composer dragging" : "composer"}
@@ -169,15 +194,113 @@ export function Composer({
         <details ref={executionMode} className={unsafe ? "execution-mode unsafe" : "execution-mode"}>
           <summary>
             {unsafe ? <span className="execution-dot" aria-hidden="true" /> : <Shield />}
-            {unsafe ? "Unsafe · this thread" : "Restricted"}
+            {unsafe
+              ? "Unsafe · this thread"
+              : `Restricted${sandboxAccess.length ? ` · ${sandboxAccess.length}` : ""}`}
           </summary>
           <div className="execution-details">
             <strong>{unsafe ? "Unrestricted host execution" : restrictedDetail}</strong>
             <p>
               {unsafe
                 ? "Shell commands run as your user and can access host files, network, and inherited environment. File tools remain workspace-only."
-                : <>Shell commands can write in this workspace and use private temporary files.<br />Personal host files, network access, and Git metadata are blocked.</>}
+                : <>Shell commands can write in this workspace and use private temporary files.<br />Other host files, network access, and workspace Git metadata remain protected.</>}
             </p>
+            {!unsafe && platform !== "win32" ? (
+              <div className="sandbox-access">
+                <div className="sandbox-access-heading">
+                  <span>Additional locations</span>
+                  <small>Remain sandboxed</small>
+                </div>
+                {sandboxAccess.length ? (
+                  <div className="sandbox-location-list">
+                    {sandboxAccess.map((location) => (
+                      <div className="sandbox-location" key={location.id}>
+                        <span className="sandbox-location-icon" aria-hidden="true">⌁</span>
+                        <span className="sandbox-location-copy">
+                          <code title={location.path}>{location.path}</code>
+                          <small>
+                            {location.writable ? "Read & write" : "Read only"}
+                            {` · ${sandboxScopeLabel(location.scope)}`}
+                          </small>
+                        </span>
+                        <button
+                          type="button"
+                          className="sandbox-location-remove"
+                          aria-label={`Remove ${location.path}`}
+                          title="Remove location"
+                          disabled={running}
+                          onClick={() => onRemoveSandboxAccess(location.id)}
+                        >×</button>
+                      </div>
+                    ))}
+                  </div>
+                ) : <small className="sandbox-access-empty">No additional folders allowed.</small>}
+
+                {addingSandboxLocation ? (
+                  <div className="sandbox-location-form">
+                    <label>
+                      Folder
+                      <button
+                        type="button"
+                        className="sandbox-location-picker"
+                        autoFocus
+                        title={sandboxPath || undefined}
+                        onClick={() => void chooseSandboxLocation()}
+                      >
+                        <span>{sandboxPath || "Choose folder…"}</span>
+                        <span aria-hidden="true">Choose</span>
+                      </button>
+                    </label>
+                    <div className="sandbox-location-options" aria-label="Folder access">
+                      <button
+                        type="button"
+                        className={!sandboxWritable ? "selected" : ""}
+                        onClick={() => setSandboxWritable(false)}
+                      >Read only</button>
+                      <button
+                        type="button"
+                        className={sandboxWritable ? "selected" : ""}
+                        onClick={() => setSandboxWritable(true)}
+                      >Read & write</button>
+                    </div>
+                    <div className="sandbox-location-options sandbox-location-scope" aria-label="Permission duration">
+                      <button
+                        type="button"
+                        className={sandboxScope === "thread" ? "selected" : ""}
+                        onClick={() => setSandboxScope("thread")}
+                      >This thread</button>
+                      <button
+                        type="button"
+                        className={sandboxScope === "workspace" ? "selected" : ""}
+                        onClick={() => setSandboxScope("workspace")}
+                      >This workspace</button>
+                      <button
+                        type="button"
+                        className={sandboxScope === "global" ? "selected" : ""}
+                        onClick={() => setSandboxScope("global")}
+                      >All workspaces</button>
+                    </div>
+                    <div className="sandbox-location-actions">
+                      <button type="button" onClick={() => setAddingSandboxLocation(false)}>Cancel</button>
+                      <button type="button" className="primary" disabled={!sandboxPath.trim() || running} onClick={addSandboxLocation}>
+                        Add access
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="sandbox-add-location"
+                    disabled={running}
+                    onClick={() => setAddingSandboxLocation(true)}
+                  >+ Add location</button>
+                )}
+              </div>
+            ) : !unsafe && platform === "win32" ? (
+              <small className="sandbox-access-unavailable">
+                Additional sandbox folders are unavailable on Windows.
+              </small>
+            ) : null}
             <label className={unsafe ? "host-toggle enabled" : "host-toggle"}>
               <input
                 type="checkbox"
@@ -209,6 +332,12 @@ export function Composer({
       {error ? <div className="composer-error" role="alert">{error}</div> : null}
     </form>
   );
+}
+
+function sandboxScopeLabel(scope: SandboxAccessGrant["scope"]): string {
+  if (scope === "thread") return "This thread";
+  if (scope === "workspace") return "This workspace";
+  return "All workspaces";
 }
 
 function ToolSurfaceControl({
@@ -364,6 +493,7 @@ type ComposerProps = {
   compactingContext: boolean;
   unsafe: boolean;
   restrictedDetail: string;
+  sandboxAccess: SandboxAccessGrant[];
   orbMotion: OrbMotion;
   blocker: string | null;
   error: string | null;
@@ -382,6 +512,9 @@ type ComposerProps = {
   onToolSurface(surface: ModelToolSurface): void;
   onCompact(): void;
   onUnsafe(value: boolean): void;
+  onChooseSandboxLocation(): Promise<string | null>;
+  onAddSandboxAccess(input: SandboxAccessInput): void;
+  onRemoveSandboxAccess(grantId: string): void;
   onStop(): void;
   onSlashCommand(): void;
 };

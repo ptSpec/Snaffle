@@ -1,7 +1,10 @@
 import { Children, isValidElement, memo, useState, type ComponentProps, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
+import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import hljs from "highlight.js/lib/common";
+import "katex/dist/katex.min.css";
 import type { SourceReference } from "../../../../protocol.js";
 import { MermaidDiagram } from "./mermaid.js";
 
@@ -12,9 +15,14 @@ export const MarkdownContent = memo(function MarkdownContent({
   text: string;
   sources?: SourceReference[];
 }): JSX.Element {
-  const markdown = normalizeCitationMarkers(text);
+  const markdown = normalizeLatexDelimiters(normalizeCitationMarkers(text));
   return (
-    <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm, inlineSources(sources)]} skipHtml>
+    <ReactMarkdown
+      components={markdownComponents}
+      remarkPlugins={[remarkGfm, remarkMath, inlineSources(sources)]}
+      rehypePlugins={[rehypeKatex]}
+      skipHtml
+    >
       {markdown}
     </ReactMarkdown>
   );
@@ -28,6 +36,17 @@ function normalizeCitationMarkers(text: string): string {
       .map((url) => `<${url}>`)
       .join(" "),
   );
+}
+
+function normalizeLatexDelimiters(text: string): string {
+  return text
+    .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/g)
+    .map((part, index) => index % 2 === 1
+      ? part
+      : part
+          .replace(/\\\[([\s\S]*?)\\\]/g, (_match, math: string) => `\n\n$$\n${math.trim()}\n$$\n\n`)
+          .replace(/\\\(([^\n]*?)\\\)/g, (_match, math: string) => `$${math}$`))
+    .join("");
 }
 
 type MarkdownNode = {

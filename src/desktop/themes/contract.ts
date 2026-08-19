@@ -19,6 +19,7 @@ export const THEME_COLOR_DESCRIPTIONS = {
   "code-string": "Syntax-highlighted strings.",
   "code-number": "Syntax-highlighted numbers and literals.",
   "code-type": "Syntax-highlighted types and classes.",
+  "code-tag": "Syntax-highlighted markup tags and attributes.",
 } as const;
 
 export type ThemeColorName = keyof typeof THEME_COLOR_DESCRIPTIONS;

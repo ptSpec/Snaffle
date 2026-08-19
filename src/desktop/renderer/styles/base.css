@@ -62,6 +62,7 @@
   --syntax-number: var(--code-number);
   --syntax-function: var(--primary);
   --syntax-type: var(--code-type);
+  --syntax-tag: var(--code-tag);
   --syntax-operator: var(--code-text);
   --code-block-background: var(--code-background);
   --editor-selection-background: var(--primary);
@@ -325,6 +326,24 @@ body.resizing-columns .column-resizer::after {
   mask-image: linear-gradient(180deg, transparent, black 28%, black 72%, transparent);
 }
 
+.left-sidebar::after {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--pane-depth-shadow) 46%, transparent)
+  );
+  filter: blur(2.5px);
+  mask-image: linear-gradient(180deg, transparent, black 28%, black 72%, transparent);
+}
+
 body.resizing-columns,
 body.resizing-columns * {
   cursor: col-resize !important;
@@ -343,7 +362,6 @@ body.resizing-columns .workspace-shell {
   min-width: 0;
   min-height: 0;
   background: var(--sidebar-background);
-  box-shadow: inset -12px 0 18px -14px color-mix(in srgb, var(--pane-depth-shadow) 88%, transparent);
 }
 
 .workspace-shell > .conversation,
@@ -356,6 +374,11 @@ body.resizing-columns .workspace-shell {
   z-index: 1;
   overflow: hidden;
   border-radius: 14px 0 0 14px;
+}
+
+.workspace-shell.file-editor-focused > .conversation {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .workspace-shell > .inspector {

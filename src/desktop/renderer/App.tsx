@@ -15,6 +15,7 @@ import type { ImageUnderstandingProfile } from "../../attachments/vision.js";
 import type { CommandApprovalDecision } from "../../protocol.js";
 import {
   MAX_KEPT_ASIDE_MESSAGES,
+  type CodeSelectionInput,
   type DesktopApi,
   type DesktopRunEvent,
   type DesktopSearchResult,
@@ -64,6 +65,7 @@ import { Sidebar, type AppView, type SettingsPage } from "./sections/sidebar/sid
 import { InspectorPanel, type InspectorTab } from "./sections/inspector/panel.js";
 import type { OrbMotion } from "./components/thinking-orb.js";
 import { Composer } from "./sections/conversation/composer.js";
+import type { SandboxAccessInput } from "../../execution/access.js";
 import { AsideShelf } from "./sections/conversation/aside-shelf.js";
 import { CommandPalette, type AppCommand } from "./commands/palette.js";
 import { TerminalPanel } from "./sections/terminal/terminal.js";
@@ -113,6 +115,7 @@ const initialState: DesktopState = {
   webSearchKeyBackends: [],
   runningThreadIds: [],
   unsafeThreadIds: [],
+  sandboxAccess: [],
   defaultModel: null,
   defaultProviderConnectionId: "openrouter",
   restrictedHostAvailable: false,
@@ -193,6 +196,7 @@ export function App(): JSX.Element {
   const [explicitlyActiveTools, setExplicitlyActiveTools] = useState<string[]>([]);
   const taskInput = useRef<HTMLTextAreaElement>(null);
   const timelineView = useRef<HTMLDivElement>(null);
+  const timelineScrollTop = useRef(0);
   const executionMode = useRef<HTMLDetailsElement>(null);
   const composerAdd = useRef<HTMLDetailsElement>(null);
   const searchOpenedAt = useRef(0);
@@ -378,6 +382,15 @@ export function App(): JSX.Element {
       setShowJumpToLatest(false);
     }
   }, [timeline]);
+
+  useLayoutEffect(() => {
+    if (view !== "conversation") return;
+    const timeline = timelineView.current;
+    if (!timeline) return;
+    timeline.scrollTop = followTimeline.current
+      ? timeline.scrollHeight
+      : timelineScrollTop.current;
+  }, [view]);
 
   useEffect(() => {
     if (view === "conversation") {
@@ -872,6 +885,12 @@ export function App(): JSX.Element {
     }
   }
 
+  async function attachCodeSelection(input: CodeSelectionInput): Promise<void> {
+    if (pendingAttachments.length >= 8) throw new Error("Attach at most 8 files to one message");
+    await addAttachments([await window.desktop.importCodeSelection(input)]);
+    window.setTimeout(() => taskInput.current?.focus(), 0);
+  }
+
   async function addAttachments(imported: AttachmentPreview[]): Promise<void> {
     const fingerprints = new Set(pendingAttachments.map((attachment) => attachment.fingerprint));
     const unique = imported.filter((attachment) => {
@@ -1032,6 +1051,28 @@ export function App(): JSX.Element {
     setError(null);
     try {
       setDesktopState(withoutConversation(await window.desktop.setThreadUnsafe(threadId, unsafe)));
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function addSandboxAccess(input: SandboxAccessInput): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId) return;
+    setError(null);
+    try {
+      setDesktopState(withoutConversation(await window.desktop.addSandboxAccess(threadId, input)));
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function removeSandboxAccess(grantId: string): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId) return;
+    setError(null);
+    try {
+      setDesktopState(withoutConversation(await window.desktop.removeSandboxAccess(threadId, grantId)));
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -1878,9 +1919,11 @@ export function App(): JSX.Element {
   return (
     <main className={`app-shell platform-${window.desktop.platform}`}>
       <section
-        className={terminalVisible ? "workspace-shell terminal-open" : "workspace-shell"}
+        className={`workspace-shell${terminalVisible ? " terminal-open" : ""}${fileEditorExpanded.current ? " file-editor-focused" : ""}`}
         style={{
-          gridTemplateColumns: `${visibleLeftWidth}px minmax(360px, 1fr) ${visibleRightWidth}px`,
+          gridTemplateColumns: fileEditorExpanded.current
+            ? "0px 0px minmax(0, 1fr)"
+            : `${visibleLeftWidth}px minmax(360px, 1fr) ${visibleRightWidth}px`,
           gridTemplateRows: terminalVisible
             ? "minmax(0, 1fr) var(--terminal-height)"
             : "minmax(0, 1fr) 0px",
@@ -2000,7 +2043,11 @@ export function App(): JSX.Element {
             onError={setError}
           />
         ) : (
-          <section className="conversation view-enter" aria-label="Conversation">
+          <section
+            className="conversation view-enter"
+            aria-label="Conversation"
+            aria-hidden={fileEditorExpanded.current}
+          >
           <div className="timeline-shell">
             <div
               ref={timelineView}
@@ -2008,10 +2055,11 @@ export function App(): JSX.Element {
               aria-live="polite"
               onScroll={(event) => {
                 const view = event.currentTarget;
+                timelineScrollTop.current = view.scrollTop;
                 const distanceFromBottom = view.scrollHeight - view.scrollTop - view.clientHeight;
                 const following = distanceFromBottom < 80;
                 followTimeline.current = following;
-                setShowJumpToLatest(!following);
+                setShowJumpToLatest(distanceFromBottom > view.clientHeight * 0.4);
               }}
             >
               {timeline.map((item) => (
@@ -2111,6 +2159,7 @@ export function App(): JSX.Element {
             compactingContext={compactingContext}
             unsafe={unsafeHostExecution}
             restrictedDetail={desktopState.restrictedHostDetail}
+            sandboxAccess={desktopState.sandboxAccess}
             orbMotion={sendOrbMotion}
             blocker={runBlocker}
             error={error}
@@ -2129,6 +2178,9 @@ export function App(): JSX.Element {
             onToolSurface={(surface) => void setModelToolSurface(surface)}
             onCompact={() => void compactCurrentContext()}
             onUnsafe={(value) => void setThreadUnsafe(value)}
+            onChooseSandboxLocation={() => window.desktop.chooseSandboxFolder()}
+            onAddSandboxAccess={(input) => void addSandboxAccess(input)}
+            onRemoveSandboxAccess={(grantId) => void removeSandboxAccess(grantId)}
             onStop={() => void stopRun()}
             onSlashCommand={() => setCommandMode("slash")}
           />
@@ -2156,6 +2208,7 @@ export function App(): JSX.Element {
               onSelect={setSelectedItemId}
               onNavigateTurn={scrollToTimelineItem}
               onEditorOpen={expandFileEditor}
+              onAskSelection={attachCodeSelection}
               onCollapse={() => {
                 expandFileEditor(false);
                 setRightCollapsed(true);
@@ -2175,7 +2228,7 @@ export function App(): JSX.Element {
           />
         ) : null}
 
-        {leftCollapsed ? (
+        {fileEditorExpanded.current ? null : leftCollapsed ? (
           <button
             className="panel-reopen left"
             type="button"
@@ -2228,7 +2281,7 @@ export function App(): JSX.Element {
 }
 
 function focusedEditorWidth(): number {
-  return Math.max(320, Math.min(window.innerWidth * 0.65, window.innerWidth - 360));
+  return window.innerWidth;
 }
 
 function mergeStreamEvent(previous: DesktopRunEvent, next: DesktopRunEvent): boolean {

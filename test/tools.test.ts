@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -486,6 +486,30 @@ test("restricted commands stay inside the workspace", async (t) => {
   assert.notEqual(gitWrite.exitCode, 0);
   assert.notEqual(nestedGitWrite.exitCode, 0);
   assert.equal(inheritedSecret.exitCode, 0);
+});
+
+test("restricted commands honor explicit read-only and writable folders", async (t) => {
+  if (!nativeSandboxStatus().available) return t.skip(nativeSandboxStatus().detail);
+
+  const root = await mkdtemp(path.join(tmpdir(), "sandbox-access-workspace-"));
+  const readOnly = await mkdtemp(path.join(tmpdir(), "sandbox-access-read-"));
+  const writable = await mkdtemp(path.join(tmpdir(), "sandbox-access-write-"));
+  t.after(() => Promise.all([root, readOnly, writable].map((directory) =>
+    rm(directory, { recursive: true, force: true }))));
+  await writeFile(path.join(readOnly, "input.txt"), "visible");
+  const workspace = new LocalWorkspace(root, "restricted", undefined, [
+    { path: await realpath(readOnly), writable: false },
+    { path: await realpath(writable), writable: true },
+  ]);
+
+  const read = await workspace.run(`cat ${JSON.stringify(path.join(await realpath(readOnly), "input.txt"))}`, undefined, 5000);
+  const write = await workspace.run(`printf saved > ${JSON.stringify(path.join(await realpath(writable), "output.txt"))}`, undefined, 5000);
+  const denied = await workspace.run(`printf nope > ${JSON.stringify(path.join(await realpath(readOnly), "blocked.txt"))}`, undefined, 5000);
+
+  assert.equal(read.stdout, "visible");
+  assert.equal(write.exitCode, 0);
+  assert.equal(await readFile(path.join(writable, "output.txt"), "utf8"), "saved");
+  assert.notEqual(denied.exitCode, 0);
 });
 
 test("restricted commands can be approved once or for the thread", async (t) => {

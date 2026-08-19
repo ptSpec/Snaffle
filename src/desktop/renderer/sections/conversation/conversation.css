@@ -32,7 +32,7 @@
   background: var(--panel);
   border: 1px solid var(--border-default);
   border-radius: 999px;
-  box-shadow: 0 5px 18px color-mix(in srgb, var(--text) 13%, transparent);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 18%);
   font-family: var(--font-interface);
   font-size: calc(12px * var(--interface-font-scale));
   transform: translateX(50%);
@@ -43,6 +43,10 @@
   color: var(--text-strong);
   background: var(--hover-background);
   border-color: var(--border-focus);
+}
+
+html[data-appearance="dark"] .jump-to-latest {
+  box-shadow: 0 3px 10px rgb(0 0 0 / 24%);
 }
 
 .jump-to-latest svg {
@@ -605,6 +609,18 @@
   max-width: 100%;
 }
 
+.markdown-content .katex-display {
+  max-width: 100%;
+  margin: 14px 0;
+  padding: 4px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.markdown-content .katex-error {
+  color: var(--status-danger-text);
+}
+
 .code-block {
   position: relative;
   margin: 0 0 14px;
@@ -613,6 +629,10 @@
   background: var(--code-block-background);
   border: 1px solid var(--border-default);
   border-radius: 7px;
+}
+
+html[data-appearance="dark"] .markdown-content .code-block {
+  border-color: transparent;
 }
 
 .code-block-actions {
@@ -757,10 +777,15 @@
 
 .hljs-string,
 .hljs-regexp,
-.hljs-attribute,
 .hljs-template-tag,
 .hljs-template-variable {
   color: var(--syntax-string);
+}
+
+.hljs-name,
+.hljs-attr,
+.hljs-attribute {
+  color: var(--syntax-tag);
 }
 
 .hljs-number,

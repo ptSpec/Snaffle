@@ -1,6 +1,34 @@
 .git-editor {
+  --code-background: var(--panel);
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: hidden;
   background: var(--code-background);
+}
+
+.git-editor-host {
+  height: 100%;
+}
+
+.git-editor-ask {
+  position: absolute;
+  z-index: 8;
+  min-height: 28px;
+  padding: 4px 10px;
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 72%, var(--text-strong));
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 28%);
+  font: 600 calc(12px * var(--interface-font-scale))/1 var(--font-interface);
+}
+
+.git-editor-ask:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.git-editor-ask:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
 }

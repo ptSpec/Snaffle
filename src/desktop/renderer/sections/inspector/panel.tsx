@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
-import type { DesktopWorkspace } from "../../../api.js";
+import type { CodeSelectionInput, DesktopWorkspace } from "../../../api.js";
 import type { TimelineItem } from "../conversation/timeline-state.js";
 import { ExecutionOverview } from "./overview.js";
 import { Inspector } from "./inspect.js";
@@ -23,6 +23,7 @@ export function InspectorPanel({
   onSelect,
   onNavigateTurn,
   onEditorOpen,
+  onAskSelection,
   onCollapse,
 }: {
   workspace: DesktopWorkspace | null;
@@ -39,6 +40,7 @@ export function InspectorPanel({
   onSelect(id: string | null): void;
   onNavigateTurn(id: string): void;
   onEditorOpen(open: boolean): void;
+  onAskSelection(input: CodeSelectionInput): Promise<void>;
   onCollapse(): void;
 }): JSX.Element {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -113,7 +115,12 @@ export function InspectorPanel({
           )}
         </div>
       ) : (
-        <GitPanel workspace={workspace} running={running} onEditorOpen={onEditorOpen} />
+        <GitPanel
+          workspace={workspace}
+          running={running}
+          onEditorOpen={onEditorOpen}
+          onAskSelection={onAskSelection}
+        />
       )}
     </>
   );
