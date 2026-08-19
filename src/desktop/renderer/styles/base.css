@@ -326,10 +326,11 @@ body.resizing-columns .column-resizer::after {
   mask-image: linear-gradient(180deg, transparent, black 28%, black 72%, transparent);
 }
 
-.left-resizer::before {
+.left-sidebar::after {
   position: absolute;
+  z-index: 2;
   top: 0;
-  right: 4px;
+  right: 0;
   bottom: 0;
   width: 14px;
   content: "";

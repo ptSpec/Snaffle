@@ -576,7 +576,7 @@ html[data-accented-theme="true"] .workspace-row.active .workspace-icon {
   --thread-row-fill: var(--hover-background);
 
   position: relative;
-  transition: background-color 180ms ease, filter 180ms ease;
+  transition: filter 180ms ease;
 }
 
 .thread-row.active {
