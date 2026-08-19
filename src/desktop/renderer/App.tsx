@@ -22,6 +22,7 @@ import {
   type DesktopState,
   type DesktopThread,
   type DesktopUpdateState,
+  type StartRunInput,
   type SavedMessage,
 } from "../api.js";
 import type {
@@ -160,6 +161,11 @@ const initialUpdateState: DesktopUpdateState = {
   automatic: false,
 };
 
+type QueuedFollowUp = {
+  request: StartRunInput;
+  attachments: AttachmentPreview[];
+};
+
 export function App(): JSX.Element {
   const [desktopState, setDesktopState] = useState(initialState);
   const [updateState, setUpdateState] = useState(initialUpdateState);
@@ -196,6 +202,7 @@ export function App(): JSX.Element {
   const [contextRefresh, setContextRefresh] = useState(0);
   const [compactingContext, setCompactingContext] = useState(false);
   const [explicitlyActiveTools, setExplicitlyActiveTools] = useState<string[]>([]);
+  const [, refreshQueuedFollowUps] = useState(0);
   const taskInput = useRef<HTMLTextAreaElement>(null);
   const timelineView = useRef<HTMLDivElement>(null);
   const timelineScrollTop = useRef(0);
@@ -336,11 +343,15 @@ export function App(): JSX.Element {
   const activeThreadId = useRef<string | null>(null);
   const threadTimelines = useRef(new Map<string, TimelineItem[]>());
   const threadAttachments = useRef(new Map<string, AttachmentPreview[]>());
+  const queuedFollowUps = useRef(new Map<string, QueuedFollowUp>());
   rightWidthValue.current = rightWidth;
   leftCollapsedValue.current = leftCollapsed;
   const running = desktopState.activeThreadId
     ? desktopState.runningThreadIds.includes(desktopState.activeThreadId)
     : false;
+  const queuedFollowUp = desktopState.activeThreadId
+    ? queuedFollowUps.current.get(desktopState.activeThreadId) ?? null
+    : null;
   const unsafeHostExecution = desktopState.activeThreadId
     ? desktopState.unsafeThreadIds.includes(desktopState.activeThreadId)
     : false;
@@ -510,9 +521,23 @@ export function App(): JSX.Element {
     let queuedEvents: DesktopRunEvent[] = [];
     let flushTimer: number | undefined;
 
+    function launchQueuedFollowUp(threadId: string, queued: QueuedFollowUp): void {
+      queuedFollowUps.current.delete(threadId);
+      refreshQueuedFollowUps((value) => value + 1);
+      void submitPreparedTask(queued).then((started) => {
+        if (started || activeThreadId.current === threadId) return;
+        queuedFollowUps.current.set(threadId, queued);
+        refreshQueuedFollowUps((value) => value + 1);
+      });
+    }
+
     function applyRunEvent({ threadId, event }: DesktopRunEvent): void {
+      const queued = event.type === "run.persisted"
+        ? queuedFollowUps.current.get(threadId)
+        : undefined;
       if (event.type === "run.persisted" && activeThreadId.current !== threadId) {
         threadTimelines.current.delete(threadId);
+        if (queued) launchQueuedFollowUp(threadId, queued);
         return;
       }
       if (event.type.startsWith("context.") && activeThreadId.current !== threadId) {
@@ -578,6 +603,7 @@ export function App(): JSX.Element {
       if (event.type === "run.persisted" || event.type.startsWith("context.")) {
         setContextRefresh((value) => value + 1);
       }
+      if (queued) launchQueuedFollowUp(threadId, queued);
     }
 
     function flushEvents(): void {
@@ -796,7 +822,16 @@ export function App(): JSX.Element {
     attachments: AttachmentPreview[],
     activeTools: string[],
   ): Promise<void> {
-    const request = {
+    await submitPreparedTask(prepareRunRequest(threadId, message, attachments, activeTools));
+  }
+
+  function prepareRunRequest(
+    threadId: string,
+    message: string,
+    attachments: AttachmentPreview[],
+    activeTools: string[],
+  ): QueuedFollowUp {
+    const request: StartRunInput = {
       threadId,
       task: message,
       providerConnectionId: selectedProviderConnectionId,
@@ -810,11 +845,20 @@ export function App(): JSX.Element {
       ...(activeTools.length ? { explicitlyActiveTools: activeTools } : {}),
     };
 
-    followTimeline.current = true;
+    return { request, attachments };
+  }
+
+  async function submitPreparedTask(followUp: QueuedFollowUp): Promise<boolean> {
+    const { request, attachments } = followUp;
+    const active = activeThreadId.current === request.threadId;
+
+    if (active) followTimeline.current = true;
     appendUserMessage(request.threadId, request.task, attachments);
-    setTask("");
-    setPendingAttachments([]);
-    setExplicitlyActiveTools([]);
+    if (active) {
+      setTask("");
+      setPendingAttachments([]);
+      setExplicitlyActiveTools([]);
+    }
     threadAttachments.current.delete(request.threadId);
     setDesktopState((state) => ({
       ...state,
@@ -830,11 +874,52 @@ export function App(): JSX.Element {
         ...state,
         runningThreadIds: state.runningThreadIds.filter((id) => id !== request.threadId),
       }));
-      setPendingAttachments(attachments);
-      setExplicitlyActiveTools(activeTools);
+      if (active) {
+        setTask(request.task);
+        setPendingAttachments(attachments);
+        setExplicitlyActiveTools(request.explicitlyActiveTools ?? []);
+      }
       threadAttachments.current.set(request.threadId, attachments);
       setError(errorMessage(cause));
+      return false;
     }
+    return true;
+  }
+
+  function queueFollowUp(): void {
+    const threadId = desktopState.activeThreadId;
+    const message = task.trim();
+    if (!running || !threadId || !message || queuedFollowUps.current.has(threadId)) return;
+    if (runBlocker) {
+      setError(runBlocker);
+      return;
+    }
+
+    queuedFollowUps.current.set(
+      threadId,
+      prepareRunRequest(threadId, message, pendingAttachments, explicitlyActiveTools),
+    );
+    setTask("");
+    setPendingAttachments([]);
+    setExplicitlyActiveTools([]);
+    threadAttachments.current.delete(threadId);
+    refreshQueuedFollowUps((value) => value + 1);
+    setError(null);
+  }
+
+  function cancelQueuedFollowUp(): void {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId) return;
+    const queued = queuedFollowUps.current.get(threadId);
+    if (!queued) return;
+
+    queuedFollowUps.current.delete(threadId);
+    setTask(queued.request.task);
+    setPendingAttachments(queued.attachments);
+    setExplicitlyActiveTools(queued.request.explicitlyActiveTools ?? []);
+    threadAttachments.current.set(threadId, queued.attachments);
+    refreshQueuedFollowUps((value) => value + 1);
+    window.requestAnimationFrame(() => taskInput.current?.focus());
   }
 
   async function restoreThread(sequence: number): Promise<void> {
@@ -2233,6 +2318,7 @@ export function App(): JSX.Element {
             blocker={runBlocker}
             error={error}
             platform={window.desktop.platform}
+            queuedMessage={queuedFollowUp?.request.task ?? null}
             onTask={setTask}
             onSubmit={(event) => void startRun(event)}
             onDragging={setDraggingAttachments}
@@ -2251,6 +2337,8 @@ export function App(): JSX.Element {
             onAddSandboxAccess={(input) => void addSandboxAccess(input)}
             onRemoveSandboxAccess={(grantId) => void removeSandboxAccess(grantId)}
             onStop={() => void stopRun()}
+            onQueue={queueFollowUp}
+            onCancelQueued={cancelQueuedFollowUp}
             onSlashCommand={() => setCommandMode("slash")}
           />
           </section>

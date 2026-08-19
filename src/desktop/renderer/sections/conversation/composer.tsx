@@ -48,6 +48,7 @@ export function Composer({
   blocker,
   error,
   platform,
+  queuedMessage,
   onTask,
   onSubmit,
   onDragging,
@@ -66,6 +67,8 @@ export function Composer({
   onAddSandboxAccess,
   onRemoveSandboxAccess,
   onStop,
+  onQueue,
+  onCancelQueued,
   onSlashCommand,
 }: ComposerProps): JSX.Element {
   const [addingSandboxLocation, setAddingSandboxLocation] = useState(false);
@@ -129,11 +132,27 @@ export function Composer({
           }
           if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
           event.preventDefault();
+          if (running && event.altKey) {
+            onQueue();
+            return;
+          }
           event.currentTarget.form?.requestSubmit();
         }}
         placeholder="Describe the coding task…"
         rows={1}
       />
+
+      {queuedMessage ? (
+        <div className="queued-follow-up">
+          <span><strong>Queued next</strong> · {queuedMessage}</span>
+          <button
+            type="button"
+            aria-label="Remove queued message"
+            title="Remove queued message"
+            onClick={onCancelQueued}
+          >×</button>
+        </div>
+      ) : null}
 
       <div className="composer-controls">
         <details ref={composerAdd} className="composer-add">
@@ -312,7 +331,23 @@ export function Composer({
             </label>
           </div>
         </details>
-        {running && task.trim() ? <small className="steer-hint">Enter to steer</small> : null}
+        {running && task.trim() ? (
+          <span className="run-message-actions">
+            <small>↵ Steer</small>
+            {!queuedMessage ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <button
+                  type="button"
+                  title={platform === "darwin"
+                    ? "Queue after the current response (Option+Enter)"
+                    : "Queue after the current response (Alt+Enter)"}
+                  onClick={onQueue}
+                >{platform === "darwin" ? "⌥↵ Queue" : "Alt+Enter Queue"}</button>
+              </>
+            ) : null}
+          </span>
+        ) : null}
         <button
           className={running ? "send-button stop" : "send-button"}
           type={running ? "button" : "submit"}
@@ -498,6 +533,7 @@ type ComposerProps = {
   blocker: string | null;
   error: string | null;
   platform: string;
+  queuedMessage: string | null;
   onTask(value: string): void;
   onSubmit(event: FormEvent<HTMLFormElement>): void;
   onDragging(value: boolean): void;
@@ -516,5 +552,7 @@ type ComposerProps = {
   onAddSandboxAccess(input: SandboxAccessInput): void;
   onRemoveSandboxAccess(grantId: string): void;
   onStop(): void;
+  onQueue(): void;
+  onCancelQueued(): void;
   onSlashCommand(): void;
 };

@@ -199,6 +199,46 @@ textarea {
   padding: 4px 14px 8px;
 }
 
+.queued-follow-up {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 6px 14px 2px;
+  padding: 6px 8px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--hover-background) 72%, transparent);
+  border-radius: 8px;
+  font-size: calc(11px * var(--interface-font-scale));
+}
+
+.queued-follow-up > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queued-follow-up strong {
+  color: var(--text-secondary);
+}
+
+.queued-follow-up button {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 0 3px;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.queued-follow-up button:hover {
+  color: var(--text-primary);
+}
+
 .execution-mode {
   position: relative;
   flex: 0 0 auto;
@@ -1416,17 +1456,30 @@ html[data-theme="snaffle-sage"] .send-button:not(.stop) .send-button-orb {
   padding: 0;
 }
 
-.steer-hint {
+.run-message-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
   color: var(--text-faint);
   font-size: calc(10px * var(--interface-font-scale));
   white-space: nowrap;
-  animation: steer-hint-pulse 1.8s ease-in-out infinite;
 }
 
-@keyframes steer-hint-pulse {
-  50% {
-    color: var(--text-secondary);
-  }
+.run-message-actions small {
+  font: inherit;
+}
+
+.run-message-actions button {
+  padding: 2px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  font: inherit;
+}
+
+.run-message-actions button:hover {
+  color: var(--text-primary);
 }
 
 .send-button.stop .thinking-orb {
@@ -1466,9 +1519,6 @@ html[data-theme="snaffle-sage"] .send-button:not(.stop) .send-button-orb {
     animation: none;
   }
 
-  .steer-hint {
-    animation: none;
-  }
 }
 
 .composer-error {
