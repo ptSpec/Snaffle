@@ -71,6 +71,7 @@ export function registerRunIpc(options: {
   connection(connectionId: string): ProviderConnection;
   settings: () => {
     maxSteps: number;
+    autoTitleGeneration: boolean;
     providerTimeoutMinutes: number;
     providerRetries: number;
     compactionMode: CompactionMode;
@@ -442,6 +443,32 @@ export function registerRunIpc(options: {
         entries: entries.map((entry) => ({ sequence: entry.sequence, entryId: entry.id })),
       });
       options.compactor.schedule(compactionInput);
+      const firstUser = entries.find((entry) =>
+        entry.message.role === "user" && !entry.message.internal
+      )?.message.content;
+      const lastAssistant = [...entries].reverse().find(
+        (entry) => entry.message.role === "assistant",
+      )?.message;
+      const fallbackTitle = firstUser ? shortThreadTitle(firstUser) : "";
+      if (
+        settings.autoTitleGeneration &&
+        firstUser &&
+        lastAssistant?.role === "assistant" &&
+        lastAssistant.finishReason !== "incomplete" &&
+        lastAssistant.content &&
+        (/^Thread \d+$/.test(selectedThread.title) || selectedThread.title === fallbackTitle)
+      ) {
+        void generateThreadTitle({
+          threadId,
+          currentTitle: fallbackTitle,
+          task: firstUser,
+          answer: lastAssistant.content,
+          connectionId: input.providerConnectionId,
+          model: input.model,
+          providerCapacity,
+          options,
+        }).catch(() => undefined);
+      }
     }).catch(() => undefined).finally(() => {
       mainRoute.release();
       if (active.get(threadId) === run) active.delete(threadId);
@@ -578,6 +605,62 @@ export function registerRunIpc(options: {
 }
 
 type ProviderRoute = SubagentProviderRoute;
+
+async function generateThreadTitle(input: {
+  threadId: string;
+  currentTitle: string;
+  task: string;
+  answer: string;
+  connectionId: string;
+  model: string;
+  providerCapacity: ProviderCapacity;
+  options: Parameters<typeof registerRunIpc>[0];
+}): Promise<void> {
+  const signal = AbortSignal.timeout(30_000);
+  const route = await providerRoute(
+    input.connectionId,
+    input.model,
+    input.providerCapacity,
+    signal,
+    input.options.connection,
+    (connectionId, model) => input.options.provider(
+      connectionId,
+      model,
+      (attachment) => input.options.attachments.resolve(attachment),
+    ),
+  );
+  try {
+    const response = await route.provider.complete(
+      [
+        {
+          role: "system",
+          content: "Write a clear title for this conversation in at most six words. Return only the title, without quotes or punctuation at the end.",
+        },
+        {
+          role: "user",
+          content: `Request:\n${input.task.slice(0, 2_000)}\n\nResponse:\n${input.answer.slice(0, 4_000)}`,
+        },
+      ],
+      [],
+      signal,
+    );
+    const title = cleanThreadTitle(response.text);
+    if (!title || !await input.options.store.setGeneratedThreadTitle(input.threadId, input.currentTitle, title)) return;
+    input.options.sendEvent(input.threadId, { type: "thread.title.generated", title });
+  } finally {
+    route.release();
+  }
+}
+
+function shortThreadTitle(text: string): string {
+  const title = text.trim().replace(/\s+/g, " ");
+  return title.length > 48 ? `${title.slice(0, 47)}…` : title;
+}
+
+function cleanThreadTitle(text: string): string {
+  const title = text.trim().split("\n", 1)[0]?.replace(/^\s*["'`#*]+|["'`#*.!?]+\s*$/g, "").trim() ?? "";
+  return title.length > 72 ? `${title.slice(0, 71).trimEnd()}…` : title;
+}
 
 async function providerRoute(
   connectionId: string,

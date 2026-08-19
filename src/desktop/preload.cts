@@ -105,6 +105,8 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:set-editor-launcher", command, argumentsTemplate),
   chooseEditorApplication: () => ipcRenderer.invoke("desktop:choose-editor-application"),
   setMaxSteps: (maxSteps: number) => ipcRenderer.invoke("desktop:set-max-steps", maxSteps),
+  setAutoTitleGeneration: (enabled: boolean) =>
+    ipcRenderer.invoke("desktop:set-auto-title-generation", enabled),
   setProviderTimeoutMinutes: (minutes: number) =>
     ipcRenderer.invoke("desktop:set-provider-timeout", minutes),
   setProviderRetries: (retries: number) =>

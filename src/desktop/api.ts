@@ -150,6 +150,7 @@ export type DesktopState = {
   editorCommand: string;
   editorArguments: string;
   maxSteps: number;
+  autoTitleGeneration: boolean;
   providerTimeoutMinutes: number;
   providerRetries: number;
   subagent: SubagentProfile;
@@ -258,6 +259,7 @@ export interface DesktopApi {
   setEditorLauncher(command: string, argumentsTemplate: string): Promise<void>;
   chooseEditorApplication(): Promise<string | null>;
   setMaxSteps(maxSteps: number): Promise<void>;
+  setAutoTitleGeneration(enabled: boolean): Promise<void>;
   setProviderTimeoutMinutes(minutes: number): Promise<void>;
   setProviderRetries(retries: number): Promise<void>;
   setSubagent(profile: SubagentProfile): Promise<void>;

@@ -132,6 +132,7 @@ const initialState: DesktopState = {
   editorCommand: "",
   editorArguments: "",
   maxSteps: 50,
+  autoTitleGeneration: true,
   providerTimeoutMinutes: 3,
   providerRetries: 4,
   subagent: {
@@ -554,6 +555,25 @@ export function App(): JSX.Element {
           runningThreadIds: state.runningThreadIds.filter((id) => id !== threadId),
         }));
       }
+      if (event.type === "thread.title.generated") {
+        setDesktopState((state) => ({
+          ...state,
+          workspace: state.workspace
+            ? {
+                ...state.workspace,
+                threads: state.workspace.threads.map((thread) =>
+                  thread.id === threadId ? { ...thread, title: event.title } : thread
+                ),
+              }
+            : null,
+          workspaces: state.workspaces.map((workspace) => ({
+            ...workspace,
+            threads: workspace.threads.map((thread) =>
+              thread.id === threadId ? { ...thread, title: event.title } : thread
+            ),
+          })),
+        }));
+      }
       if (event.type === "run.persisted" || event.type.startsWith("context.")) {
         setContextRefresh((value) => value + 1);
       }
@@ -764,24 +784,33 @@ export function App(): JSX.Element {
       return;
     }
 
+    const message = task.trim();
+    if (!message) return;
+    await submitTask(threadId, message, pendingAttachments, explicitlyActiveTools);
+  }
+
+  async function submitTask(
+    threadId: string,
+    message: string,
+    attachments: AttachmentPreview[],
+    activeTools: string[],
+  ): Promise<void> {
     const request = {
       threadId,
-      task: task.trim(),
+      task: message,
       providerConnectionId: selectedProviderConnectionId,
       model: selectedModel,
       ...(effectiveReasoningEffort ? { reasoningEffort: effectiveReasoningEffort } : {}),
       contextLength: selectedContextLength,
       imageInputSupported: selectedModalities?.includes("image") !== false,
-      ...(pendingAttachments.length
-        ? { attachments: pendingAttachments.map(attachmentRef) }
+      ...(attachments.length
+        ? { attachments: attachments.map(attachmentRef) }
         : {}),
-      ...(explicitlyActiveTools.length ? { explicitlyActiveTools } : {}),
+      ...(activeTools.length ? { explicitlyActiveTools: activeTools } : {}),
     };
 
     followTimeline.current = true;
-    appendUserMessage(request.threadId, request.task, pendingAttachments);
-    const sentAttachments = pendingAttachments;
-    const sentExplicitTools = explicitlyActiveTools;
+    appendUserMessage(request.threadId, request.task, attachments);
     setTask("");
     setPendingAttachments([]);
     setExplicitlyActiveTools([]);
@@ -800,9 +829,9 @@ export function App(): JSX.Element {
         ...state,
         runningThreadIds: state.runningThreadIds.filter((id) => id !== request.threadId),
       }));
-      setPendingAttachments(sentAttachments);
-      setExplicitlyActiveTools(sentExplicitTools);
-      threadAttachments.current.set(request.threadId, sentAttachments);
+      setPendingAttachments(attachments);
+      setExplicitlyActiveTools(activeTools);
+      threadAttachments.current.set(request.threadId, attachments);
       setError(errorMessage(cause));
     }
   }
@@ -822,6 +851,31 @@ export function App(): JSX.Element {
       threadAttachments.current.set(threadId, restoredAttachments);
       setPendingAttachments(restoredAttachments);
       window.requestAnimationFrame(() => taskInput.current?.focus());
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function regenerateResponse(assistantSequence: number): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId) return;
+    const user = [...timeline].reverse().find(
+      (item) => item.kind === "user" && item.sequence !== undefined && item.sequence < assistantSequence,
+    );
+    if (!user || user.kind !== "user" || user.sequence === undefined) {
+      setError("The original request is no longer available");
+      return;
+    }
+    const attachments = (user.attachments ?? []).map((attachment) => ({
+      ...attachment,
+      fingerprint: attachment.id,
+    }));
+
+    try {
+      const state = await window.desktop.restoreThread(threadId, user.sequence);
+      threadTimelines.current.delete(threadId);
+      showDesktopState(state);
+      await submitTask(threadId, user.text, attachments, []);
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -1325,6 +1379,16 @@ export function App(): JSX.Element {
     try {
       await window.desktop.setMaxSteps(maxSteps);
       setDesktopState((state) => ({ ...state, maxSteps }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function setAutoTitleGeneration(autoTitleGeneration: boolean): Promise<void> {
+    try {
+      await window.desktop.setAutoTitleGeneration(autoTitleGeneration);
+      setDesktopState((state) => ({ ...state, autoTitleGeneration }));
       setError(null);
     } catch (cause) {
       setError(errorMessage(cause));
@@ -1974,6 +2038,7 @@ export function App(): JSX.Element {
             editorCommand={desktopState.editorCommand}
             editorArguments={desktopState.editorArguments}
             maxSteps={desktopState.maxSteps}
+            autoTitleGeneration={desktopState.autoTitleGeneration}
             providerTimeoutMinutes={desktopState.providerTimeoutMinutes}
             providerRetries={desktopState.providerRetries}
             subagent={desktopState.subagent}
@@ -2005,6 +2070,7 @@ export function App(): JSX.Element {
             onEditorLauncher={(command, argumentsTemplate) => void setEditorLauncher(command, argumentsTemplate)}
             onChooseEditor={() => void chooseEditorApplication()}
             onMaxSteps={(maxSteps) => void setMaxSteps(maxSteps)}
+            onAutoTitleGeneration={(enabled) => void setAutoTitleGeneration(enabled)}
             onProviderTimeoutMinutes={(minutes) => void setProviderTimeoutMinutes(minutes)}
             onProviderRetries={(retries) => void setProviderRetries(retries)}
             onSubagent={(profile) => void setSubagent(profile)}
@@ -2095,6 +2161,7 @@ export function App(): JSX.Element {
                     });
                   }}
                   {...(!running ? { onRestore: (sequence) => void restoreThread(sequence) } : {})}
+                  {...(!running ? { onRegenerate: (sequence) => void regenerateResponse(sequence) } : {})}
                   {...(!running ? { onFork: (sequence) => void forkThread(sequence) } : {})}
                 />
               ))}

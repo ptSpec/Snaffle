@@ -587,6 +587,14 @@ export class DesktopStore {
     );
   }
 
+  async setGeneratedThreadTitle(threadId: string, currentTitle: string, title: string): Promise<boolean> {
+    const result = await this.database.execute({
+      sql: "UPDATE threads SET title = ? WHERE id = ? AND title = ?",
+      args: [title, threadId, currentTitle],
+    });
+    return result.rowsAffected > 0;
+  }
+
   async restoreThread(threadId: string, sequence: number): Promise<void> {
     const result = await this.database.execute({
       sql: "SELECT data FROM entries WHERE thread_id = ? AND sequence = ?",

@@ -124,6 +124,7 @@ let editorFontSize = DEFAULT_EDITOR_FONT_SIZE;
 let editorCommand = "";
 let editorArguments = "";
 let maxSteps = DEFAULT_MAX_STEPS;
+let autoTitleGeneration = true;
 let providerTimeoutMinutes = DEFAULT_PROVIDER_TIMEOUT_MS / 60_000;
 let providerRetries = DEFAULT_PROVIDER_RETRIES;
 let subagent: SubagentProfile = subagentProfile(undefined);
@@ -169,6 +170,7 @@ async function start(): Promise<void> {
   editorCommand = typeof settings.editorCommand === "string" ? settings.editorCommand : "";
   editorArguments = typeof settings.editorArguments === "string" ? settings.editorArguments : "";
   maxSteps = validMaxSteps(settings.maxSteps) ?? DEFAULT_MAX_STEPS;
+  autoTitleGeneration = settings.autoTitleGeneration !== false;
   providerTimeoutMinutes = validProviderTimeout(settings.providerTimeoutMinutes) ?? providerTimeoutMinutes;
   providerRetries = validProviderRetries(settings.providerRetries) ?? DEFAULT_PROVIDER_RETRIES;
   subagent = subagentProfile(settings.subagent);
@@ -291,6 +293,7 @@ function registerIpc(): void {
     connection: (connectionId) => providerConnections.resolve(connectionId),
     settings: () => ({
       maxSteps,
+      autoTitleGeneration,
       providerTimeoutMinutes,
       providerRetries,
       compactionMode,
@@ -520,6 +523,12 @@ function registerIpc(): void {
     saveSettings({ maxSteps });
   });
 
+  ipcMain.handle("desktop:set-auto-title-generation", (_event, value: unknown): void => {
+    if (typeof value !== "boolean") throw new Error("Automatic titles must be enabled or disabled");
+    autoTitleGeneration = value;
+    saveSettings({ autoTitleGeneration });
+  });
+
   ipcMain.handle("desktop:set-provider-timeout", (_event, value: unknown): void => {
     const next = validProviderTimeout(value);
     if (next === undefined) throw new Error("Provider timeout must be 1 to 30 minutes");
@@ -716,6 +725,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     editorCommand,
     editorArguments,
     maxSteps,
+    autoTitleGeneration,
     providerTimeoutMinutes,
     providerRetries,
     subagent,

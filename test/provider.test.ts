@@ -605,3 +605,28 @@ test("OpenAI-compatible provider streams text and assembles tool calls", async (
     costUsd: 0.001,
   });
 });
+
+test("OpenAI-compatible provider marks an abruptly closed stream incomplete", async (t) => {
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { "content-type": "text/event-stream" });
+    response.end('data: {"choices":[{"delta":{"content":"Partial response"}}]}\n\n');
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Test server did not start");
+
+  const provider = new OpenAICompatibleProvider({
+    baseUrl: `http://127.0.0.1:${address.port}/v1`,
+    model: "test-model",
+    maxRetries: 0,
+  });
+  const result = await provider.complete(
+    [{ role: "user", content: "Answer" }],
+    [],
+    new AbortController().signal,
+  );
+
+  assert.equal(result.text, "Partial response");
+  assert.equal(result.finishReason, "incomplete");
+});

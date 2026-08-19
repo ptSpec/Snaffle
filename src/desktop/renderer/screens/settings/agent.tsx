@@ -7,6 +7,7 @@ import type { ProviderCatalog, ProviderConnection } from "../../../../providers/
 
 export function AgentSettings({
   maxSteps,
+  autoTitleGeneration,
   providerTimeoutMinutes,
   providerRetries,
   subagent,
@@ -15,12 +16,14 @@ export function AgentSettings({
   providerCatalogs,
   error,
   onMaxSteps,
+  onAutoTitleGeneration,
   onProviderTimeoutMinutes,
   onProviderRetries,
   onSubagent,
   onImageUnderstanding,
 }: {
   maxSteps: number;
+  autoTitleGeneration: boolean;
   providerTimeoutMinutes: number;
   providerRetries: number;
   subagent: SubagentProfile;
@@ -29,6 +32,7 @@ export function AgentSettings({
   providerCatalogs: ProviderCatalog[];
   error: string | null;
   onMaxSteps: (maxSteps: number) => void;
+  onAutoTitleGeneration: (enabled: boolean) => void;
   onProviderTimeoutMinutes: (minutes: number) => void;
   onProviderRetries: (retries: number) => void;
   onSubagent: (profile: SubagentProfile) => void;
@@ -136,6 +140,18 @@ export function AgentSettings({
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
           </button>
           <div className="agent-settings-reveal"><div className="agent-settings-body">
+            <label className="setting-field">
+              <span>
+                <strong>Automatic thread titles</strong>
+                <small>Generate a short title after the first successful response.</small>
+              </span>
+              <input
+                className="selection-checkbox"
+                type="checkbox"
+                checked={autoTitleGeneration}
+                onChange={(event) => onAutoTitleGeneration(event.target.checked)}
+              />
+            </label>
             <NumberSetting
               label="Maximum turns"
               description="Maximum model turns per run, from 1 to 200."

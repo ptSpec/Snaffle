@@ -145,4 +145,5 @@ export type RunEvent =
     }
   | { type: "run.completed"; text: string; steps: number }
   | { type: "run.persisted"; entries: Array<{ sequence: number; entryId: string }> }
+  | { type: "thread.title.generated"; title: string }
   | { type: "run.failed"; message: string };

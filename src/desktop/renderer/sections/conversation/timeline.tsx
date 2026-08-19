@@ -26,6 +26,7 @@ export function TimelineEntry({
   onToggleKeptAside,
   onToggleAttachmentContext,
   onRestore,
+  onRegenerate,
   onFork,
 }: {
   item: TimelineItem;
@@ -44,6 +45,7 @@ export function TimelineEntry({
     attachment: AttachmentRef,
   ) => void;
   onRestore?: (sequence: number) => void;
+  onRegenerate?: (sequence: number) => void;
   onFork?: (sequence: number) => void;
 }): JSX.Element {
   if (item.kind === "activity-group") {
@@ -131,6 +133,16 @@ export function TimelineEntry({
               <MarkdownContent text={item.text} {...(item.sources ? { sources: item.sources } : {})} />
             )}
           </div>
+          {item.finishReason === "incomplete" ? (
+            <div className="interrupted-response" role="note">
+              <span>The provider closed the response early.</span>
+              {onRegenerate && item.sequence !== undefined ? (
+                <button type="button" onClick={() => onRegenerate(item.sequence!)}>
+                  Regenerate response
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {!item.streaming && !item.intermediate ? (
             <MessageFooter
               text={item.text}
