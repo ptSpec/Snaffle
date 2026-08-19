@@ -65,6 +65,7 @@ import { Sidebar, type AppView, type SettingsPage } from "./sections/sidebar/sid
 import { InspectorPanel, type InspectorTab } from "./sections/inspector/panel.js";
 import type { OrbMotion } from "./components/thinking-orb.js";
 import { Composer } from "./sections/conversation/composer.js";
+import type { SandboxAccessInput } from "../../execution/access.js";
 import { AsideShelf } from "./sections/conversation/aside-shelf.js";
 import { CommandPalette, type AppCommand } from "./commands/palette.js";
 import { TerminalPanel } from "./sections/terminal/terminal.js";
@@ -114,6 +115,7 @@ const initialState: DesktopState = {
   webSearchKeyBackends: [],
   runningThreadIds: [],
   unsafeThreadIds: [],
+  sandboxAccess: [],
   defaultModel: null,
   defaultProviderConnectionId: "openrouter",
   restrictedHostAvailable: false,
@@ -1049,6 +1051,28 @@ export function App(): JSX.Element {
     setError(null);
     try {
       setDesktopState(withoutConversation(await window.desktop.setThreadUnsafe(threadId, unsafe)));
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function addSandboxAccess(input: SandboxAccessInput): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId) return;
+    setError(null);
+    try {
+      setDesktopState(withoutConversation(await window.desktop.addSandboxAccess(threadId, input)));
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function removeSandboxAccess(grantId: string): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId) return;
+    setError(null);
+    try {
+      setDesktopState(withoutConversation(await window.desktop.removeSandboxAccess(threadId, grantId)));
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -2135,6 +2159,7 @@ export function App(): JSX.Element {
             compactingContext={compactingContext}
             unsafe={unsafeHostExecution}
             restrictedDetail={desktopState.restrictedHostDetail}
+            sandboxAccess={desktopState.sandboxAccess}
             orbMotion={sendOrbMotion}
             blocker={runBlocker}
             error={error}
@@ -2153,6 +2178,9 @@ export function App(): JSX.Element {
             onToolSurface={(surface) => void setModelToolSurface(surface)}
             onCompact={() => void compactCurrentContext()}
             onUnsafe={(value) => void setThreadUnsafe(value)}
+            onChooseSandboxLocation={() => window.desktop.chooseSandboxFolder()}
+            onAddSandboxAccess={(input) => void addSandboxAccess(input)}
+            onRemoveSandboxAccess={(grantId) => void removeSandboxAccess(grantId)}
             onStop={() => void stopRun()}
             onSlashCommand={() => setCommandMode("slash")}
           />

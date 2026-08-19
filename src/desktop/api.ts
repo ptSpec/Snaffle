@@ -246,6 +246,9 @@ export interface DesktopApi {
   steerRun(threadId: string, message: string): Promise<boolean>;
   stopRun(threadId: string): Promise<boolean>;
   setThreadUnsafe(threadId: string, unsafe: boolean): Promise<DesktopState>;
+  chooseSandboxFolder(): Promise<string | null>;
+  addSandboxAccess(threadId: string, input: SandboxAccessInput): Promise<DesktopState>;
+  removeSandboxAccess(threadId: string, grantId: string): Promise<DesktopState>;
   resolveCommandApproval(id: string, decision: CommandApprovalDecision): Promise<DesktopState>;
   setTheme(themeId: string): Promise<void>;
   setTypography(interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId): Promise<void>;

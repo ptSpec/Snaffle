@@ -502,6 +502,17 @@ function registerIpc(): void {
     return result.canceled ? null : result.filePaths[0] ?? null;
   });
 
+  ipcMain.handle("desktop:choose-sandbox-folder", async (): Promise<string | null> => {
+    if (process.platform === "win32") {
+      throw new Error("Additional sandbox folders are available on macOS and Linux");
+    }
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      title: "Choose a folder to allow",
+      properties: ["openDirectory"],
+    });
+    return result.canceled ? null : result.filePaths[0] ?? null;
+  });
+
   ipcMain.handle("desktop:set-max-steps", (_event, value: unknown): void => {
     const next = validMaxSteps(value);
     if (next === undefined) throw new Error("Maximum turns must be an integer from 1 to 200");
