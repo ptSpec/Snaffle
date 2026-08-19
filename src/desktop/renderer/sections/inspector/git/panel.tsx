@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { DesktopWorkspace, GitChanges, GitFileContents } from "../../../../api.js";
+import type { CodeSelectionInput, DesktopWorkspace, GitChanges, GitFileContents } from "../../../../api.js";
 import { SearchPicker } from "../../../components/search-picker.js";
-import type { GitEditorHandle } from "./editor.js";
+import type { GitCodeSelection, GitEditorHandle } from "./editor.js";
 import { FileChange } from "./file-change.js";
 
 const GitEditor = lazy(() => import("./editor.js"));
@@ -10,10 +10,12 @@ export function GitPanel({
   workspace,
   running,
   onEditorOpen,
+  onAskSelection,
 }: {
   workspace: DesktopWorkspace | null;
   running: boolean;
   onEditorOpen(open: boolean): void;
+  onAskSelection(input: CodeSelectionInput): Promise<void>;
 }): JSX.Element {
   const [changes, setChanges] = useState<GitChanges | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -94,6 +96,17 @@ export function GitPanel({
   }, [selectedPath]);
 
   useEffect(() => {
+    if (!selectedPath) return;
+    const closeEditor = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      setSelectedPath(null);
+    };
+    window.addEventListener("keydown", closeEditor);
+    return () => window.removeEventListener("keydown", closeEditor);
+  }, [selectedPath]);
+
+  useEffect(() => {
     onEditorOpen(Boolean(selectedPath));
   }, [onEditorOpen, selectedPath]);
 
@@ -161,6 +174,17 @@ export function GitPanel({
     }
   }
 
+  async function askSelection(ranges: GitCodeSelection[]): Promise<void> {
+    if (!selectedPath || dirty || saving) return;
+    setFailure(null);
+    try {
+      await onAskSelection({ path: selectedPath, ranges });
+      setSelectedPath(null);
+    } catch (error) {
+      setFailure(errorMessage(error));
+    }
+  }
+
   async function commit(): Promise<void> {
     if (!workspace || !commitMessage.trim() || selectedCommitPaths.length === 0 || committing || running) return;
     setCommitting(true);
@@ -210,11 +234,11 @@ export function GitPanel({
         <div className="change-detail">
           <div className="change-detail-heading">
             <div className="change-navigation">
-              <button className="change-back" type="button" onClick={() => setSelectedPath(null)} aria-label="Back to changed files">
+              <button className="change-back" type="button" onClick={() => setSelectedPath(null)} aria-label="Back to changed files" title="Back to changed files (Esc)">
                 <svg className="change-back-icon" aria-hidden="true" viewBox="0 0 10 16">
                   <path d="M8 1 1 8l7 7" />
                 </svg>
-                <span>Back</span>
+                <span>Back (Esc)</span>
               </button>
               <SearchPicker
                 className="change-file-picker"
@@ -246,8 +270,10 @@ export function GitPanel({
                 path={selectedFile.path}
                 current={fileContents.current}
                 original={fileContents.original}
+                askDisabled={dirty || saving}
                 onDirty={() => setDirty(true)}
                 onSave={(content) => void save(content)}
+                onAskSelection={(ranges) => void askSelection(ranges)}
               />
             </Suspense>
           ) : failure ? null : <p className="inspector-empty">Loading file…</p>}
@@ -255,9 +281,12 @@ export function GitPanel({
       ) : (
         <>
           <div className="changes-summary">
-            <span className="change-branch" title={changes.branch ?? "Detached HEAD"}>
-              <BranchIcon />
-              <strong>{changes.branch ?? "Detached HEAD"}</strong>
+            <span className="change-summary-copy">
+              <small>Working tree</small>
+              <span className="change-branch" title={changes.branch ?? "Detached HEAD"}>
+                <BranchIcon />
+                <strong>{changes.branch ?? "Detached HEAD"}</strong>
+              </span>
             </span>
             <span className="change-counts"><b>+{changes.additions}</b> <i>−{changes.deletions}</i></span>
             <button type="button" onClick={() => void refresh()} disabled={loading} title="Refresh changes">↻</button>

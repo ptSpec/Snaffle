@@ -126,6 +126,28 @@
   color: var(--status-error-text);
 }
 
+.attachment-code-references {
+  align-self: center;
+  padding: 5px 9px;
+  color: var(--text-secondary);
+  background: var(--control-background);
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  font-size: calc(11px * var(--interface-font-scale));
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.attachment-tray.references-only {
+  min-height: 34px;
+  margin-bottom: -3px;
+  align-items: center;
+}
+
+.attachment-tray.references-only > small {
+  padding-bottom: 0;
+}
+
 .composer-add {
   position: relative;
   flex: 0 0 32px;

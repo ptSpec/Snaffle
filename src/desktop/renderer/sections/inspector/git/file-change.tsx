@@ -57,7 +57,7 @@ export function FileChange({
     const width = Math.min(520, window.innerWidth - 16);
     setPosition({
       top: Math.max(8, Math.min(bounds.top, window.innerHeight - 360)),
-      left: Math.max(8, bounds.left - width + 1),
+      left: Math.max(8, bounds.left - width - 2),
     });
     showTimer.current = window.setTimeout(() => {
       showing.current = true;
@@ -180,8 +180,10 @@ function DiffPreview({
       <strong>{path}</strong>
       {preview ? (
         <pre>
-          {preview.lines.map((line, index) => <span className={lineClass(line)} key={`${index}:${line}`}>{line || " "}</span>)}
-          {preview.truncated ? <span className="truncated">… preview truncated</span> : null}
+          <code>
+            {preview.lines.map((line, index) => <span className={lineClass(line)} key={`${index}:${line}`}>{line || " "}</span>)}
+            {preview.truncated ? <span className="truncated">… preview truncated</span> : null}
+          </code>
         </pre>
       ) : <small>Loading preview…</small>}
     </aside>

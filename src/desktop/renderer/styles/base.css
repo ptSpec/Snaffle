@@ -358,6 +358,11 @@ body.resizing-columns .workspace-shell {
   border-radius: 14px 0 0 14px;
 }
 
+.workspace-shell.file-editor-focused > .conversation {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .workspace-shell > .inspector {
   grid-row: 1;
   grid-column: 3;

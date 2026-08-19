@@ -88,12 +88,26 @@
 
 .changes-summary {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
-  min-height: 28px;
-  padding: 0 12px;
+  min-height: 52px;
+  padding: 2px 12px 9px;
   color: var(--text-secondary);
   font-size: calc(14px * var(--interface-font-scale));
+}
+
+.change-summary-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.change-summary-copy > small {
+  color: var(--text-muted);
+  font-size: calc(10px * var(--interface-font-scale));
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .change-branch {
@@ -319,7 +333,7 @@
 }
 
 .change-files {
-  padding-bottom: 8px;
+  padding: 0 6px 8px;
 }
 
 .change-select-all {
@@ -327,7 +341,8 @@
   grid-template-columns: 16px minmax(0, 1fr) auto;
   gap: 7px;
   align-items: center;
-  padding: 7px 6px;
+  margin-bottom: 3px;
+  padding: 8px;
   color: var(--text-muted);
   font-size: calc(13px * var(--interface-font-scale));
   cursor: pointer;
@@ -343,23 +358,25 @@
   gap: 7px;
   align-items: center;
   width: 100%;
-  padding: 7px 6px;
+  margin-block: 1px;
+  padding: 8px;
   color: var(--text-secondary);
   text-align: left;
   background: transparent;
   border: 0;
-  border-radius: 6px;
+  border-radius: 7px;
   font-size: calc(14px * var(--interface-font-scale));
   cursor: pointer;
 }
 
 .change-file:hover {
   color: var(--text-strong);
-  background: var(--selected-background);
+  background: var(--hover-background);
 }
 
 .change-file.selected {
-  background: color-mix(in srgb, var(--success) 8%, transparent);
+  background: var(--hover-background);
+  box-shadow: inset 2px 0 var(--primary);
 }
 
 .change-file-open-zone {
@@ -367,8 +384,9 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  margin: -7px -6px -7px -7px;
-  padding: 7px 6px 7px 11px;
+  margin: -8px;
+  margin-left: -7px;
+  padding: 8px 6px 8px 11px;
   color: var(--text-muted);
   background: transparent;
   border: 0;
@@ -462,7 +480,13 @@
 }
 
 .change-status {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
   color: var(--text-muted);
+  background: color-mix(in srgb, currentColor 11%, transparent);
+  border-radius: 5px;
   font: 600 12px/1 var(--font-code);
   text-align: center;
 }

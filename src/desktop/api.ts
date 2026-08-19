@@ -186,6 +186,15 @@ export type DesktopTerminalExitEvent = {
   exitCode: number;
 };
 
+export type CodeSelectionInput = {
+  path: string;
+  ranges: Array<{
+    fromLine: number;
+    toLine: number;
+    text: string;
+  }>;
+};
+
 export interface DesktopApi {
   platform: string;
   getState(): Promise<DesktopState>;
@@ -224,6 +233,7 @@ export interface DesktopApi {
   importDroppedFiles(files: File[]): Promise<AttachmentPreview[]>;
   importClipboardImage(): Promise<AttachmentPreview>;
   importTerminalOutput(workspaceId: string, output: string): Promise<AttachmentPreview>;
+  importCodeSelection(input: CodeSelectionInput): Promise<AttachmentPreview>;
   readClipboardText(): Promise<string>;
   readClipboardHtml(): Promise<string>;
   removeAttachment(id: string): Promise<void>;

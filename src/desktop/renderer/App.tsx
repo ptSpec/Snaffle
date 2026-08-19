@@ -15,6 +15,7 @@ import type { ImageUnderstandingProfile } from "../../attachments/vision.js";
 import type { CommandApprovalDecision } from "../../protocol.js";
 import {
   MAX_KEPT_ASIDE_MESSAGES,
+  type CodeSelectionInput,
   type DesktopApi,
   type DesktopRunEvent,
   type DesktopSearchResult,
@@ -870,6 +871,12 @@ export function App(): JSX.Element {
     } catch (cause) {
       setError(errorMessage(cause));
     }
+  }
+
+  async function attachCodeSelection(input: CodeSelectionInput): Promise<void> {
+    if (pendingAttachments.length >= 8) throw new Error("Attach at most 8 files to one message");
+    await addAttachments([await window.desktop.importCodeSelection(input)]);
+    window.setTimeout(() => taskInput.current?.focus(), 0);
   }
 
   async function addAttachments(imported: AttachmentPreview[]): Promise<void> {
@@ -1878,9 +1885,11 @@ export function App(): JSX.Element {
   return (
     <main className={`app-shell platform-${window.desktop.platform}`}>
       <section
-        className={terminalVisible ? "workspace-shell terminal-open" : "workspace-shell"}
+        className={`workspace-shell${terminalVisible ? " terminal-open" : ""}${fileEditorExpanded.current ? " file-editor-focused" : ""}`}
         style={{
-          gridTemplateColumns: `${visibleLeftWidth}px minmax(360px, 1fr) ${visibleRightWidth}px`,
+          gridTemplateColumns: fileEditorExpanded.current
+            ? "0px 0px minmax(0, 1fr)"
+            : `${visibleLeftWidth}px minmax(360px, 1fr) ${visibleRightWidth}px`,
           gridTemplateRows: terminalVisible
             ? "minmax(0, 1fr) var(--terminal-height)"
             : "minmax(0, 1fr) 0px",
@@ -2000,7 +2009,11 @@ export function App(): JSX.Element {
             onError={setError}
           />
         ) : (
-          <section className="conversation view-enter" aria-label="Conversation">
+          <section
+            className="conversation view-enter"
+            aria-label="Conversation"
+            aria-hidden={fileEditorExpanded.current}
+          >
           <div className="timeline-shell">
             <div
               ref={timelineView}
@@ -2156,6 +2169,7 @@ export function App(): JSX.Element {
               onSelect={setSelectedItemId}
               onNavigateTurn={scrollToTimelineItem}
               onEditorOpen={expandFileEditor}
+              onAskSelection={attachCodeSelection}
               onCollapse={() => {
                 expandFileEditor(false);
                 setRightCollapsed(true);
@@ -2175,7 +2189,7 @@ export function App(): JSX.Element {
           />
         ) : null}
 
-        {leftCollapsed ? (
+        {fileEditorExpanded.current ? null : leftCollapsed ? (
           <button
             className="panel-reopen left"
             type="button"
@@ -2228,7 +2242,7 @@ export function App(): JSX.Element {
 }
 
 function focusedEditorWidth(): number {
-  return Math.max(320, Math.min(window.innerWidth * 0.65, window.innerWidth - 360));
+  return window.innerWidth;
 }
 
 function mergeStreamEvent(previous: DesktopRunEvent, next: DesktopRunEvent): boolean {

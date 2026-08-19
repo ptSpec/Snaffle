@@ -18,18 +18,22 @@ export function AttachmentTray({
   onRemoveActive: (attachment: AttachmentRef) => void;
   onRemovePending: (attachment: AttachmentPreview) => void;
 }): JSX.Element | null {
+  const activeCodeReferences = activeAttachments.filter((attachment) => isCodeReference(attachment.name));
   const attachments: Array<{ attachment: DisplayAttachment; active: boolean }> = [
-    ...activeAttachments.map((attachment) => ({ attachment, active: true })),
+    ...activeAttachments
+      .filter((attachment) => !isCodeReference(attachment.name))
+      .map((attachment) => ({ attachment, active: true })),
     ...pendingAttachments.map((attachment) => ({ attachment, active: false })),
   ];
-  if (!attachments.length) return null;
+  if (!attachments.length && !activeCodeReferences.length) return null;
   const visible = attachments.slice(-4);
   const hidden = attachments.length - visible.length;
   const fanWidth = 112 + (visible.length - 1) * 34 + (hidden ? 34 : 8);
+  const compact = !attachments.length && activeCodeReferences.length > 0;
 
   return (
-    <section className={tooLarge ? "attachment-tray too-large" : "attachment-tray"}>
-      <div className="attachment-fan" style={{ width: fanWidth }}>
+    <section className={`attachment-tray${tooLarge ? " too-large" : ""}${compact ? " references-only" : ""}`}>
+      {visible.length ? <div className="attachment-fan" style={{ width: fanWidth }}>
         {visible.map(({ attachment, active }, index) => (
           <article
             className={active ? "attachment-card active" : "attachment-card"}
@@ -56,15 +60,26 @@ export function AttachmentTray({
         {hidden ? (
           <span className="attachment-more">+{hidden}</span>
         ) : null}
-      </div>
+      </div> : null}
+      {activeCodeReferences.length ? (
+        <span
+          className="attachment-code-references"
+          title={activeCodeReferences.map((attachment) => attachment.name).join("\n")}
+        >Code {activeCodeReferences.length === 1 ? "reference" : "references"} · {activeCodeReferences.length}</span>
+      ) : null}
       <small>{tooLarge ? "Too large for this model" : `~${formatTokens(estimatedTokens)} tokens`}</small>
     </section>
   );
 }
 
 function fileLabel(name: string): string {
+  if (isCodeReference(name)) return "CODE";
   const extension = name.split(".").pop();
   return extension && extension !== name ? extension.toUpperCase().slice(0, 5) : "FILE";
+}
+
+function isCodeReference(name: string): boolean {
+  return name.includes(" · lines ") || / · \d+ selections$/.test(name);
 }
 
 function formatTokens(tokens: number): string {
