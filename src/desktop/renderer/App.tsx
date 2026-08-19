@@ -2038,10 +2038,11 @@ export function App(): JSX.Element {
                 setShowJumpToLatest(distanceFromBottom > view.clientHeight * 0.4);
               }}
             >
-              {timeline.map((item) => (
+              {timeline.map((item, index) => (
                 <TimelineEntry
                   key={item.id}
                   item={item}
+                  toolPreparationFollows={timeline[index + 1]?.kind === "tool-preparing"}
                   previousModel={previousAssistantModels.get(item.id)}
                   selectedId={selectedItemId}
                   onSelect={(id) => {

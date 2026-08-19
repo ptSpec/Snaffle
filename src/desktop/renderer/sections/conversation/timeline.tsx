@@ -27,6 +27,7 @@ export function TimelineEntry({
   onToggleAttachmentContext,
   onRestore,
   onFork,
+  toolPreparationFollows = false,
 }: {
   item: TimelineItem;
   previousModel?: string | undefined;
@@ -45,6 +46,7 @@ export function TimelineEntry({
   ) => void;
   onRestore?: (sequence: number) => void;
   onFork?: (sequence: number) => void;
+  toolPreparationFollows?: boolean;
 }): JSX.Element {
   if (item.kind === "activity-group") {
     return (
@@ -126,7 +128,10 @@ export function TimelineEntry({
         >
           <div className={item.streaming ? "markdown-content streaming" : "markdown-content"}>
             {item.streaming ? (
-              <>{item.text}<span className="streaming-cursor" aria-hidden="true" /></>
+              <>
+                {toolPreparationFollows ? item.text.trimEnd() : item.text}
+                {toolPreparationFollows ? null : <span className="streaming-cursor" aria-hidden="true" />}
+              </>
             ) : (
               <MarkdownContent text={item.text} {...(item.sources ? { sources: item.sources } : {})} />
             )}
