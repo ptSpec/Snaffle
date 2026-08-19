@@ -20,6 +20,9 @@ import type { SkillSummary } from "../extensions/skills/types.js";
 import type { ImageUnderstandingProfile } from "../attachments/vision.js";
 import type { ModelToolSurface, ModelToolSurfaces } from "../capabilities/surface.js";
 import type { DesktopUpdateState } from "./updates.js";
+import type { SandboxAccessGrant, SandboxAccessInput } from "../execution/access.js";
+
+export type { SandboxAccessGrant, SandboxAccessInput } from "../execution/access.js";
 
 export type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents } from "../git/types.js";
 export type { DesktopUpdateState } from "./updates.js";
@@ -130,6 +133,7 @@ export type DesktopState = {
   webSearchKeyBackends: KetchSearchBackend[];
   runningThreadIds: string[];
   unsafeThreadIds: string[];
+  sandboxAccess: SandboxAccessGrant[];
   defaultModel: string | null;
   defaultProviderConnectionId: string;
   restrictedHostAvailable: boolean;

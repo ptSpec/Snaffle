@@ -47,6 +47,7 @@ import {
 } from "../providers/openai-compatible.js";
 import { isReasoningEffort } from "../providers/provider.js";
 import type { RunEvent } from "../protocol.js";
+import { globalSandboxAccess, mergeSandboxAccess } from "../execution/access.js";
 import { probeNativeSandbox } from "../execution/native/sandbox.js";
 import { defaultTools } from "../tools/built-ins.js";
 import { McpManager } from "../mcp/manager.js";
@@ -682,6 +683,12 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     ),
     runningThreadIds: runs.runningThreadIds(),
     unsafeThreadIds: runs.unsafeThreadIds(),
+    sandboxAccess: mergeSandboxAccess(
+      await globalSandboxAccess(),
+      workspace && state.activeThreadId
+        ? await store.sandboxAccess(workspace.id, state.activeThreadId)
+        : [],
+    ),
     defaultModel: selectedModel || null,
     defaultProviderConnectionId: selectedProviderConnectionId,
     restrictedHostAvailable: sandbox.available,

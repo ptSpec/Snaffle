@@ -11,6 +11,7 @@ import { ContextStore } from "../context/store.js";
 import type { DesktopEntry, DesktopSearchResult, DesktopThread, DesktopWorkspace } from "./api.js";
 import { AsideStore } from "./aside-store.js";
 import { SavedMessageStore } from "./saved-messages-store.js";
+import type { SandboxAccessGrant, SandboxAccessInput } from "../execution/access.js";
 
 export type StoreState = {
   workspaces: DesktopWorkspace[];
@@ -99,6 +100,15 @@ export class DesktopStore {
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL
         )`,
+        `CREATE TABLE IF NOT EXISTS sandbox_access (
+          id TEXT PRIMARY KEY,
+          scope TEXT NOT NULL,
+          target_id TEXT NOT NULL,
+          path TEXT NOT NULL,
+          writable INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,
+          UNIQUE(scope, target_id, path)
+        )`,
       ],
       "write",
     );
@@ -178,6 +188,46 @@ export class DesktopStore {
       activeWorkspaceId: state.get("active_workspace_id") ?? null,
       activeThreadId: state.get("active_thread_id") ?? null,
     };
+  }
+
+  async sandboxAccess(workspaceId: string, threadId: string): Promise<SandboxAccessGrant[]> {
+    const result = await this.database.execute({
+      sql: `SELECT id, scope, path, writable FROM sandbox_access
+        WHERE (scope = 'workspace' AND target_id = ?)
+          OR (scope = 'thread' AND target_id = ?)
+        ORDER BY created_at`,
+      args: [workspaceId, threadId],
+    });
+    return result.rows.map((row) => ({
+      id: rowText(row, "id"),
+      scope: rowText(row, "scope") === "thread" ? "thread" : "workspace",
+      path: rowText(row, "path"),
+      writable: rowNumber(row, "writable") === 1,
+    }));
+  }
+
+  async addSandboxAccess(
+    workspaceId: string,
+    threadId: string,
+    input: SandboxAccessInput,
+  ): Promise<void> {
+    const targetId = input.scope === "thread" ? threadId : workspaceId;
+    await this.database.execute({
+      sql: `INSERT INTO sandbox_access(id, scope, target_id, path, writable, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(scope, target_id, path) DO UPDATE SET writable = excluded.writable`,
+      args: [randomUUID(), input.scope, targetId, input.path, input.writable ? 1 : 0, Date.now()],
+    });
+  }
+
+  async removeSandboxAccess(workspaceId: string, threadId: string, grantId: string): Promise<void> {
+    await this.database.execute({
+      sql: `DELETE FROM sandbox_access WHERE id = ? AND (
+        (scope = 'workspace' AND target_id = ?) OR
+        (scope = 'thread' AND target_id = ?)
+      )`,
+      args: [grantId, workspaceId, threadId],
+    });
   }
 
   async repairLegacyBlankThreadProviders(model: string, providerConnectionId: string): Promise<void> {
@@ -410,10 +460,16 @@ export class DesktopStore {
     if (threadIds.length === 0) return;
     const current = await this.state();
     const placeholders = threadIds.map(() => "?").join(", ");
-    await this.database.execute({
-      sql: `DELETE FROM threads WHERE id IN (${placeholders})`,
-      args: threadIds,
-    });
+    await this.database.batch([
+      {
+        sql: `DELETE FROM sandbox_access WHERE scope = 'thread' AND target_id IN (${placeholders})`,
+        args: threadIds,
+      },
+      {
+        sql: `DELETE FROM threads WHERE id IN (${placeholders})`,
+        args: threadIds,
+      },
+    ], "write");
 
     if (!current.activeThreadId || !threadIds.includes(current.activeThreadId)) return;
     if (!current.activeWorkspaceId) return;
@@ -423,10 +479,18 @@ export class DesktopStore {
 
   async removeWorkspace(workspaceId: string): Promise<void> {
     const current = await this.state();
-    await this.database.execute({
-      sql: "DELETE FROM workspaces WHERE id = ?",
-      args: [workspaceId],
-    });
+    await this.database.batch([
+      {
+        sql: `DELETE FROM sandbox_access WHERE scope = 'thread'
+          AND target_id IN (SELECT id FROM threads WHERE workspace_id = ?)`,
+        args: [workspaceId],
+      },
+      {
+        sql: "DELETE FROM sandbox_access WHERE scope = 'workspace' AND target_id = ?",
+        args: [workspaceId],
+      },
+      { sql: "DELETE FROM workspaces WHERE id = ?", args: [workspaceId] },
+    ], "write");
     if (current.activeWorkspaceId !== workspaceId) return;
 
     const next = await this.database.execute(

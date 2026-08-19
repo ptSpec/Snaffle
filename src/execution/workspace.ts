@@ -7,6 +7,7 @@ import { rgPath } from "@vscode/ripgrep";
 import { PROJECT } from "../identity.js";
 import { hostEnvironmentDescription, runRestrictedCommand } from "./native/sandbox.js";
 import type { CommandApprovalDecision } from "../protocol.js";
+import { personalSnaffleDirectory, type SandboxAccess } from "./access.js";
 
 const execAsync = promisify(exec);
 const ripgrepExecutable = rgPath.replace(
@@ -57,6 +58,7 @@ export class LocalWorkspace implements Workspace {
     root: string,
     private commandExecution: CommandExecution,
     private readonly approveCommand?: CommandApproval,
+    private readonly sandboxAccess: SandboxAccess[] = [],
   ) {
     this.root = realpathSync(path.resolve(root));
     const commandBoundary = commandExecution === "restricted"
@@ -64,7 +66,11 @@ export class LocalWorkspace implements Workspace {
       : commandExecution === "unsafe"
         ? "Shell commands have the host user's normal access."
         : "Shell commands are disabled.";
-    this.environment = `${hostEnvironmentDescription()} ${commandBoundary}`;
+    const extraAccess = sandboxAccess.length
+      ? ` Additional shell access: ${sandboxAccess.map((entry) =>
+          `${entry.writable ? "read and write" : "read only"} ${entry.path}`).join("; ")}.`
+      : "";
+    this.environment = `${hostEnvironmentDescription()} ${commandBoundary}${extraAccess}`;
   }
 
   async read(filePath: string): Promise<string> {
@@ -150,7 +156,14 @@ export class LocalWorkspace implements Workspace {
             stderr: "This command requests network access, which is unavailable in restricted execution.",
             permissionDenied: true,
           }
-        : await runRestrictedCommand(command, this.root, commandCwd, timeoutMs, signal);
+        : await runRestrictedCommand(
+            command,
+            this.root,
+            commandCwd,
+            timeoutMs,
+            signal,
+            this.sandboxAccess,
+          );
       if (!result.permissionDenied || !this.approveCommand) return result;
 
       signal?.throwIfAborted();
@@ -218,9 +231,12 @@ export class LocalWorkspace implements Workspace {
 
   private async resolveWrite(input: string): Promise<string> {
     const target = this.resolve(input);
+    this.assertWritable(target, input);
 
     try {
-      this.assertInside(await realpath(target), input);
+      const actual = await realpath(target);
+      this.assertInside(actual, input);
+      this.assertWritable(actual, input);
       return target;
     } catch (error) {
       if (!isMissingPath(error)) throw error;
@@ -229,7 +245,9 @@ export class LocalWorkspace implements Workspace {
     let existing = path.dirname(target);
     while (true) {
       try {
-        this.assertInside(await realpath(existing), input);
+        const actual = await realpath(existing);
+        this.assertInside(actual, input);
+        this.assertWritable(actual, input);
         break;
       } catch (error) {
         if (!isMissingPath(error)) throw error;
@@ -240,7 +258,9 @@ export class LocalWorkspace implements Workspace {
     }
 
     await mkdir(path.dirname(target), { recursive: true });
-    this.assertInside(await realpath(path.dirname(target)), input);
+    const parent = await realpath(path.dirname(target));
+    this.assertInside(parent, input);
+    this.assertWritable(parent, input);
     return target;
   }
 
@@ -251,6 +271,13 @@ export class LocalWorkspace implements Workspace {
     }
     if (relative.split(path.sep).includes(".git")) {
       throw new Error(`Git metadata is managed by ${PROJECT.name} and cannot be accessed through file tools`);
+    }
+  }
+
+  private assertWritable(resolved: string, input: string): void {
+    const relative = path.relative(personalSnaffleDirectory(), resolved);
+    if (!relative || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))) {
+      throw new Error(`Personal ${PROJECT.name} configuration cannot be changed through file tools: ${input}`);
     }
   }
 

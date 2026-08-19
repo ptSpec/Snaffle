@@ -3,6 +3,7 @@ import { constants, accessSync, existsSync, type Dirent } from "node:fs";
 import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { personalSnaffleDirectory, type SandboxAccess } from "../access.js";
 
 const MACOS_PROFILE = `(version 1)
 (deny default)
@@ -14,6 +15,7 @@ const MACOS_PROFILE = `(version 1)
 (allow file-read* file-test-existence
   (subpath (param "WORKSPACE"))
   (subpath (param "TEMP"))
+  __EXTRA_READ__
   (literal "/opt")
   (literal "/usr/local")
   (literal "/Library")
@@ -38,8 +40,10 @@ const MACOS_PROFILE = `(version 1)
   (subpath "/private/var/select"))
 (allow file-read-metadata
   __WORKSPACE_ANCESTORS__)
-(allow file-write* (subpath (param "WORKSPACE")) (subpath (param "TEMP")))
+(allow file-write* (subpath (param "WORKSPACE")) (subpath (param "TEMP"))
+  __EXTRA_WRITE__)
 (deny file-write* (regex #"/\\.git(/|$)"))
+(deny file-write* (subpath __PERSONAL_STATE__))
 (deny network*)`;
 
 const RESOURCE_LIMITS = `cpu="$1"
@@ -107,17 +111,18 @@ export async function runRestrictedCommand(
   cwd: string,
   timeoutMs: number,
   signal?: AbortSignal,
+  access: SandboxAccess[] = [],
 ): Promise<SandboxResult> {
   const status = nativeSandboxStatus();
   if (!status.available) throw new Error(status.detail);
 
   if (process.platform === "darwin") {
-    return runMacos(command, workspace, cwd, timeoutMs, signal);
+    return runMacos(command, workspace, cwd, timeoutMs, signal, access);
   }
 
   const bubblewrap = findExecutable("bwrap");
   if (!bubblewrap) throw new Error("Install Bubblewrap (bwrap) for restricted execution");
-  return runLinux(bubblewrap, command, workspace, cwd, timeoutMs, signal);
+  return runLinux(bubblewrap, command, workspace, cwd, timeoutMs, signal, access);
 }
 
 async function runMacos(
@@ -126,6 +131,7 @@ async function runMacos(
   cwd: string,
   timeoutMs: number,
   signal?: AbortSignal,
+  access: SandboxAccess[] = [],
 ): Promise<SandboxResult> {
   const temporary = await mkdtemp(path.join(tmpdir(), "coding-harness-sandbox-"));
   const home = path.join(temporary, "home");
@@ -137,7 +143,7 @@ async function runMacos(
       [
         "-D", `WORKSPACE=${workspace}`,
         "-D", `TEMP=${temporary}`,
-        "-p", macosProfile(workspace),
+        "-p", macosProfile(workspace, access),
         ...restrictedShell(command, timeoutMs),
       ],
       cwd,
@@ -150,13 +156,24 @@ async function runMacos(
   }
 }
 
-function macosProfile(workspace: string): string {
+function macosProfile(workspace: string, access: SandboxAccess[]): string {
   const ancestors: string[] = [];
-  for (let current = path.dirname(workspace);; current = path.dirname(current)) {
-    ancestors.push(`(literal ${JSON.stringify(current)})`);
-    if (current === path.dirname(current)) break;
+  for (const location of [workspace, ...access.map((entry) => entry.path)]) {
+    for (let current = path.dirname(location);; current = path.dirname(current)) {
+      ancestors.push(`(literal ${JSON.stringify(current)})`);
+      if (current === path.dirname(current)) break;
+    }
   }
-  return MACOS_PROFILE.replace("__WORKSPACE_ANCESTORS__", ancestors.join("\n  "));
+  const read = access.map((entry) => `(subpath ${JSON.stringify(entry.path)})`).join("\n  ");
+  const write = access
+    .filter((entry) => entry.writable)
+    .map((entry) => `(subpath ${JSON.stringify(entry.path)})`)
+    .join("\n  ");
+  return MACOS_PROFILE
+    .replace("__WORKSPACE_ANCESTORS__", [...new Set(ancestors)].join("\n  "))
+    .replace("__EXTRA_READ__", read)
+    .replace("__EXTRA_WRITE__", write)
+    .replace("__PERSONAL_STATE__", JSON.stringify(personalSnaffleDirectory()));
 }
 
 async function runLinux(
@@ -166,8 +183,11 @@ async function runLinux(
   cwd: string,
   timeoutMs: number,
   signal?: AbortSignal,
+  access: SandboxAccess[] = [],
 ): Promise<SandboxResult> {
   const gitMetadata = await findGitMetadata(workspace);
+  const personalState = personalSnaffleDirectory();
+  await mkdir(personalState, { recursive: true });
   const args = [
     "--die-with-parent",
     "--new-session",
@@ -177,8 +197,10 @@ async function runLinux(
     "--proc", "/proc",
     "--tmpfs", "/tmp",
     "--dir", "/tmp/home",
+    ...access.flatMap((entry) => [entry.writable ? "--bind" : "--ro-bind", entry.path, entry.path]),
     "--bind", workspace, workspace,
     ...gitMetadata.flatMap((entry) => ["--ro-bind", entry, entry]),
+    "--ro-bind", personalState, personalState,
     "--chdir", cwd,
     ...restrictedShell(command, timeoutMs),
   ];
