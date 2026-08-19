@@ -19,6 +19,7 @@ type SectionState = "pending" | "done" | "skipped";
 
 const PROVIDER_WEB_BACKENDS: Partial<Record<string, WebSearchBackend>> = {
   openrouter: "openrouter",
+  deepseek: "deepseek",
 };
 
 export function Onboarding({
@@ -264,7 +265,9 @@ export function Onboarding({
       ? "primary"
       : "other";
   const webInfo = WEB_BACKENDS.find((backend) => backend.id === webBackend)!;
-  const keyedWebBackend = webBackend !== "ddg" && webBackend !== "openrouter" ? webBackend : null;
+  const keyedWebBackend = webBackend !== "ddg" && webBackend !== "openrouter" && webBackend !== "deepseek"
+    ? webBackend
+    : null;
 
   return (
     <main className="onboarding-shell">

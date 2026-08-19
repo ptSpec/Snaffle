@@ -1,6 +1,6 @@
 export type KetchSearchBackend = "ddg" | "exa" | "tavily" | "brave" | "firecrawl";
-export type WebSearchBackend = KetchSearchBackend | "openrouter";
+export type WebSearchBackend = KetchSearchBackend | "openrouter" | "deepseek";
 
 export const WEB_SEARCH_BACKENDS: WebSearchBackend[] = [
-  "ddg", "exa", "tavily", "brave", "firecrawl", "openrouter",
+  "ddg", "exa", "tavily", "brave", "firecrawl", "openrouter", "deepseek",
 ];

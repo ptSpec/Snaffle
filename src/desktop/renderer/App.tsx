@@ -109,6 +109,7 @@ const initialState: DesktopState = {
   mcpEnabled: true,
   mcpServers: [],
   openRouterAvailable: false,
+  deepSeekAvailable: false,
   ketchAvailable: false,
   webSearchEnabled: false,
   webSearchBackend: "ddg",
@@ -2047,6 +2048,7 @@ export function App(): JSX.Element {
             compactionThreshold={desktopState.compactionThreshold}
             ketchAvailable={desktopState.ketchAvailable}
             openRouterAvailable={desktopState.openRouterAvailable}
+            deepSeekAvailable={desktopState.deepSeekAvailable}
             webSearchEnabled={desktopState.webSearchEnabled}
             webSearchBackend={desktopState.webSearchBackend}
             webSearchKeyBackends={desktopState.webSearchKeyBackends}

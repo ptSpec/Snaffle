@@ -48,6 +48,7 @@ export function Settings({
   compactionThreshold,
   ketchAvailable,
   openRouterAvailable,
+  deepSeekAvailable,
   webSearchEnabled,
   webSearchBackend,
   webSearchKeyBackends,
@@ -115,6 +116,7 @@ export function Settings({
   compactionThreshold: number;
   ketchAvailable: boolean;
   openRouterAvailable: boolean;
+  deepSeekAvailable: boolean;
   webSearchEnabled: boolean;
   webSearchBackend: WebSearchBackend;
   webSearchKeyBackends: KetchSearchBackend[];
@@ -217,6 +219,7 @@ export function Settings({
         enabled={webSearchEnabled}
         ketchAvailable={ketchAvailable}
         openRouterAvailable={openRouterAvailable}
+        deepSeekAvailable={deepSeekAvailable}
         error={error}
         onEnabled={onWebSearchEnabled}
         onBackend={onWebSearchBackend}

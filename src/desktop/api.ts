@@ -127,6 +127,7 @@ export type DesktopState = {
   mcpEnabled: boolean;
   mcpServers: McpServerConfig[];
   openRouterAvailable: boolean;
+  deepSeekAvailable: boolean;
   ketchAvailable: boolean;
   webSearchEnabled: boolean;
   webSearchBackend: WebSearchBackend;

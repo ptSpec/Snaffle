@@ -695,11 +695,14 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     openRouterAvailable: providerConnections.list().find(
       (connection) => connection.id === OPENROUTER_CONNECTION_ID,
     )?.hasApiKey ?? false,
+    deepSeekAvailable: Boolean(deepSeekApiKey()),
     ketchAvailable: Boolean(findKetch()),
     webSearchEnabled,
     webSearchBackend,
     webSearchKeyBackends: WEB_SEARCH_BACKENDS.flatMap((backend) =>
-      backend !== "openrouter" && backend !== "ddg" && webSearchApiKey(backend) ? [backend] : []
+      backend !== "openrouter" && backend !== "deepseek" && backend !== "ddg" && webSearchApiKey(backend)
+        ? [backend]
+        : []
     ),
     runningThreadIds: runs.runningThreadIds(),
     unsafeThreadIds: runs.unsafeThreadIds(),
@@ -791,6 +794,7 @@ function configuredTools(workspacePath?: string): ActiveTool[] {
           backend: webSearchBackend,
           apiKey: webSearchApiKey(webSearchBackend),
           openRouterApiKey: openRouterApiKey(),
+          deepSeekApiKey: deepSeekApiKey(),
         }
       : {}).map((tool) => ({ source: { type: "built-in" }, tool }));
   tools.push({ source: { type: "built-in" }, tool: updatePlanTool() });
@@ -960,8 +964,16 @@ function openRouterApiKey(): string {
   }
 }
 
+function deepSeekApiKey(): string {
+  const connection = providerConnections.list().find((item) =>
+    item.providerId === "deepseek" && item.enabled && item.hasApiKey
+  );
+  if (!connection) return "";
+  return providerConnections.resolve(connection.id).apiKey ?? "";
+}
+
 function webSearchApiKey(backend: WebSearchBackend): string | undefined {
-  if (backend === "ddg" || backend === "openrouter") return undefined;
+  if (backend === "ddg" || backend === "openrouter" || backend === "deepseek") return undefined;
   const environment = {
     exa: process.env.EXA_API_KEY || process.env.KETCH_EXA_API_KEY,
     tavily: process.env.TAVILY_API_KEY || process.env.KETCH_TAVILY_API_KEY,
@@ -998,7 +1010,7 @@ function validWebSearchBackend(value: unknown): WebSearchBackend | undefined {
 
 function validKetchSearchBackend(value: unknown): KetchSearchBackend | undefined {
   const backend = validWebSearchBackend(value);
-  return backend && backend !== "openrouter" ? backend : undefined;
+  return backend && backend !== "openrouter" && backend !== "deepseek" ? backend : undefined;
 }
 
 function sendRunEvent(threadId: string, event: RunEvent): void {
