@@ -27,6 +27,10 @@ export function registerGitIpc(
     return gitDiffPreview(await workspacePath(workspaceId), text(filePath, "File path"));
   });
 
+  ipcMain.handle("desktop:get-turn-changes", async (_event, value: unknown) => {
+    return store.turnChanges(text(value, "Change artifact ID"));
+  });
+
   ipcMain.handle("desktop:save-git-file", async (
     _event,
     workspaceId: unknown,

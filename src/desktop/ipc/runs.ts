@@ -19,6 +19,7 @@ import { projectContext } from "../../context/projection.js";
 import { estimateContextCharacters, estimateContextTokens } from "../../context/budget.js";
 import { probeNativeSandbox } from "../../execution/native/sandbox.js";
 import { LocalWorkspace, type CommandApprovalRequest } from "../../execution/workspace.js";
+import { beginTurnChanges, discardTurnChanges, finishTurnChanges } from "../../git/turn-changes.js";
 import {
   isReasoningEffort,
   type ModelProvider,
@@ -399,6 +400,7 @@ export function registerRunIpc(options: {
       active.delete(threadId);
       throw error;
     }
+    const turnChangesBaseline = await beginTurnChanges(selectedWorkspace.path);
     void runAgent({
       task: modelTask,
       provider: mainRoute.provider,
@@ -420,13 +422,27 @@ export function registerRunIpc(options: {
         options.sendEvent(threadId, event);
       },
     }).then(async () => {
-      const entries = await options.store.entries(threadId);
+      let entries = await options.store.entries(threadId);
+      const finalAssistant = [...entries].reverse().find((entry) =>
+        entry.message.role === "assistant" && !entry.message.toolCalls?.length
+      );
+      const changes = await finishTurnChanges(turnChangesBaseline);
+      if (finalAssistant && changes?.files) {
+        await options.store.saveTurnChanges(threadId, finalAssistant.sequence, changes);
+        entries = await options.store.entries(threadId);
+      }
       options.sendEvent(threadId, {
         type: "run.persisted",
-        entries: entries.map((entry) => ({ sequence: entry.sequence, entryId: entry.id })),
+        entries: entries.map((entry) => ({
+          sequence: entry.sequence,
+          entryId: entry.id,
+          ...(entry.changes ? { changes: entry.changes } : {}),
+        })),
       });
       options.compactor.schedule(compactionInput);
-    }).catch(() => undefined).finally(() => {
+    }).catch(async () => {
+      await discardTurnChanges(turnChangesBaseline);
+    }).finally(() => {
       mainRoute.release();
       if (active.get(threadId) === run) active.delete(threadId);
     });

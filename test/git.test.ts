@@ -7,6 +7,7 @@ import test from "node:test";
 import { promisify } from "node:util";
 import { commitGitChanges, saveGitFile } from "../src/git/actions.js";
 import { gitChanges, gitDiffPreview, gitFileContents, parseGitNumstat, parseGitStatus } from "../src/git/repository.js";
+import { beginTurnChanges, finishTurnChanges } from "../src/git/turn-changes.js";
 
 const exec = promisify(execFile);
 
@@ -89,6 +90,34 @@ test("Git commit includes only selected files", async () => {
     assert.equal((await exec("git", ["show", "HEAD:new.txt"], { cwd: workspace })).stdout, "new\n");
     assert.equal((await exec("git", ["show", "HEAD:two.txt"], { cwd: workspace })).stdout, "two\n");
     assert.match((await exec("git", ["status", "--porcelain", "two.txt"], { cwd: workspace })).stdout, /^M  two\.txt/);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("turn changes exclude work that existed before the run", async () => {
+  const workspace = await mkdtemp(join(tmpdir(), "snaffle-turn-changes-"));
+  try {
+    await exec("git", ["init"], { cwd: workspace });
+    await exec("git", ["config", "user.name", "Snaffle Test"], { cwd: workspace });
+    await exec("git", ["config", "user.email", "test@example.com"], { cwd: workspace });
+    await writeFile(join(workspace, "existing.txt"), "committed\n");
+    await exec("git", ["add", "."], { cwd: workspace });
+    await exec("git", ["commit", "-m", "initial"], { cwd: workspace });
+    await writeFile(join(workspace, "existing.txt"), "committed\nbefore run\n");
+
+    const baseline = await beginTurnChanges(workspace);
+    await writeFile(join(workspace, "existing.txt"), "committed\nbefore run\nduring run\n");
+    await writeFile(join(workspace, "new.txt"), "new during run\n");
+    const changes = await finishTurnChanges(baseline);
+
+    assert.deepEqual(
+      changes && { files: changes.files, additions: changes.additions, deletions: changes.deletions },
+      { files: 2, additions: 2, deletions: 0 },
+    );
+    assert.doesNotMatch(changes?.patch ?? "", /^\+before run$/m);
+    assert.match(changes?.patch ?? "", /^\+during run$/m);
+    assert.match(changes?.patch ?? "", /^\+new during run$/m);
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }

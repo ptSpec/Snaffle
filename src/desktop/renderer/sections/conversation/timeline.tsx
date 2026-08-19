@@ -3,6 +3,7 @@ import type { AttachmentRef } from "../../../../attachments/types.js";
 import type { CommandApprovalDecision } from "../../../../protocol.js";
 import { MAX_KEPT_ASIDE_MESSAGES } from "../../../api.js";
 import { CopyIcon, MarkdownContent } from "./markdown.js";
+import { TurnChanges } from "./turn-changes.js";
 import {
   toolGeneratingLabel,
   toolStatus,
@@ -131,6 +132,7 @@ export function TimelineEntry({
               <MarkdownContent text={item.text} {...(item.sources ? { sources: item.sources } : {})} />
             )}
           </div>
+          {!item.streaming && !item.intermediate && item.changes ? <TurnChanges summary={item.changes} /> : null}
           {!item.streaming && !item.intermediate ? (
             <MessageFooter
               text={item.text}

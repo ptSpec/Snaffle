@@ -1,5 +1,6 @@
 import type { AttachmentRef } from "./attachments/types.js";
 import type { SubagentActivity, SubagentActivityUpdate } from "./agent/subagents/activity.js";
+import type { TurnChangesSummary } from "./git/types.js";
 
 export type JsonSchema = Record<string, unknown>;
 
@@ -144,5 +145,5 @@ export type RunEvent =
       presentation?: ToolPresentation;
     }
   | { type: "run.completed"; text: string; steps: number }
-  | { type: "run.persisted"; entries: Array<{ sequence: number; entryId: string }> }
+  | { type: "run.persisted"; entries: Array<{ sequence: number; entryId: string; changes?: TurnChangesSummary }> }
   | { type: "run.failed"; message: string };

@@ -5,13 +5,17 @@ import { promisify } from "node:util";
 const runFile = promisify(execFile);
 export const MAX_GIT_OUTPUT_BYTES = 8 * 1024 * 1024;
 
-export function runGit(workspace: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
+export function runGit(
+  workspace: string,
+  args: string[],
+  environment: Record<string, string> = {},
+): Promise<{ stdout: string; stderr: string }> {
   return runFile("git", args, {
     cwd: workspace,
     encoding: "utf8",
     windowsHide: true,
     maxBuffer: MAX_GIT_OUTPUT_BYTES,
-    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
+    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", ...environment },
   });
 }
 

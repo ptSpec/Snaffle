@@ -14,14 +14,14 @@ import type { CompactionMode } from "../context/budget.js";
 import type { ContextCheckpoint } from "../context/projection.js";
 import type { ContextReport } from "../context/report.js";
 import type { SubagentProfile, ThreadSubagentMode } from "../agent/subagents/profile.js";
-import type { GitChanges, GitDiffPreview, GitFileContents } from "../git/types.js";
+import type { GitChanges, GitDiffPreview, GitFileContents, TurnChangesArtifact, TurnChangesSummary } from "../git/types.js";
 import type { McpServerConfig, McpServerStatus } from "../mcp/types.js";
 import type { SkillSummary } from "../extensions/skills/types.js";
 import type { ImageUnderstandingProfile } from "../attachments/vision.js";
 import type { ModelToolSurface, ModelToolSurfaces } from "../capabilities/surface.js";
 import type { DesktopUpdateState } from "./updates.js";
 
-export type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents } from "../git/types.js";
+export type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents, TurnChangesArtifact, TurnChangesSummary } from "../git/types.js";
 export type { DesktopUpdateState } from "./updates.js";
 
 export type DesktopThread = {
@@ -52,6 +52,7 @@ export type DesktopEntry = {
   id: string;
   sequence: number;
   message: Message;
+  changes?: TurnChangesSummary;
 };
 
 export type DesktopSearchResult = {
@@ -273,6 +274,7 @@ export interface DesktopApi {
   getGitChanges(workspaceId: string): Promise<GitChanges>;
   getGitFile(workspaceId: string, path: string): Promise<GitFileContents>;
   getGitDiffPreview(workspaceId: string, path: string): Promise<GitDiffPreview>;
+  getTurnChanges(id: string): Promise<TurnChangesArtifact | null>;
   saveGitFile(workspaceId: string, path: string, content: string, lineEnding: GitFileContents["lineEnding"]): Promise<void>;
   commitGitChanges(workspaceId: string, message: string, paths: string[]): Promise<GitChanges>;
   openWorkspaceFile(workspaceId: string, path: string): Promise<void>;

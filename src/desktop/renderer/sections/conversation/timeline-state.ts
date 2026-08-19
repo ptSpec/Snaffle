@@ -1,13 +1,13 @@
 import type { AttachmentRef } from "../../../../attachments/types.js";
 import type { CommandApprovalDecision, RunEvent, SourceReference, ToolCall, ToolPresentation, Usage } from "../../../../protocol.js";
 import type { ContextCheckpoint } from "../../../../context/projection.js";
-import type { DesktopEntry } from "../../../api.js";
+import type { DesktopEntry, TurnChangesSummary } from "../../../api.js";
 import { applySubagentUpdate, type SubagentActivity } from "../../../../agent/subagents/activity.js";
 
 export type TimelineItem =
   | { id: string; kind: "user"; text: string; attachments?: AttachmentRef[]; sequence: number; entryId?: string }
   | { id: string; kind: "error"; text: string; restoreSequence?: number }
-  | { id: string; kind: "assistant"; text: string; streaming: boolean; intermediate?: boolean; reasoning?: string; toolCalls?: ToolCall[]; toolNames?: string[]; finishReason?: string; model?: string; providerId?: string; providerConnectionId?: string; usage?: Usage; durationMs?: number; sources?: SourceReference[]; sequence?: number; entryId?: string }
+  | { id: string; kind: "assistant"; text: string; streaming: boolean; intermediate?: boolean; reasoning?: string; toolCalls?: ToolCall[]; toolNames?: string[]; finishReason?: string; model?: string; providerId?: string; providerConnectionId?: string; usage?: Usage; durationMs?: number; sources?: SourceReference[]; sequence?: number; entryId?: string; changes?: TurnChangesSummary }
   | { id: string; kind: "activity-group"; items: TimelineItem[] }
   | { id: string; kind: "reasoning"; step: number; text: string; streaming: boolean; status?: string | undefined; retryAt?: number | undefined }
   | { id: string; kind: "tool-preparing"; step: number; index: number; name: string; argumentChars: number; startedAt: number }
@@ -297,11 +297,13 @@ export function addRunEvent(
   }
 
   if (event.type === "run.persisted") {
-    const entryIds = new Map(event.entries.map((entry) => [entry.sequence, entry.entryId]));
+    const persistedEntries = new Map(event.entries.map((entry) => [entry.sequence, entry]));
     setTimeline((items) => items.map((item) => {
       if ((item.kind !== "user" && item.kind !== "assistant") || item.sequence === undefined) return item;
-      const entryId = entryIds.get(item.sequence);
-      return entryId ? { ...item, entryId } : item;
+      const persisted = persistedEntries.get(item.sequence);
+      return persisted
+        ? { ...item, entryId: persisted.entryId, ...(persisted.changes ? { changes: persisted.changes } : {}) }
+        : item;
     }));
     return;
   }
@@ -377,7 +379,7 @@ export function timelineFromEntries(entries: DesktopEntry[], checkpoints: Contex
   const items: TimelineItem[] = [];
   const calls = new Map<string, ToolCall>();
 
-  entries.forEach(({ id: entryId, sequence, message }, index) => {
+  entries.forEach(({ id: entryId, sequence, message, changes }, index) => {
     if (message.role === "system") return;
     if (message.role === "user") {
       if (message.internal) return;
@@ -421,6 +423,7 @@ export function timelineFromEntries(entries: DesktopEntry[], checkpoints: Contex
           ...(message.toolCalls?.length ? { toolCalls: message.toolCalls } : {}),
           ...(message.toolNames?.length ? { toolNames: message.toolNames } : {}),
           ...(message.finishReason ? { finishReason: message.finishReason } : {}),
+          ...(changes ? { changes } : {}),
         });
       }
       for (const call of message.toolCalls ?? []) calls.set(call.id, call);

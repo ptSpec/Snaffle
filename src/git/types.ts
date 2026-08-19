@@ -26,3 +26,18 @@ export type GitDiffPreview = {
   lines: string[];
   truncated: boolean;
 };
+
+export type TurnChangesSummary = {
+  id: string;
+  version: 1;
+  files: number;
+  additions: number;
+  deletions: number;
+  truncated: boolean;
+};
+
+export type TurnChangesArtifact = TurnChangesSummary & {
+  patch: string;
+  startRevision: string | null;
+  endRevision: string | null;
+};

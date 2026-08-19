@@ -9,6 +9,7 @@ import type { PlanItem } from "../tools/plan.js";
 import type { ReasoningEffort } from "../providers/provider.js";
 import { ContextStore } from "../context/store.js";
 import type { DesktopEntry, DesktopSearchResult, DesktopThread, DesktopWorkspace } from "./api.js";
+import type { TurnChangesArtifact, TurnChangesSummary } from "../git/types.js";
 import { AsideStore } from "./aside-store.js";
 import { SavedMessageStore } from "./saved-messages-store.js";
 
@@ -78,6 +79,21 @@ export class DesktopStore {
         )`,
         `CREATE INDEX IF NOT EXISTS entries_thread_sequence
           ON entries(thread_id, sequence)`,
+        `CREATE TABLE IF NOT EXISTS turn_changes (
+          id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          sequence INTEGER NOT NULL,
+          version INTEGER NOT NULL,
+          files INTEGER NOT NULL,
+          additions INTEGER NOT NULL,
+          deletions INTEGER NOT NULL,
+          truncated INTEGER NOT NULL,
+          patch TEXT NOT NULL,
+          start_revision TEXT,
+          end_revision TEXT,
+          created_at INTEGER NOT NULL,
+          UNIQUE(thread_id, sequence)
+        )`,
         `CREATE VIRTUAL TABLE IF NOT EXISTS entries_search USING fts5(
           text,
           content='entries',
@@ -282,6 +298,10 @@ export class DesktopStore {
         FROM entries WHERE thread_id = ? AND sequence <= ? ORDER BY sequence`,
       args: [sourceThreadId, throughSequence],
     });
+    const turnChanges = await this.database.execute({
+      sql: "SELECT * FROM turn_changes WHERE thread_id = ? AND sequence <= ? ORDER BY sequence",
+      args: [sourceThreadId, throughSequence],
+    });
     const threadId = randomUUID();
     const workspaceId = rowText(sourceRow, "workspace_id");
     const label = branchLabel?.trim() || null;
@@ -322,6 +342,26 @@ export class DesktopStore {
             rowText(entry, "text"),
             rowText(entry, "data"),
             rowNumber(entry, "created_at"),
+          ],
+        })),
+        ...turnChanges.rows.map((artifact) => ({
+          sql: `INSERT INTO turn_changes(
+              id, thread_id, sequence, version, files, additions, deletions, truncated,
+              patch, start_revision, end_revision, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            randomUUID(),
+            threadId,
+            rowNumber(artifact, "sequence"),
+            rowNumber(artifact, "version"),
+            rowNumber(artifact, "files"),
+            rowNumber(artifact, "additions"),
+            rowNumber(artifact, "deletions"),
+            rowNumber(artifact, "truncated"),
+            rowText(artifact, "patch"),
+            rowOptionalText(artifact, "start_revision"),
+            rowOptionalText(artifact, "end_revision"),
+            rowNumber(artifact, "created_at"),
           ],
         })),
       ],
@@ -543,6 +583,10 @@ export class DesktopStore {
           args: [threadId, sequence, sequence],
         },
         {
+          sql: "DELETE FROM turn_changes WHERE thread_id = ? AND sequence >= ?",
+          args: [threadId, sequence],
+        },
+        {
           sql: "DELETE FROM entries WHERE thread_id = ? AND sequence >= ?",
           args: [threadId, sequence],
         },
@@ -558,10 +602,57 @@ export class DesktopStore {
   async entries(threadId: string | null): Promise<DesktopEntry[]> {
     if (!threadId) return [];
     const result = await this.database.execute({
-      sql: "SELECT id, sequence, data FROM entries WHERE thread_id = ? ORDER BY sequence",
+      sql: `SELECT e.id, e.sequence, e.data,
+          c.id AS changes_id, c.version AS changes_version, c.files AS changes_files,
+          c.additions AS changes_additions, c.deletions AS changes_deletions,
+          c.truncated AS changes_truncated
+        FROM entries e
+        LEFT JOIN turn_changes c ON c.thread_id = e.thread_id AND c.sequence = e.sequence
+        WHERE e.thread_id = ? ORDER BY e.sequence`,
       args: [threadId],
     });
     return result.rows.map(entryFromRow);
+  }
+
+  async saveTurnChanges(
+    threadId: string,
+    sequence: number,
+    artifact: Omit<TurnChangesArtifact, "id">,
+  ): Promise<TurnChangesSummary> {
+    const id = randomUUID();
+    await this.database.execute({
+      sql: `INSERT INTO turn_changes(
+          id, thread_id, sequence, version, files, additions, deletions, truncated,
+          patch, start_revision, end_revision, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(thread_id, sequence) DO UPDATE SET
+          id = excluded.id, version = excluded.version, files = excluded.files,
+          additions = excluded.additions, deletions = excluded.deletions,
+          truncated = excluded.truncated, patch = excluded.patch,
+          start_revision = excluded.start_revision, end_revision = excluded.end_revision,
+          created_at = excluded.created_at`,
+      args: [
+        id, threadId, sequence, artifact.version, artifact.files, artifact.additions,
+        artifact.deletions, artifact.truncated ? 1 : 0, artifact.patch,
+        artifact.startRevision, artifact.endRevision, Date.now(),
+      ],
+    });
+    return { id, version: 1, files: artifact.files, additions: artifact.additions,
+      deletions: artifact.deletions, truncated: artifact.truncated };
+  }
+
+  async turnChanges(id: string): Promise<TurnChangesArtifact | null> {
+    const result = await this.database.execute({
+      sql: "SELECT * FROM turn_changes WHERE id = ?",
+      args: [id],
+    });
+    const row = result.rows[0];
+    return row ? {
+      ...turnChangesSummary(row),
+      patch: rowText(row, "patch"),
+      startRevision: rowOptionalText(row, "start_revision"),
+      endRevision: rowOptionalText(row, "end_revision"),
+    } : null;
   }
 
   async systemInstructions(threadId: string | null): Promise<string[]> {
@@ -596,6 +687,10 @@ export class DesktopStore {
       .replace(/\s+/g, " ");
     const title = firstTask && firstTask.length > 48 ? `${firstTask.slice(0, 47)}…` : firstTask;
     const statements: InStatement[] = [
+      {
+        sql: "DELETE FROM turn_changes WHERE thread_id = ? AND sequence >= ?",
+        args: [threadId, unchanged],
+      },
       {
         sql: "DELETE FROM entries WHERE thread_id = ? AND sequence >= ?",
         args: [threadId, unchanged],
@@ -756,10 +851,23 @@ function searchExpression(query: string): string {
 }
 
 function entryFromRow(row: Row): DesktopEntry {
+  const changesId = rowOptionalText(row, "changes_id");
   return {
     id: rowText(row, "id"),
     sequence: rowNumber(row, "sequence"),
     message: JSON.parse(rowText(row, "data")) as Message,
+    ...(changesId ? { changes: turnChangesSummary(row, "changes_") } : {}),
+  };
+}
+
+function turnChangesSummary(row: Row, prefix = ""): TurnChangesSummary {
+  return {
+    id: rowText(row, `${prefix}id`),
+    version: 1,
+    files: rowNumber(row, `${prefix}files`),
+    additions: rowNumber(row, `${prefix}additions`),
+    deletions: rowNumber(row, `${prefix}deletions`),
+    truncated: rowNumber(row, `${prefix}truncated`) === 1,
   };
 }
 
