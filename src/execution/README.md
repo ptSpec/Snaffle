@@ -14,7 +14,8 @@ Every backend should preserve the same workspace-relative file and command behav
 
 - File operations accept relative paths and absolute paths only when their canonical target remains inside the workspace; symlink escapes are rejected.
 - Model-controlled commands are restricted by default and receive no provider credentials.
-- On macOS and Linux, users may grant specific additional folders to restricted shell commands as read-only or read/write for one thread, workspace, or all workspaces. Global grants live in `~/.snaffle/sandbox-access.json`; restricted tools cannot modify that personal configuration. File tools remain workspace-only and workspace Git metadata remains protected.
+- On macOS and Linux, users may grant specific additional folders to restricted shell commands as read-only or read/write for one thread, workspace, or all workspaces. A blocked command can add a folder and retry inside the sandbox. Global grants live in `~/.snaffle/sandbox-access.json`; restricted tools cannot modify that personal configuration. File tools remain workspace-only and workspace Git metadata remains protected.
+- Restricted commands share one private temporary directory for the run. It is exposed through `$TMPDIR` and removed when the run finishes.
 - Network access requires an explicit command request and harness-owned approval.
 - Cancellation terminates active child work where the platform supports it and prevents pending work from starting.
 - `run_command` defaults to two minutes and accepts an explicit timeout up to five minutes.

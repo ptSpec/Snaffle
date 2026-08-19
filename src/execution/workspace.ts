@@ -1,6 +1,7 @@
 import { exec, spawn } from "node:child_process";
 import { realpathSync } from "node:fs";
-import { chmod, mkdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { rgPath } from "@vscode/ripgrep";
@@ -33,6 +34,7 @@ export type CommandApprovalRequest = {
   command: string;
   cwd: string;
   reason: string;
+  suggestedPaths?: string[];
 };
 
 export type CommandApproval = (
@@ -53,12 +55,13 @@ export type CommandExecution = "disabled" | "restricted" | "unsafe";
 export class LocalWorkspace implements Workspace {
   readonly root: string;
   readonly environment: string;
+  private sandboxTemporary: Promise<string> | undefined;
 
   constructor(
     root: string,
     private commandExecution: CommandExecution,
     private readonly approveCommand?: CommandApproval,
-    private readonly sandboxAccess: SandboxAccess[] = [],
+    private sandboxAccess: SandboxAccess[] = [],
   ) {
     this.root = realpathSync(path.resolve(root));
     const commandBoundary = commandExecution === "restricted"
@@ -70,7 +73,24 @@ export class LocalWorkspace implements Workspace {
       ? ` Additional shell access: ${sandboxAccess.map((entry) =>
           `${entry.writable ? "read and write" : "read only"} ${entry.path}`).join("; ")}.`
       : "";
-    this.environment = `${hostEnvironmentDescription()} ${commandBoundary}${extraAccess}`;
+    const temporary = commandExecution === "restricted"
+      ? " Use $TMPDIR for temporary work; it persists for this run and is removed afterward."
+      : "";
+    this.environment = `${hostEnvironmentDescription()} ${commandBoundary}${extraAccess}${temporary}`;
+  }
+
+  grantSandboxAccess(access: SandboxAccess): void {
+    this.sandboxAccess = [
+      ...this.sandboxAccess.filter((entry) => entry.path !== access.path),
+      access,
+    ];
+  }
+
+  async close(): Promise<void> {
+    if (!this.sandboxTemporary) return;
+    const temporary = await this.sandboxTemporary;
+    this.sandboxTemporary = undefined;
+    await rm(temporary, { recursive: true, force: true });
   }
 
   async read(filePath: string): Promise<string> {
@@ -163,6 +183,7 @@ export class LocalWorkspace implements Workspace {
             timeoutMs,
             signal,
             this.sandboxAccess,
+            await this.temporaryDirectory(),
           );
       if (!result.permissionDenied || !this.approveCommand) return result;
 
@@ -171,10 +192,23 @@ export class LocalWorkspace implements Workspace {
         command,
         cwd: this.relative(commandCwd) || ".",
         reason: result.stderr,
+        ...await this.suggestedSandboxPaths(command),
       });
       signal?.throwIfAborted();
       if (decision === "deny") {
         return { ...result, stderr: `${result.stderr}\nUnrestricted retry denied by the user.` };
+      }
+      if (decision === "sandbox") {
+        const retried = await runRestrictedCommand(
+          command,
+          this.root,
+          commandCwd,
+          timeoutMs,
+          signal,
+          this.sandboxAccess,
+          await this.temporaryDirectory(),
+        );
+        return { ...retried, approval: decision };
       }
       if (decision === "thread") this.commandExecution = "unsafe";
       const retried = await this.runUnsafe(command, commandCwd, timeoutMs, signal);
@@ -207,6 +241,36 @@ export class LocalWorkspace implements Workspace {
         ...(error.killed ? { timedOut: true } : {}),
       };
     }
+  }
+
+  private async suggestedSandboxPaths(command: string): Promise<{ suggestedPaths?: string[] }> {
+    const candidates = literalAbsolutePaths(command);
+    const folders: Array<{ path: string; canonical: string }> = [];
+    for (const candidate of candidates) {
+      try {
+        const resolved = await realpath(candidate);
+        const details = await stat(resolved);
+        const canonical = details.isDirectory() ? resolved : path.dirname(resolved);
+        if (inside(this.root, canonical) || this.sandboxAccess.some((entry) => inside(entry.path, canonical))) continue;
+        if (folders.some((entry) => entry.canonical === canonical)) continue;
+        folders.push({
+          path: details.isDirectory() ? path.normalize(candidate) : path.dirname(path.normalize(candidate)),
+          canonical,
+        });
+      } catch {
+        // Only suggest an existing path that can be confirmed before approval.
+      }
+    }
+    const suggestedPaths = folders
+      .filter((folder) => !folders.some((other) => other !== folder && inside(other.canonical, folder.canonical)))
+      .slice(0, 8)
+      .map((folder) => folder.path);
+    return suggestedPaths.length ? { suggestedPaths } : {};
+  }
+
+  private temporaryDirectory(): Promise<string> {
+    this.sandboxTemporary ??= mkdtemp(path.join(tmpdir(), "snaffle-sandbox-"));
+    return this.sandboxTemporary;
   }
 
   private resolve(input: string): string {
@@ -284,6 +348,17 @@ export class LocalWorkspace implements Workspace {
   private relative(input: string): string {
     return path.relative(this.root, input);
   }
+}
+
+function literalAbsolutePaths(command: string): string[] {
+  return (command.match(/"[^"]*"|'[^']*'|[^\s]+/g) ?? [])
+    .map((token) => token.replace(/^["'(<]+|["'),;>]+$/g, ""))
+    .filter((token) => path.isAbsolute(token));
+}
+
+function inside(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
 }
 
 type ProcessError = Error & {

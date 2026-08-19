@@ -250,6 +250,7 @@ export interface DesktopApi {
   setThreadUnsafe(threadId: string, unsafe: boolean): Promise<DesktopState>;
   chooseSandboxFolder(): Promise<string | null>;
   addSandboxAccess(threadId: string, input: SandboxAccessInput): Promise<DesktopState>;
+  grantCommandSandboxAccess(id: string, inputs: SandboxAccessInput[]): Promise<DesktopState>;
   removeSandboxAccess(threadId: string, grantId: string): Promise<DesktopState>;
   resolveCommandApproval(id: string, decision: CommandApprovalDecision): Promise<DesktopState>;
   setTheme(themeId: string): Promise<void>;

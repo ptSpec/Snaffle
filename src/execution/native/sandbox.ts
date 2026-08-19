@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { constants, accessSync, existsSync, type Dirent } from "node:fs";
-import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { personalSnaffleDirectory, type SandboxAccess } from "../access.js";
@@ -112,17 +112,25 @@ export async function runRestrictedCommand(
   timeoutMs: number,
   signal?: AbortSignal,
   access: SandboxAccess[] = [],
+  runTemporary?: string,
 ): Promise<SandboxResult> {
   const status = nativeSandboxStatus();
   if (!status.available) throw new Error(status.detail);
 
-  if (process.platform === "darwin") {
-    return runMacos(command, workspace, cwd, timeoutMs, signal, access);
-  }
+  const temporary = await realpath(runTemporary ?? await mkdtemp(path.join(tmpdir(), "snaffle-sandbox-")));
+  await mkdir(path.join(temporary, "home"), { recursive: true });
 
-  const bubblewrap = findExecutable("bwrap");
-  if (!bubblewrap) throw new Error("Install Bubblewrap (bwrap) for restricted execution");
-  return runLinux(bubblewrap, command, workspace, cwd, timeoutMs, signal, access);
+  try {
+    if (process.platform === "darwin") {
+      return await runMacos(command, workspace, cwd, timeoutMs, temporary, signal, access);
+    }
+
+    const bubblewrap = findExecutable("bwrap");
+    if (!bubblewrap) throw new Error("Install Bubblewrap (bwrap) for restricted execution");
+    return await runLinux(bubblewrap, command, workspace, cwd, timeoutMs, temporary, signal, access);
+  } finally {
+    if (!runTemporary) await rm(temporary, { recursive: true, force: true });
+  }
 }
 
 async function runMacos(
@@ -130,30 +138,24 @@ async function runMacos(
   workspace: string,
   cwd: string,
   timeoutMs: number,
+  temporary: string,
   signal?: AbortSignal,
   access: SandboxAccess[] = [],
 ): Promise<SandboxResult> {
-  const temporary = await mkdtemp(path.join(tmpdir(), "coding-harness-sandbox-"));
   const home = path.join(temporary, "home");
-  await mkdir(home);
-
-  try {
-    return await runProcess(
-      "/usr/bin/sandbox-exec",
-      [
-        "-D", `WORKSPACE=${workspace}`,
-        "-D", `TEMP=${temporary}`,
-        "-p", macosProfile(workspace, access),
-        ...restrictedShell(command, timeoutMs),
-      ],
-      cwd,
-      timeoutMs,
-      commandEnvironment(workspace, home, temporary),
-      signal,
-    );
-  } finally {
-    await rm(temporary, { recursive: true, force: true });
-  }
+  return runProcess(
+    "/usr/bin/sandbox-exec",
+    [
+      "-D", `WORKSPACE=${workspace}`,
+      "-D", `TEMP=${temporary}`,
+      "-p", macosProfile(workspace, access),
+      ...restrictedShell(command, timeoutMs),
+    ],
+    cwd,
+    timeoutMs,
+    commandEnvironment(workspace, home, temporary),
+    signal,
+  );
 }
 
 function macosProfile(workspace: string, access: SandboxAccess[]): string {
@@ -182,6 +184,7 @@ async function runLinux(
   workspace: string,
   cwd: string,
   timeoutMs: number,
+  temporary: string,
   signal?: AbortSignal,
   access: SandboxAccess[] = [],
 ): Promise<SandboxResult> {
@@ -195,8 +198,7 @@ async function runLinux(
     ...linuxSystemMounts(),
     "--dev", "/dev",
     "--proc", "/proc",
-    "--tmpfs", "/tmp",
-    "--dir", "/tmp/home",
+    "--bind", temporary, "/tmp",
     ...access.flatMap((entry) => [entry.writable ? "--bind" : "--ro-bind", entry.path, entry.path]),
     "--bind", workspace, workspace,
     ...gitMetadata.flatMap((entry) => ["--ro-bind", entry, entry]),

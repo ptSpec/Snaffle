@@ -72,8 +72,9 @@ export function Composer({
   onSlashCommand,
 }: ComposerProps): JSX.Element {
   const [addingSandboxLocation, setAddingSandboxLocation] = useState(false);
+  const [editingSandboxLocation, setEditingSandboxLocation] = useState<SandboxAccessGrant | null>(null);
   const [sandboxPath, setSandboxPath] = useState("");
-  const [sandboxWritable, setSandboxWritable] = useState(false);
+  const [sandboxWritable, setSandboxWritable] = useState(true);
   const [sandboxScope, setSandboxScope] = useState<SandboxAccessInput["scope"]>("global");
 
   async function chooseSandboxLocation(): Promise<void> {
@@ -81,14 +82,27 @@ export function Composer({
     if (location) setSandboxPath(location);
   }
 
-  function addSandboxLocation(): void {
+  function closeSandboxLocationForm(): void {
+    setAddingSandboxLocation(false);
+    setEditingSandboxLocation(null);
+    setSandboxPath("");
+    setSandboxWritable(true);
+    setSandboxScope("global");
+  }
+
+  function editSandboxLocation(location: SandboxAccessGrant): void {
+    setEditingSandboxLocation(location);
+    setSandboxPath(location.path);
+    setSandboxWritable(location.writable);
+    setSandboxScope(location.scope);
+    setAddingSandboxLocation(true);
+  }
+
+  function saveSandboxLocation(): void {
     const location = sandboxPath.trim();
     if (!location) return;
     onAddSandboxAccess({ path: location, writable: sandboxWritable, scope: sandboxScope });
-    setSandboxPath("");
-    setSandboxWritable(false);
-    setSandboxScope("global");
-    setAddingSandboxLocation(false);
+    closeSandboxLocationForm();
   }
 
   return (
@@ -242,14 +256,28 @@ export function Composer({
                             {` · ${sandboxScopeLabel(location.scope)}`}
                           </small>
                         </span>
-                        <button
-                          type="button"
-                          className="sandbox-location-remove"
-                          aria-label={`Remove ${location.path}`}
-                          title="Remove location"
-                          disabled={running}
-                          onClick={() => onRemoveSandboxAccess(location.id)}
-                        >×</button>
+                        <span className="sandbox-location-actions-inline">
+                          <button
+                            type="button"
+                            className="sandbox-location-edit"
+                            aria-label={`Edit ${location.path}`}
+                            title="Edit location"
+                            disabled={running}
+                            onClick={() => editSandboxLocation(location)}
+                          >
+                            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                              <path d="m3 11.5-.5 2 2-.5 7.7-7.7-1.5-1.5zM9.7 4.8l1.5 1.5" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            className="sandbox-location-remove"
+                            aria-label={`Remove ${location.path}`}
+                            title="Remove location"
+                            disabled={running}
+                            onClick={() => onRemoveSandboxAccess(location.id)}
+                          >×</button>
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -259,16 +287,20 @@ export function Composer({
                   <div className="sandbox-location-form">
                     <label>
                       Folder
-                      <button
-                        type="button"
-                        className="sandbox-location-picker"
-                        autoFocus
-                        title={sandboxPath || undefined}
-                        onClick={() => void chooseSandboxLocation()}
-                      >
-                        <span>{sandboxPath || "Choose folder…"}</span>
-                        <span aria-hidden="true">Choose</span>
-                      </button>
+                      {editingSandboxLocation ? (
+                        <code className="sandbox-location-fixed" title={sandboxPath}>{sandboxPath}</code>
+                      ) : (
+                        <button
+                          type="button"
+                          className="sandbox-location-picker"
+                          autoFocus
+                          title={sandboxPath || undefined}
+                          onClick={() => void chooseSandboxLocation()}
+                        >
+                          <span>{sandboxPath || "Choose folder…"}</span>
+                          <span aria-hidden="true">Choose</span>
+                        </button>
+                      )}
                     </label>
                     <div className="sandbox-location-options" aria-label="Folder access">
                       <button
@@ -286,23 +318,26 @@ export function Composer({
                       <button
                         type="button"
                         className={sandboxScope === "thread" ? "selected" : ""}
+                        disabled={Boolean(editingSandboxLocation)}
                         onClick={() => setSandboxScope("thread")}
                       >This thread</button>
                       <button
                         type="button"
                         className={sandboxScope === "workspace" ? "selected" : ""}
+                        disabled={Boolean(editingSandboxLocation)}
                         onClick={() => setSandboxScope("workspace")}
                       >This workspace</button>
                       <button
                         type="button"
                         className={sandboxScope === "global" ? "selected" : ""}
+                        disabled={Boolean(editingSandboxLocation)}
                         onClick={() => setSandboxScope("global")}
                       >All workspaces</button>
                     </div>
                     <div className="sandbox-location-actions">
-                      <button type="button" onClick={() => setAddingSandboxLocation(false)}>Cancel</button>
-                      <button type="button" className="primary" disabled={!sandboxPath.trim() || running} onClick={addSandboxLocation}>
-                        Add access
+                      <button type="button" onClick={closeSandboxLocationForm}>Cancel</button>
+                      <button type="button" className="primary" disabled={!sandboxPath.trim() || running} onClick={saveSandboxLocation}>
+                        {editingSandboxLocation ? "Save changes" : "Add access"}
                       </button>
                     </div>
                   </div>
@@ -311,7 +346,12 @@ export function Composer({
                     type="button"
                     className="sandbox-add-location"
                     disabled={running}
-                    onClick={() => setAddingSandboxLocation(true)}
+                    onClick={() => {
+                      setEditingSandboxLocation(null);
+                      setSandboxWritable(true);
+                      setSandboxScope("global");
+                      setAddingSandboxLocation(true);
+                    }}
                   >+ Add location</button>
                 )}
               </div>

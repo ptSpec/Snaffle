@@ -90,6 +90,8 @@ const api: DesktopApi = {
   chooseSandboxFolder: () => ipcRenderer.invoke("desktop:choose-sandbox-folder"),
   addSandboxAccess: (threadId: string, input: SandboxAccessInput) =>
     ipcRenderer.invoke("desktop:add-sandbox-access", threadId, input),
+  grantCommandSandboxAccess: (id: string, inputs: SandboxAccessInput[]) =>
+    ipcRenderer.invoke("desktop:grant-command-sandbox-access", id, inputs),
   removeSandboxAccess: (threadId: string, grantId: string) =>
     ipcRenderer.invoke("desktop:remove-sandbox-access", threadId, grantId),
   resolveCommandApproval: (id: string, decision: CommandApprovalDecision) =>

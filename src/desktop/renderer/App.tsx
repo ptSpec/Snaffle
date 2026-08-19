@@ -1242,6 +1242,19 @@ export function App(): JSX.Element {
     }
   }
 
+  async function grantCommandSandboxAccess(
+    id: string,
+    inputs: SandboxAccessInput[],
+  ): Promise<void> {
+    setError(null);
+    try {
+      setDesktopState(withoutConversation(await window.desktop.grantCommandSandboxAccess(id, inputs)));
+    } catch (cause) {
+      setError(errorMessage(cause));
+      throw cause;
+    }
+  }
+
   function showDesktopState(state: DesktopState): void {
     followTimeline.current = true;
     const threadChanged = activeThreadId.current !== state.activeThreadId;
@@ -2227,6 +2240,8 @@ export function App(): JSX.Element {
                     setRightCollapsed(false);
                   }}
                   onResolveApproval={(id, decision) => void resolveCommandApproval(id, decision)}
+                  onChooseSandboxFolder={() => window.desktop.chooseSandboxFolder()}
+                  onGrantSandboxAccess={grantCommandSandboxAccess}
                   savedId={
                     item.kind === "assistant"
                       ? savedIdFor(item)

@@ -469,8 +469,11 @@ test("restricted commands stay inside the workspace", async (t) => {
   const secret = path.join(outside, "secret.txt");
   await writeFile(secret, "secret");
   const workspace = new LocalWorkspace(root, "restricted");
+  t.after(() => workspace.close());
 
   const inside = await workspace.run("printf ok > generated.txt", undefined, 5000);
+  const temporaryWrite = await workspace.run("printf persistent > \"$TMPDIR/persistent\"", undefined, 5000);
+  const temporaryRead = await workspace.run("cat \"$TMPDIR/persistent\"", undefined, 5000);
   const listing = await workspace.run("ls -la", undefined, 5000);
   const nestedDirectory = await workspace.run("cd nested && pwd", undefined, 5000);
   const outsideRead = await workspace.run(`cat ${JSON.stringify(secret)}`, undefined, 5000);
@@ -479,6 +482,8 @@ test("restricted commands stay inside the workspace", async (t) => {
   const inheritedSecret = await workspace.run("test -z \"$OPENROUTER_API_KEY\"", undefined, 5000);
 
   assert.equal(inside.exitCode, 0);
+  assert.equal(temporaryWrite.exitCode, 0);
+  assert.equal(temporaryRead.stdout, "persistent");
   assert.equal(listing.exitCode, 0);
   assert.equal(nestedDirectory.exitCode, 0);
   assert.equal(await readFile(path.join(root, "generated.txt"), "utf8"), "ok");
@@ -501,6 +506,7 @@ test("restricted commands honor explicit read-only and writable folders", async 
     { path: await realpath(readOnly), writable: false },
     { path: await realpath(writable), writable: true },
   ]);
+  t.after(() => workspace.close());
 
   const read = await workspace.run(`cat ${JSON.stringify(path.join(await realpath(readOnly), "input.txt"))}`, undefined, 5000);
   const write = await workspace.run(`printf saved > ${JSON.stringify(path.join(await realpath(writable), "output.txt"))}`, undefined, 5000);
@@ -521,6 +527,7 @@ test("restricted commands can be approved once or for the thread", async (t) => 
   const decisions = ["once", "thread"] as const;
   let approvals = 0;
   const workspace = new LocalWorkspace(root, "restricted", async () => decisions[approvals++] ?? "deny");
+  t.after(() => workspace.close());
 
   const once = await workspace.run("printf once > .git/once", undefined, 5000);
   const thread = await workspace.run("printf thread > .git/thread", undefined, 5000);
@@ -541,12 +548,39 @@ test("network commands request approval before restricted execution", async (t) 
     reason = request.reason;
     return "once";
   });
+  t.after(() => workspace.close());
 
   const result = await workspace.run("printf approved", undefined, 5000, true);
 
   assert.equal(result.stdout, "approved");
   assert.equal(result.approval, "once");
   assert.match(reason, /requests network access/);
+});
+
+test("restricted commands can retry with a newly granted folder", async (t) => {
+  if (!nativeSandboxStatus().available) return t.skip(nativeSandboxStatus().detail);
+
+  const root = await mkdtemp(path.join(tmpdir(), "sandbox-grant-workspace-"));
+  const outside = await mkdtemp(path.join(tmpdir(), "sandbox-grant-folder-"));
+  await writeFile(path.join(outside, "input.txt"), "visible after approval");
+  let workspace: LocalWorkspace;
+  let suggestedPaths: string[] = [];
+  workspace = new LocalWorkspace(root, "restricted", async (request) => {
+    suggestedPaths = request.suggestedPaths ?? [];
+    workspace.grantSandboxAccess({ path: await realpath(outside), writable: false });
+    return "sandbox";
+  });
+  t.after(() => Promise.all([
+    workspace.close(),
+    rm(root, { recursive: true, force: true }),
+    rm(outside, { recursive: true, force: true }),
+  ]));
+
+  const result = await workspace.run(`cat ${JSON.stringify(path.join(outside, "input.txt"))}`, undefined, 5000);
+
+  assert.equal(result.stdout, "visible after approval");
+  assert.equal(result.approval, "sandbox");
+  assert.deepEqual(suggestedPaths, [outside]);
 });
 
 test("commands require explicit host permission", async (t) => {

@@ -38,7 +38,7 @@ export type TimelineItem =
       summary?: string;
       text?: string;
     }
-  | { id: string; kind: "approval"; command: string; cwd: string; reason: string; decision?: CommandApprovalDecision }
+  | { id: string; kind: "approval"; command: string; cwd: string; reason: string; suggestedPaths?: string[]; decision?: CommandApprovalDecision }
   | {
       id: string;
       kind: "tool";
@@ -135,6 +135,7 @@ export function addRunEvent(
         command: event.command,
         cwd: event.cwd,
         reason: event.reason,
+        ...(event.suggestedPaths?.length ? { suggestedPaths: event.suggestedPaths } : {}),
       },
     ]);
     return;

@@ -57,18 +57,22 @@ async function main(): Promise<void> {
   const skills = new SkillRegistry(options.workspace);
   if (skills.summaries().length) tools.push(skillTool(skills));
 
-  const result = await runAgent({
-    task: options.task,
-    provider: createCliProvider(options),
-    capabilities: builtInCapabilities(tools),
-    workspace: new LocalWorkspace(options.workspace, options.unsafeHost ? "unsafe" : "restricted"),
-    trace: new JsonlTrace(options.tracePath),
-    signal: controller.signal,
-    maxSteps: options.maxSteps,
-    onEvent: printEvent,
-  });
-
-  process.stdout.write(`${result.text}\n`);
+  const workspace = new LocalWorkspace(options.workspace, options.unsafeHost ? "unsafe" : "restricted");
+  try {
+    const result = await runAgent({
+      task: options.task,
+      provider: createCliProvider(options),
+      capabilities: builtInCapabilities(tools),
+      workspace,
+      trace: new JsonlTrace(options.tracePath),
+      signal: controller.signal,
+      maxSteps: options.maxSteps,
+      onEvent: printEvent,
+    });
+    process.stdout.write(`${result.text}\n`);
+  } finally {
+    await workspace.close();
+  }
 }
 
 function parseArgs(args: string[]): CliOptions {

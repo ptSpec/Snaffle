@@ -95,6 +95,7 @@ export function registerRunIpc(options: {
   const implementCapacity = new ProviderCapacity();
   const approvals = new Map<string, {
     threadId: string;
+    workspace: LocalWorkspace;
     resolve: (decision: CommandApprovalDecision) => void;
   }>();
 
@@ -114,6 +115,7 @@ export function registerRunIpc(options: {
 
   const requestApproval = async (
     threadId: string,
+    workspace: LocalWorkspace,
     request: CommandApprovalRequest,
   ): Promise<CommandApprovalDecision> => {
     const approvalId = randomUUID();
@@ -123,9 +125,10 @@ export function registerRunIpc(options: {
       command: request.command,
       cwd: request.cwd,
       reason: request.reason.slice(0, 2000),
+      ...(request.suggestedPaths?.length ? { suggestedPaths: request.suggestedPaths } : {}),
     };
     const decision = new Promise<CommandApprovalDecision>((resolve) => {
-      approvals.set(approvalId, { threadId, resolve });
+      approvals.set(approvalId, { threadId, workspace, resolve });
     });
     await emitPermission(threadId, event);
     return decision;
@@ -162,10 +165,11 @@ export function registerRunIpc(options: {
           await globalSandboxAccess(),
           await options.store.sandboxAccess(selectedWorkspace.id, threadId),
         );
-    const workspace = new LocalWorkspace(
+    let workspace: LocalWorkspace;
+    workspace = new LocalWorkspace(
       selectedWorkspace.path,
       unrestricted ? "unsafe" : "restricted",
-      (request) => requestApproval(threadId, request),
+      (request) => requestApproval(threadId, workspace, request),
       sandboxAccess,
     );
     const run = {
@@ -297,6 +301,7 @@ export function registerRunIpc(options: {
       }
     } catch (error) {
       active.delete(threadId);
+      await workspace.close();
       throw error;
     }
 
@@ -414,6 +419,7 @@ export function registerRunIpc(options: {
       );
     } catch (error) {
       active.delete(threadId);
+      await workspace.close();
       throw error;
     }
     void runAgent({
@@ -470,9 +476,10 @@ export function registerRunIpc(options: {
           options,
         }).catch(() => undefined);
       }
-    }).catch(() => undefined).finally(() => {
+    }).catch(() => undefined).finally(async () => {
       mainRoute.release();
       if (active.get(threadId) === run) active.delete(threadId);
+      await workspace.close();
     });
   });
 
@@ -528,27 +535,32 @@ export function registerRunIpc(options: {
     }
     const threadId = id(rawThreadId, "Thread");
     if (active.has(threadId)) throw new Error("Sandbox access cannot change during a run");
-    const state = await options.store.state();
-    const workspace = state.workspaces.find((item) =>
-      item.threads.some((thread) => thread.id === threadId));
-    if (!workspace) throw new Error("The selected thread no longer exists");
-    const input = await sandboxAccessInput(rawInput, workspace.path);
-    const existing = mergeSandboxAccess(
-      await globalSandboxAccess(),
-      await options.store.sandboxAccess(workspace.id, threadId),
-    );
-    const samePath = existing.find((grant) => grant.path === input.path);
-    if (samePath && samePath.scope !== input.scope) {
-      throw new Error(`This folder is already allowed for ${sandboxScopeLabel(samePath.scope)}; remove it before changing scope`);
+    await saveSandboxAccess(threadId, rawInput);
+    return options.state(false);
+  });
+
+  ipcMain.handle("desktop:grant-command-sandbox-access", async (
+    _event,
+    rawApprovalId: unknown,
+    rawInputs: unknown,
+  ): Promise<DesktopState> => {
+    const approvalId = id(rawApprovalId, "Approval");
+    const pending = approvals.get(approvalId);
+    if (!pending) throw new Error("This approval request is no longer active");
+    if (!Array.isArray(rawInputs) || !rawInputs.length || rawInputs.length > 8) {
+      throw new Error("Choose between 1 and 8 folders");
     }
-    if (!existing.some((grant) => grant.path === input.path) && existing.length >= 8) {
-      throw new Error("Add at most 8 additional sandbox folders");
+    for (const rawInput of rawInputs) {
+      const input = await saveSandboxAccess(pending.threadId, rawInput);
+      pending.workspace.grantSandboxAccess(input);
     }
-    if (input.scope === "global") {
-      await addGlobalSandboxAccess(input);
-    } else {
-      await options.store.addSandboxAccess(workspace.id, threadId, input);
-    }
+    approvals.delete(approvalId);
+    await emitPermission(pending.threadId, {
+      type: "permission.resolved",
+      id: approvalId,
+      decision: "sandbox",
+    });
+    pending.resolve("sandbox");
     return options.state(false);
   });
 
@@ -589,6 +601,31 @@ export function registerRunIpc(options: {
     pending.resolve(decision);
     return options.state(false);
   });
+
+  async function saveSandboxAccess(
+    threadId: string,
+    rawInput: unknown,
+  ): Promise<SandboxAccessInput> {
+    const state = await options.store.state();
+    const workspace = state.workspaces.find((item) =>
+      item.threads.some((thread) => thread.id === threadId));
+    if (!workspace) throw new Error("The selected thread no longer exists");
+    const input = await sandboxAccessInput(rawInput, workspace.path);
+    const existing = mergeSandboxAccess(
+      await globalSandboxAccess(),
+      await options.store.sandboxAccess(workspace.id, threadId),
+    );
+    const samePath = existing.find((grant) => grant.path === input.path);
+    if (samePath && samePath.scope !== input.scope) {
+      throw new Error(`This folder is already allowed for ${sandboxScopeLabel(samePath.scope)}; remove it before changing scope`);
+    }
+    if (!samePath && existing.length >= 8) {
+      throw new Error("Add at most 8 additional sandbox folders");
+    }
+    if (input.scope === "global") await addGlobalSandboxAccess(input);
+    else await options.store.addSandboxAccess(workspace.id, threadId, input);
+    return input;
+  }
 
   return {
     runningThreadIds: () => [...active.keys()],
@@ -857,7 +894,7 @@ function steeringMessage(value: unknown): string {
   return message;
 }
 
-function approvalDecision(value: unknown): CommandApprovalDecision {
+function approvalDecision(value: unknown): Exclude<CommandApprovalDecision, "sandbox"> {
   if (value === "deny" || value === "once" || value === "thread") return value;
   throw new Error("Invalid approval decision");
 }
