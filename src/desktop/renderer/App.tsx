@@ -2035,7 +2035,7 @@ export function App(): JSX.Element {
                 const distanceFromBottom = view.scrollHeight - view.scrollTop - view.clientHeight;
                 const following = distanceFromBottom < 80;
                 followTimeline.current = following;
-                setShowJumpToLatest(!following);
+                setShowJumpToLatest(distanceFromBottom > view.clientHeight * 0.4);
               }}
             >
               {timeline.map((item) => (

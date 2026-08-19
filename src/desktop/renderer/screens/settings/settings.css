@@ -512,7 +512,7 @@
   background: var(--panel);
   border: 1px solid var(--border-focus);
   border-radius: 0 0 12px 12px;
-  box-shadow: 0 12px 30px color-mix(in srgb, var(--text-primary) 14%, transparent);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 24%);
 }
 
 .typography-settings {
