@@ -233,6 +233,11 @@ select:focus {
   border-color: var(--border-focus);
 }
 
+select option {
+  color: var(--text-primary);
+  background: var(--input-background);
+}
+
 button {
   cursor: pointer;
 }
