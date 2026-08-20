@@ -124,6 +124,7 @@ async function searchOpenRouter(
       tools: [{
         type: "openrouter:web_search",
         parameters: {
+          engine: "exa",
           max_results: maxResults,
           max_total_results: maxResults,
           max_uses: 1,

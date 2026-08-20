@@ -2232,9 +2232,10 @@ export function App(): JSX.Element {
               aria-live="polite"
               onScroll={(event) => {
                 const view = event.currentTarget;
+                const scrolledUp = view.scrollTop < timelineScrollTop.current - 1;
                 timelineScrollTop.current = view.scrollTop;
                 const distanceFromBottom = view.scrollHeight - view.scrollTop - view.clientHeight;
-                const following = distanceFromBottom < 80;
+                const following = !scrolledUp && distanceFromBottom < 80;
                 followTimeline.current = following;
                 setShowJumpToLatest(distanceFromBottom > view.clientHeight * 0.4);
               }}
