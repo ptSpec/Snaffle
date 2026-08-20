@@ -106,8 +106,6 @@ export function Onboarding({
     selectedCatalog?.models.some((model) => model.id === defaultModel || model.id === defaultModelBase),
   );
   const pendingCount = Object.values(sectionStates).filter((state) => state === "pending").length;
-  const pendingOptionalCount = (["appearance", "web", "subagent"] as const)
-    .filter((section) => sectionStates[section] === "pending").length;
 
   useEffect(() => {
     if (addingConnection) return;
@@ -527,13 +525,9 @@ export function Onboarding({
 
         <footer className="onboarding-footer">
           <div className="onboarding-progress">
-            <span>{pendingCount === 0
-              ? "Ready when you are."
-              : modelReady
-                ? `${pendingOptionalCount} optional ${pendingOptionalCount === 1 ? "choice" : "choices"} remaining`
-                : `${pendingCount} ${pendingCount === 1 ? "choice" : "choices"} remaining`}</span>
+            {pendingCount === 0 ? <span>Ready when you are.</span> : null}
             {pendingCount > (modelReady ? 0 : 1) ? (
-              <button type="button" onClick={skipOptionalSetup}>Skip optional setup</button>
+              <button type="button" onClick={skipOptionalSetup}>Skip (Set up later in settings)</button>
             ) : null}
           </div>
           <button className="onboarding-primary" type="button" disabled={!modelReady || pendingCount > 0 || finishing} onClick={() => void finish()}>
