@@ -1465,6 +1465,16 @@ html[data-appearance="light"] .model-provider-mark.logo.allowance-critical::afte
   transform: scale(1);
 }
 
+.send-button-send-symbol svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .send-button-stop-symbol {
   width: 13px;
   height: 13px;

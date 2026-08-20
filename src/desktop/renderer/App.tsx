@@ -353,9 +353,11 @@ export function App(): JSX.Element {
   const queuedFollowUp = desktopState.activeThreadId
     ? queuedFollowUps.current.get(desktopState.activeThreadId) ?? null
     : null;
-  const unsafeHostExecution = desktopState.activeThreadId
-    ? desktopState.unsafeThreadIds.includes(desktopState.activeThreadId)
-    : false;
+  const unsafeHostExecution = window.desktop.platform === "win32" || (
+    desktopState.activeThreadId
+      ? desktopState.unsafeThreadIds.includes(desktopState.activeThreadId)
+      : false
+  );
 
   const expandFileEditor = useCallback((expanded: boolean): void => {
     if (fileEditorExpanded.current === expanded) return;

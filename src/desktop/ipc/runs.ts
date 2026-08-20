@@ -147,7 +147,7 @@ export function registerRunIpc(options: {
     const selectedThread = selectedWorkspace.threads.find((thread) => thread.id === input.threadId);
     if (!selectedThread) throw new Error("The selected thread no longer exists");
     if (active.has(input.threadId)) throw new Error("This thread is already running");
-    const unrestricted = unsafe.has(input.threadId);
+    const unrestricted = process.platform === "win32" || unsafe.has(input.threadId);
     if (!unrestricted) {
       const sandbox = await probeNativeSandbox();
       if (!sandbox.available) throw new Error(sandbox.detail);

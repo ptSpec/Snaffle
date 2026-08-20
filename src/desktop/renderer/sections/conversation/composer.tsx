@@ -226,7 +226,11 @@ export function Composer({
           disabled={running || !selectedModel}
           onChange={onToolSurface}
         />
-        <details ref={executionMode} className={unsafe ? "execution-mode unsafe" : "execution-mode"}>
+        <details
+          ref={executionMode}
+          className={unsafe ? "execution-mode unsafe" : "execution-mode"}
+          hidden={platform === "win32"}
+        >
           <summary>
             {unsafe ? <span className="execution-dot" aria-hidden="true" /> : <Shield />}
             {unsafe
@@ -423,7 +427,11 @@ export function Composer({
           <span className="send-button-orb" aria-hidden="true">
             <ThinkingOrb motion={orbMotion} speed={1.7} />
           </span>
-          <span className="send-button-symbol send-button-send-symbol" aria-hidden="true">↑</span>
+          <span className="send-button-symbol send-button-send-symbol" aria-hidden="true">
+            <svg viewBox="0 0 20 20">
+              <path d="M10 15V5m0 0L6 9m4-4 4 4" />
+            </svg>
+          </span>
           <span className="send-button-symbol send-button-stop-symbol" aria-hidden="true" />
         </button>
       </div>

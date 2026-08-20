@@ -181,7 +181,7 @@ test("update plan keeps one concise current plan", async () => {
   }
 });
 
-test("OpenRouter web search has one bounded server-side search", async (t) => {
+test("OpenRouter web search has one bounded provider search", async (t) => {
   const { root, workspace } = await fixture();
   const originalFetch = globalThis.fetch;
   let request: Record<string, unknown> | undefined;
@@ -204,19 +204,11 @@ test("OpenRouter web search has one bounded server-side search", async (t) => {
   assert.ok(tool);
   await tool.execute(workspace, { query: "current Node.js release", maxResults: 3 });
 
-  assert.equal(request?.tool_choice, "required");
-  assert.equal(request?.max_tool_calls, 1);
+  assert.equal(request?.tool_choice, undefined);
+  assert.equal(request?.max_tool_calls, undefined);
   assert.equal(request?.max_tokens, 1_000);
-  assert.deepEqual(request?.tools, [{
-    type: "openrouter:web_search",
-    parameters: {
-      engine: "exa",
-      max_results: 3,
-      max_total_results: 3,
-      max_uses: 1,
-      max_characters: 3_000,
-    },
-  }]);
+  assert.equal(request?.tools, undefined);
+  assert.deepEqual(request?.plugins, [{ id: "web", engine: "exa", max_results: 3 }]);
 });
 
 test("Ketch search and extraction use its structured CLI output", {

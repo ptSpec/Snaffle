@@ -121,18 +121,7 @@ async function searchOpenRouter(
         },
         { role: "user", content: query },
       ],
-      tools: [{
-        type: "openrouter:web_search",
-        parameters: {
-          engine: "exa",
-          max_results: maxResults,
-          max_total_results: maxResults,
-          max_uses: 1,
-          max_characters: 3_000,
-        },
-      }],
-      tool_choice: "required",
-      max_tool_calls: 1,
+      plugins: [{ id: "web", engine: "exa", max_results: maxResults }],
       max_tokens: 1_000,
     }),
   });
