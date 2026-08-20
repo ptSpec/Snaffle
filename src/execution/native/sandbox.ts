@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { constants, accessSync, existsSync, type Dirent } from "node:fs";
-import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { personalSnaffleDirectory, type SandboxAccess } from "../access.js";
@@ -42,9 +42,9 @@ const MACOS_PROFILE = `(version 1)
   __WORKSPACE_ANCESTORS__)
 (allow file-write* (subpath (param "WORKSPACE")) (subpath (param "TEMP"))
   __EXTRA_WRITE__)
-(deny file-write* (regex #"/\\.git(/|$)"))
+__GIT_METADATA__
 (deny file-write* (subpath __PERSONAL_STATE__))
-(deny network*)`;
+__NETWORK__`;
 
 const RESOURCE_LIMITS = `cpu="$1"
 command="$2"
@@ -112,17 +112,26 @@ export async function runRestrictedCommand(
   timeoutMs: number,
   signal?: AbortSignal,
   access: SandboxAccess[] = [],
+  runTemporary?: string,
+  networkEnabled = true,
 ): Promise<SandboxResult> {
   const status = nativeSandboxStatus();
   if (!status.available) throw new Error(status.detail);
 
-  if (process.platform === "darwin") {
-    return runMacos(command, workspace, cwd, timeoutMs, signal, access);
-  }
+  const temporary = await realpath(runTemporary ?? await mkdtemp(path.join(tmpdir(), "snaffle-sandbox-")));
+  await mkdir(path.join(temporary, "home"), { recursive: true });
 
-  const bubblewrap = findExecutable("bwrap");
-  if (!bubblewrap) throw new Error("Install Bubblewrap (bwrap) for restricted execution");
-  return runLinux(bubblewrap, command, workspace, cwd, timeoutMs, signal, access);
+  try {
+    if (process.platform === "darwin") {
+      return await runMacos(command, workspace, cwd, timeoutMs, temporary, signal, access, networkEnabled);
+    }
+
+    const bubblewrap = findExecutable("bwrap");
+    if (!bubblewrap) throw new Error("Install Bubblewrap (bwrap) for restricted execution");
+    return await runLinux(bubblewrap, command, workspace, cwd, timeoutMs, temporary, signal, access, networkEnabled);
+  } finally {
+    if (!runTemporary) await rm(temporary, { recursive: true, force: true });
+  }
 }
 
 async function runMacos(
@@ -130,35 +139,37 @@ async function runMacos(
   workspace: string,
   cwd: string,
   timeoutMs: number,
+  temporary: string,
   signal?: AbortSignal,
   access: SandboxAccess[] = [],
+  networkEnabled = true,
 ): Promise<SandboxResult> {
-  const temporary = await mkdtemp(path.join(tmpdir(), "coding-harness-sandbox-"));
   const home = path.join(temporary, "home");
-  await mkdir(home);
-
-  try {
-    return await runProcess(
-      "/usr/bin/sandbox-exec",
-      [
-        "-D", `WORKSPACE=${workspace}`,
-        "-D", `TEMP=${temporary}`,
-        "-p", macosProfile(workspace, access),
-        ...restrictedShell(command, timeoutMs),
-      ],
-      cwd,
-      timeoutMs,
-      commandEnvironment(workspace, home, temporary),
-      signal,
-    );
-  } finally {
-    await rm(temporary, { recursive: true, force: true });
-  }
+  const gitMetadata = await findGitMetadata(workspace);
+  return runProcess(
+    "/usr/bin/sandbox-exec",
+    [
+      "-D", `WORKSPACE=${workspace}`,
+      "-D", `TEMP=${temporary}`,
+      "-p", macosProfile(workspace, temporary, access, networkEnabled, gitMetadata),
+      ...restrictedShell(command, timeoutMs),
+    ],
+    cwd,
+    timeoutMs,
+    commandEnvironment(workspace, home, temporary),
+    signal,
+  );
 }
 
-function macosProfile(workspace: string, access: SandboxAccess[]): string {
+function macosProfile(
+  workspace: string,
+  temporary: string,
+  access: SandboxAccess[],
+  networkEnabled: boolean,
+  gitMetadata: string[],
+): string {
   const ancestors: string[] = [];
-  for (const location of [workspace, ...access.map((entry) => entry.path)]) {
+  for (const location of [workspace, temporary, ...access.map((entry) => entry.path)]) {
     for (let current = path.dirname(location);; current = path.dirname(current)) {
       ancestors.push(`(literal ${JSON.stringify(current)})`);
       if (current === path.dirname(current)) break;
@@ -173,6 +184,10 @@ function macosProfile(workspace: string, access: SandboxAccess[]): string {
     .replace("__WORKSPACE_ANCESTORS__", [...new Set(ancestors)].join("\n  "))
     .replace("__EXTRA_READ__", read)
     .replace("__EXTRA_WRITE__", write)
+    .replace("__GIT_METADATA__", gitMetadata
+      .map((entry) => `(deny file-write* (subpath ${JSON.stringify(entry)}))`)
+      .join("\n"))
+    .replace("__NETWORK__", networkEnabled ? "(allow network*)" : "(deny network*)")
     .replace("__PERSONAL_STATE__", JSON.stringify(personalSnaffleDirectory()));
 }
 
@@ -182,8 +197,10 @@ async function runLinux(
   workspace: string,
   cwd: string,
   timeoutMs: number,
+  temporary: string,
   signal?: AbortSignal,
   access: SandboxAccess[] = [],
+  networkEnabled = true,
 ): Promise<SandboxResult> {
   const gitMetadata = await findGitMetadata(workspace);
   const personalState = personalSnaffleDirectory();
@@ -192,11 +209,11 @@ async function runLinux(
     "--die-with-parent",
     "--new-session",
     "--unshare-all",
+    ...(networkEnabled ? ["--share-net"] : []),
     ...linuxSystemMounts(),
     "--dev", "/dev",
     "--proc", "/proc",
-    "--tmpfs", "/tmp",
-    "--dir", "/tmp/home",
+    "--bind", temporary, "/tmp",
     ...access.flatMap((entry) => [entry.writable ? "--bind" : "--ro-bind", entry.path, entry.path]),
     "--bind", workspace, workspace,
     ...gitMetadata.flatMap((entry) => ["--ro-bind", entry, entry]),

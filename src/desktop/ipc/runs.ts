@@ -20,6 +20,7 @@ import { initialMessages } from "../../context/prompt.js";
 import { projectContext } from "../../context/projection.js";
 import { estimateContextCharacters, estimateContextTokens } from "../../context/budget.js";
 import { probeNativeSandbox } from "../../execution/native/sandbox.js";
+import { threadScratchDirectory } from "../../execution/scratch.js";
 import { LocalWorkspace, type CommandApprovalRequest } from "../../execution/workspace.js";
 import {
   isReasoningEffort,
@@ -53,6 +54,7 @@ export type RunIpc = {
 
 export function registerRunIpc(options: {
   store: DesktopStore;
+  scratchRoot: string;
   attachments: AttachmentStore;
   compactor: ContextCompactor;
   state: (includeConversation?: boolean) => Promise<DesktopState>;
@@ -71,6 +73,8 @@ export function registerRunIpc(options: {
   connection(connectionId: string): ProviderConnection;
   settings: () => {
     maxSteps: number;
+    autoTitleGeneration: boolean;
+    sandboxNetworkEnabled: boolean;
     providerTimeoutMinutes: number;
     providerRetries: number;
     compactionMode: CompactionMode;
@@ -94,6 +98,7 @@ export function registerRunIpc(options: {
   const implementCapacity = new ProviderCapacity();
   const approvals = new Map<string, {
     threadId: string;
+    workspace: LocalWorkspace;
     resolve: (decision: CommandApprovalDecision) => void;
   }>();
 
@@ -113,6 +118,7 @@ export function registerRunIpc(options: {
 
   const requestApproval = async (
     threadId: string,
+    workspace: LocalWorkspace,
     request: CommandApprovalRequest,
   ): Promise<CommandApprovalDecision> => {
     const approvalId = randomUUID();
@@ -122,9 +128,10 @@ export function registerRunIpc(options: {
       command: request.command,
       cwd: request.cwd,
       reason: request.reason.slice(0, 2000),
+      ...(request.suggestedPaths?.length ? { suggestedPaths: request.suggestedPaths } : {}),
     };
     const decision = new Promise<CommandApprovalDecision>((resolve) => {
-      approvals.set(approvalId, { threadId, resolve });
+      approvals.set(approvalId, { threadId, workspace, resolve });
     });
     await emitPermission(threadId, event);
     return decision;
@@ -161,11 +168,14 @@ export function registerRunIpc(options: {
           await globalSandboxAccess(),
           await options.store.sandboxAccess(selectedWorkspace.id, threadId),
         );
-    const workspace = new LocalWorkspace(
+    let workspace: LocalWorkspace;
+    workspace = new LocalWorkspace(
       selectedWorkspace.path,
       unrestricted ? "unsafe" : "restricted",
-      (request) => requestApproval(threadId, request),
+      (request) => requestApproval(threadId, workspace, request),
       sandboxAccess,
+      threadScratchDirectory(options.scratchRoot, threadId),
+      settings.sandboxNetworkEnabled,
     );
     const run = {
       controller,
@@ -296,6 +306,7 @@ export function registerRunIpc(options: {
       }
     } catch (error) {
       active.delete(threadId);
+      await workspace.close();
       throw error;
     }
 
@@ -413,6 +424,7 @@ export function registerRunIpc(options: {
       );
     } catch (error) {
       active.delete(threadId);
+      await workspace.close();
       throw error;
     }
     void runAgent({
@@ -437,14 +449,42 @@ export function registerRunIpc(options: {
       },
     }).then(async () => {
       const entries = await options.store.entries(threadId);
+      if (active.get(threadId) === run) active.delete(threadId);
       options.sendEvent(threadId, {
         type: "run.persisted",
         entries: entries.map((entry) => ({ sequence: entry.sequence, entryId: entry.id })),
       });
       options.compactor.schedule(compactionInput);
-    }).catch(() => undefined).finally(() => {
+      const firstUser = entries.find((entry) =>
+        entry.message.role === "user" && !entry.message.internal
+      )?.message.content;
+      const lastAssistant = [...entries].reverse().find(
+        (entry) => entry.message.role === "assistant",
+      )?.message;
+      const fallbackTitle = firstUser ? shortThreadTitle(firstUser) : "";
+      if (
+        settings.autoTitleGeneration &&
+        firstUser &&
+        lastAssistant?.role === "assistant" &&
+        lastAssistant.finishReason !== "incomplete" &&
+        lastAssistant.content &&
+        (/^Thread \d+$/.test(selectedThread.title) || selectedThread.title === fallbackTitle)
+      ) {
+        void generateThreadTitle({
+          threadId,
+          currentTitle: fallbackTitle,
+          task: firstUser,
+          answer: lastAssistant.content,
+          connectionId: input.providerConnectionId,
+          model: input.model,
+          providerCapacity,
+          options,
+        }).catch(() => undefined);
+      }
+    }).catch(() => undefined).finally(async () => {
       mainRoute.release();
       if (active.get(threadId) === run) active.delete(threadId);
+      await workspace.close();
     });
   });
 
@@ -500,27 +540,32 @@ export function registerRunIpc(options: {
     }
     const threadId = id(rawThreadId, "Thread");
     if (active.has(threadId)) throw new Error("Sandbox access cannot change during a run");
-    const state = await options.store.state();
-    const workspace = state.workspaces.find((item) =>
-      item.threads.some((thread) => thread.id === threadId));
-    if (!workspace) throw new Error("The selected thread no longer exists");
-    const input = await sandboxAccessInput(rawInput, workspace.path);
-    const existing = mergeSandboxAccess(
-      await globalSandboxAccess(),
-      await options.store.sandboxAccess(workspace.id, threadId),
-    );
-    const samePath = existing.find((grant) => grant.path === input.path);
-    if (samePath && samePath.scope !== input.scope) {
-      throw new Error(`This folder is already allowed for ${sandboxScopeLabel(samePath.scope)}; remove it before changing scope`);
+    await saveSandboxAccess(threadId, rawInput);
+    return options.state(false);
+  });
+
+  ipcMain.handle("desktop:grant-command-sandbox-access", async (
+    _event,
+    rawApprovalId: unknown,
+    rawInputs: unknown,
+  ): Promise<DesktopState> => {
+    const approvalId = id(rawApprovalId, "Approval");
+    const pending = approvals.get(approvalId);
+    if (!pending) throw new Error("This approval request is no longer active");
+    if (!Array.isArray(rawInputs) || !rawInputs.length || rawInputs.length > 8) {
+      throw new Error("Choose between 1 and 8 folders");
     }
-    if (!existing.some((grant) => grant.path === input.path) && existing.length >= 8) {
-      throw new Error("Add at most 8 additional sandbox folders");
+    for (const rawInput of rawInputs) {
+      const input = await saveSandboxAccess(pending.threadId, rawInput);
+      pending.workspace.grantSandboxAccess(input);
     }
-    if (input.scope === "global") {
-      await addGlobalSandboxAccess(input);
-    } else {
-      await options.store.addSandboxAccess(workspace.id, threadId, input);
-    }
+    approvals.delete(approvalId);
+    await emitPermission(pending.threadId, {
+      type: "permission.resolved",
+      id: approvalId,
+      decision: "sandbox",
+    });
+    pending.resolve("sandbox");
     return options.state(false);
   });
 
@@ -562,6 +607,31 @@ export function registerRunIpc(options: {
     return options.state(false);
   });
 
+  async function saveSandboxAccess(
+    threadId: string,
+    rawInput: unknown,
+  ): Promise<SandboxAccessInput> {
+    const state = await options.store.state();
+    const workspace = state.workspaces.find((item) =>
+      item.threads.some((thread) => thread.id === threadId));
+    if (!workspace) throw new Error("The selected thread no longer exists");
+    const input = await sandboxAccessInput(rawInput, workspace.path);
+    const existing = mergeSandboxAccess(
+      await globalSandboxAccess(),
+      await options.store.sandboxAccess(workspace.id, threadId),
+    );
+    const samePath = existing.find((grant) => grant.path === input.path);
+    if (samePath && samePath.scope !== input.scope) {
+      throw new Error(`This folder is already allowed for ${sandboxScopeLabel(samePath.scope)}; remove it before changing scope`);
+    }
+    if (!samePath && existing.length >= 8) {
+      throw new Error("Add at most 8 additional sandbox folders");
+    }
+    if (input.scope === "global") await addGlobalSandboxAccess(input);
+    else await options.store.addSandboxAccess(workspace.id, threadId, input);
+    return input;
+  }
+
   return {
     runningThreadIds: () => [...active.keys()],
     unsafeThreadIds: () => [...unsafe],
@@ -578,6 +648,62 @@ export function registerRunIpc(options: {
 }
 
 type ProviderRoute = SubagentProviderRoute;
+
+async function generateThreadTitle(input: {
+  threadId: string;
+  currentTitle: string;
+  task: string;
+  answer: string;
+  connectionId: string;
+  model: string;
+  providerCapacity: ProviderCapacity;
+  options: Parameters<typeof registerRunIpc>[0];
+}): Promise<void> {
+  const signal = AbortSignal.timeout(30_000);
+  const route = await providerRoute(
+    input.connectionId,
+    input.model,
+    input.providerCapacity,
+    signal,
+    input.options.connection,
+    (connectionId, model) => input.options.provider(
+      connectionId,
+      model,
+      (attachment) => input.options.attachments.resolve(attachment),
+    ),
+  );
+  try {
+    const response = await route.provider.complete(
+      [
+        {
+          role: "system",
+          content: "Write a clear title for this conversation in at most six words. Return only the title, without quotes or punctuation at the end.",
+        },
+        {
+          role: "user",
+          content: `Request:\n${input.task.slice(0, 2_000)}\n\nResponse:\n${input.answer.slice(0, 4_000)}`,
+        },
+      ],
+      [],
+      signal,
+    );
+    const title = cleanThreadTitle(response.text);
+    if (!title || !await input.options.store.setGeneratedThreadTitle(input.threadId, input.currentTitle, title)) return;
+    input.options.sendEvent(input.threadId, { type: "thread.title.generated", title });
+  } finally {
+    route.release();
+  }
+}
+
+function shortThreadTitle(text: string): string {
+  const title = text.trim().replace(/\s+/g, " ");
+  return title.length > 48 ? `${title.slice(0, 47)}…` : title;
+}
+
+function cleanThreadTitle(text: string): string {
+  const title = text.trim().split("\n", 1)[0]?.replace(/^\s*["'`#*]+|["'`#*.!?]+\s*$/g, "").trim() ?? "";
+  return title.length > 72 ? `${title.slice(0, 71).trimEnd()}…` : title;
+}
 
 async function providerRoute(
   connectionId: string,
@@ -773,8 +899,8 @@ function steeringMessage(value: unknown): string {
   return message;
 }
 
-function approvalDecision(value: unknown): CommandApprovalDecision {
-  if (value === "deny" || value === "once" || value === "thread") return value;
+function approvalDecision(value: unknown): Exclude<CommandApprovalDecision, "sandbox"> {
+  if (value === "deny" || value === "once" || value === "response" || value === "thread") return value;
   throw new Error("Invalid approval decision");
 }
 

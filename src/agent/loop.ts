@@ -61,7 +61,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
       : initialMessages(options.task, options.attachments, options.systemPrompt)),
     options.systemPrompt ?? SYSTEM_PROMPT,
   );
-  const environment = currentEnvironmentMessage();
+  const environment = currentEnvironmentMessage(options.workspace.environment);
   const toolSpecs = tools.map(({ name, description, inputSchema }) => ({
     name,
     description,

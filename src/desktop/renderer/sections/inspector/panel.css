@@ -70,6 +70,12 @@
   padding-inline: 10px;
 }
 
+.changes-view {
+  box-sizing: border-box;
+  margin-left: -8px;
+  padding-left: 8px;
+}
+
 .inspector-empty,
 .git-state {
   margin: 18px 2px;
@@ -138,7 +144,7 @@
 .commit-panel {
   --commit-ink: var(--text-primary);
 
-  margin: 6px 0 8px;
+  margin: 6px 0 8px -18px;
   padding: 0;
   color: var(--commit-ink);
   background: var(--panel);
@@ -150,7 +156,7 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 8px 12px;
+  padding: 8px 12px 8px 30px;
   color: var(--commit-ink);
   list-style: none;
   cursor: pointer;
@@ -195,7 +201,7 @@
 }
 
 .commit-body {
-  padding: 10px 12px 9px;
+  padding: 10px 12px 9px 30px;
 }
 
 .commit-entry {

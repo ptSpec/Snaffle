@@ -47,8 +47,18 @@ import {
 } from "../providers/openai-compatible.js";
 import { isReasoningEffort } from "../providers/provider.js";
 import type { RunEvent } from "../protocol.js";
-import { globalSandboxAccess, mergeSandboxAccess } from "../execution/access.js";
+import {
+  globalSandboxAccess,
+  globalSandboxNetworkAllowed,
+  mergeSandboxAccess,
+  setGlobalSandboxNetworkAllowed,
+} from "../execution/access.js";
 import { probeNativeSandbox } from "../execution/native/sandbox.js";
+import {
+  cleanInactiveThreadScratch,
+  removeThreadScratch,
+  THREAD_SCRATCH_MAX_IDLE_MS,
+} from "../execution/scratch.js";
 import { defaultTools } from "../tools/built-ins.js";
 import { McpManager } from "../mcp/manager.js";
 import { mcpTool } from "../mcp/tool.js";
@@ -124,6 +134,8 @@ let editorFontSize = DEFAULT_EDITOR_FONT_SIZE;
 let editorCommand = "";
 let editorArguments = "";
 let maxSteps = DEFAULT_MAX_STEPS;
+let autoTitleGeneration = true;
+let sandboxNetworkEnabled = true;
 let providerTimeoutMinutes = DEFAULT_PROVIDER_TIMEOUT_MS / 60_000;
 let providerRetries = DEFAULT_PROVIDER_RETRIES;
 let subagent: SubagentProfile = subagentProfile(undefined);
@@ -169,6 +181,8 @@ async function start(): Promise<void> {
   editorCommand = typeof settings.editorCommand === "string" ? settings.editorCommand : "";
   editorArguments = typeof settings.editorArguments === "string" ? settings.editorArguments : "";
   maxSteps = validMaxSteps(settings.maxSteps) ?? DEFAULT_MAX_STEPS;
+  autoTitleGeneration = settings.autoTitleGeneration !== false;
+  sandboxNetworkEnabled = await globalSandboxNetworkAllowed();
   providerTimeoutMinutes = validProviderTimeout(settings.providerTimeoutMinutes) ?? providerTimeoutMinutes;
   providerRetries = validProviderRetries(settings.providerRetries) ?? DEFAULT_PROVIDER_RETRIES;
   subagent = subagentProfile(settings.subagent);
@@ -221,6 +235,8 @@ async function start(): Promise<void> {
     saveWebSearchApiKeys();
   }
   store = await openStore(path.join(app.getPath("userData"), `${PROJECT.slug}.db`));
+  await cleanInactiveThreadScratch(scratchRoot(), THREAD_SCRATCH_MAX_IDLE_MS)
+    .catch((error) => console.warn("Could not clean inactive thread temporary files", error));
   await store.repairLegacyBlankThreadProviders(selectedModel, selectedProviderConnectionId);
   contextCompactor = new ContextCompactor({
     repository: store.context,
@@ -274,6 +290,7 @@ function registerIpc(): void {
   });
   runs = registerRunIpc({
     store,
+    scratchRoot: scratchRoot(),
     attachments,
     compactor: contextCompactor,
     state: desktopState,
@@ -291,6 +308,8 @@ function registerIpc(): void {
     connection: (connectionId) => providerConnections.resolve(connectionId),
     settings: () => ({
       maxSteps,
+      autoTitleGeneration,
+      sandboxNetworkEnabled,
       providerTimeoutMinutes,
       providerRetries,
       compactionMode,
@@ -343,7 +362,11 @@ function registerIpc(): void {
     mainWindow: () => mainWindow,
     runningThread: runs.isThreadRunning,
     runningWorkspace: runs.isWorkspaceRunning,
-    threadsDeleted: runs.forgetThreads,
+    threadsDeleted: (threadIds) => {
+      runs.forgetThreads(threadIds);
+      void Promise.all(threadIds.map((threadId) => removeThreadScratch(scratchRoot(), threadId)))
+        .catch((error) => console.warn("Could not remove thread temporary files", error));
+    },
     workspaceRemoved: terminals.close,
     defaultModel: () => selectedModel,
     defaultProviderConnectionId: () => selectedProviderConnectionId,
@@ -520,6 +543,18 @@ function registerIpc(): void {
     saveSettings({ maxSteps });
   });
 
+  ipcMain.handle("desktop:set-auto-title-generation", (_event, value: unknown): void => {
+    if (typeof value !== "boolean") throw new Error("Automatic titles must be enabled or disabled");
+    autoTitleGeneration = value;
+    saveSettings({ autoTitleGeneration });
+  });
+
+  ipcMain.handle("desktop:set-sandbox-network-enabled", async (_event, value: unknown): Promise<void> => {
+    if (typeof value !== "boolean") throw new Error("Sandbox network access must be enabled or disabled");
+    sandboxNetworkEnabled = value;
+    await setGlobalSandboxNetworkAllowed(value);
+  });
+
   ipcMain.handle("desktop:set-provider-timeout", (_event, value: unknown): void => {
     const next = validProviderTimeout(value);
     if (next === undefined) throw new Error("Provider timeout must be 1 to 30 minutes");
@@ -651,6 +686,17 @@ function registerIpc(): void {
   });
 }
 
+function scratchRoot(): string {
+  if (process.platform === "darwin") {
+    return path.join(app.getPath("home"), "Library", "Caches", PROJECT.name, "thread-scratch");
+  }
+  if (process.platform === "linux") {
+    const cache = process.env.XDG_CACHE_HOME || path.join(app.getPath("home"), ".cache");
+    return path.join(cache, PROJECT.slug, "thread-scratch");
+  }
+  return path.join(app.getPath("userData"), "Cache", "thread-scratch");
+}
+
 async function desktopState(includeConversation = true): Promise<DesktopState> {
   const state = await store.state();
   const sandbox = await probeNativeSandbox();
@@ -686,11 +732,14 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     openRouterAvailable: providerConnections.list().find(
       (connection) => connection.id === OPENROUTER_CONNECTION_ID,
     )?.hasApiKey ?? false,
+    deepSeekAvailable: Boolean(deepSeekApiKey()),
     ketchAvailable: Boolean(findKetch()),
     webSearchEnabled,
     webSearchBackend,
     webSearchKeyBackends: WEB_SEARCH_BACKENDS.flatMap((backend) =>
-      backend !== "openrouter" && backend !== "ddg" && webSearchApiKey(backend) ? [backend] : []
+      backend !== "openrouter" && backend !== "deepseek" && backend !== "ddg" && webSearchApiKey(backend)
+        ? [backend]
+        : []
     ),
     runningThreadIds: runs.runningThreadIds(),
     unsafeThreadIds: runs.unsafeThreadIds(),
@@ -716,6 +765,8 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     editorCommand,
     editorArguments,
     maxSteps,
+    autoTitleGeneration,
+    sandboxNetworkEnabled,
     providerTimeoutMinutes,
     providerRetries,
     subagent,
@@ -781,6 +832,7 @@ function configuredTools(workspacePath?: string): ActiveTool[] {
           backend: webSearchBackend,
           apiKey: webSearchApiKey(webSearchBackend),
           openRouterApiKey: openRouterApiKey(),
+          deepSeekApiKey: deepSeekApiKey(),
         }
       : {}).map((tool) => ({ source: { type: "built-in" }, tool }));
   tools.push({ source: { type: "built-in" }, tool: updatePlanTool() });
@@ -950,8 +1002,16 @@ function openRouterApiKey(): string {
   }
 }
 
+function deepSeekApiKey(): string {
+  const connection = providerConnections.list().find((item) =>
+    item.providerId === "deepseek" && item.enabled && item.hasApiKey
+  );
+  if (!connection) return "";
+  return providerConnections.resolve(connection.id).apiKey ?? "";
+}
+
 function webSearchApiKey(backend: WebSearchBackend): string | undefined {
-  if (backend === "ddg" || backend === "openrouter") return undefined;
+  if (backend === "ddg" || backend === "openrouter" || backend === "deepseek") return undefined;
   const environment = {
     exa: process.env.EXA_API_KEY || process.env.KETCH_EXA_API_KEY,
     tavily: process.env.TAVILY_API_KEY || process.env.KETCH_TAVILY_API_KEY,
@@ -988,7 +1048,7 @@ function validWebSearchBackend(value: unknown): WebSearchBackend | undefined {
 
 function validKetchSearchBackend(value: unknown): KetchSearchBackend | undefined {
   const backend = validWebSearchBackend(value);
-  return backend && backend !== "openrouter" ? backend : undefined;
+  return backend && backend !== "openrouter" && backend !== "deepseek" ? backend : undefined;
 }
 
 function sendRunEvent(threadId: string, event: RunEvent): void {

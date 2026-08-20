@@ -23,6 +23,7 @@ export type SavedSettings = {
   editorCommand?: unknown;
   editorArguments?: unknown;
   maxSteps?: unknown;
+  autoTitleGeneration?: unknown;
   providerTimeoutMinutes?: unknown;
   providerRetries?: unknown;
   subagent?: unknown;
@@ -57,6 +58,7 @@ export type SettingsUpdate = {
   editorCommand?: string;
   editorArguments?: string;
   maxSteps?: number;
+  autoTitleGeneration?: boolean;
   providerTimeoutMinutes?: number;
   providerRetries?: number;
   subagent?: SubagentProfile;

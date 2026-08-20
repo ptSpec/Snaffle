@@ -39,6 +39,7 @@ export function Settings({
   editorCommand,
   editorArguments,
   maxSteps,
+  autoTitleGeneration,
   providerTimeoutMinutes,
   providerRetries,
   subagent,
@@ -47,6 +48,7 @@ export function Settings({
   compactionThreshold,
   ketchAvailable,
   openRouterAvailable,
+  deepSeekAvailable,
   webSearchEnabled,
   webSearchBackend,
   webSearchKeyBackends,
@@ -70,6 +72,7 @@ export function Settings({
   onEditorLauncher,
   onChooseEditor,
   onMaxSteps,
+  onAutoTitleGeneration,
   onProviderTimeoutMinutes,
   onProviderRetries,
   onSubagent,
@@ -104,6 +107,7 @@ export function Settings({
   editorCommand: string;
   editorArguments: string;
   maxSteps: number;
+  autoTitleGeneration: boolean;
   providerTimeoutMinutes: number;
   providerRetries: number;
   subagent: SubagentProfile;
@@ -112,6 +116,7 @@ export function Settings({
   compactionThreshold: number;
   ketchAvailable: boolean;
   openRouterAvailable: boolean;
+  deepSeekAvailable: boolean;
   webSearchEnabled: boolean;
   webSearchBackend: WebSearchBackend;
   webSearchKeyBackends: KetchSearchBackend[];
@@ -135,6 +140,7 @@ export function Settings({
   onEditorLauncher: (command: string, argumentsTemplate: string) => void;
   onChooseEditor: () => void;
   onMaxSteps: (maxSteps: number) => void;
+  onAutoTitleGeneration: (enabled: boolean) => void;
   onProviderTimeoutMinutes: (minutes: number) => void;
   onProviderRetries: (retries: number) => void;
   onSubagent: (profile: SubagentProfile) => void;
@@ -213,6 +219,7 @@ export function Settings({
         enabled={webSearchEnabled}
         ketchAvailable={ketchAvailable}
         openRouterAvailable={openRouterAvailable}
+        deepSeekAvailable={deepSeekAvailable}
         error={error}
         onEnabled={onWebSearchEnabled}
         onBackend={onWebSearchBackend}
@@ -239,6 +246,7 @@ export function Settings({
     return (
       <AgentSettings
         maxSteps={maxSteps}
+        autoTitleGeneration={autoTitleGeneration}
         providerTimeoutMinutes={providerTimeoutMinutes}
         providerRetries={providerRetries}
         subagent={subagent}
@@ -247,6 +255,7 @@ export function Settings({
         providerCatalogs={providerCatalogs}
         error={error}
         onMaxSteps={onMaxSteps}
+        onAutoTitleGeneration={onAutoTitleGeneration}
         onProviderTimeoutMinutes={onProviderTimeoutMinutes}
         onProviderRetries={onProviderRetries}
         onSubagent={onSubagent}

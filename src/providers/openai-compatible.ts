@@ -344,7 +344,11 @@ async function parseStream(
     text,
     ...(reasoning ? { reasoning } : {}),
     toolCalls,
-    ...(finishReason === undefined ? {} : { finishReason }),
+    ...(!finished && finishReason === undefined
+      ? { finishReason: "incomplete" }
+      : finishReason === undefined
+        ? {}
+        : { finishReason }),
     ...(usage === undefined ? {} : { usage: parseUsage(usage) }),
   };
 }

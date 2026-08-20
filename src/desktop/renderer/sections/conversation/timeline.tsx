@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AttachmentRef } from "../../../../attachments/types.js";
 import type { CommandApprovalDecision } from "../../../../protocol.js";
-import { MAX_KEPT_ASIDE_MESSAGES } from "../../../api.js";
+import { MAX_KEPT_ASIDE_MESSAGES, type SandboxAccessInput } from "../../../api.js";
 import { CopyIcon, MarkdownContent } from "./markdown.js";
 import {
   toolGeneratingLabel,
@@ -19,6 +19,8 @@ export function TimelineEntry({
   onSelect,
   onEditUser,
   onResolveApproval,
+  onChooseSandboxFolder,
+  onGrantSandboxAccess,
   savedId,
   onToggleSaved,
   keptAside = false,
@@ -26,6 +28,7 @@ export function TimelineEntry({
   onToggleKeptAside,
   onToggleAttachmentContext,
   onRestore,
+  onRegenerate,
   onFork,
 }: {
   item: TimelineItem;
@@ -34,6 +37,8 @@ export function TimelineEntry({
   onSelect: (id: string) => void;
   onEditUser?: (text: string) => void;
   onResolveApproval?: (id: string, decision: CommandApprovalDecision) => void;
+  onChooseSandboxFolder?: () => Promise<string | null>;
+  onGrantSandboxAccess?: (id: string, inputs: SandboxAccessInput[]) => Promise<void>;
   savedId?: string | undefined;
   onToggleSaved?: (item: SaveableTimelineItem, savedId?: string) => void;
   keptAside?: boolean;
@@ -44,6 +49,7 @@ export function TimelineEntry({
     attachment: AttachmentRef,
   ) => void;
   onRestore?: (sequence: number) => void;
+  onRegenerate?: (sequence: number) => void;
   onFork?: (sequence: number) => void;
 }): JSX.Element {
   if (item.kind === "activity-group") {
@@ -53,6 +59,8 @@ export function TimelineEntry({
         selectedId={selectedId}
         onSelect={onSelect}
         {...(onResolveApproval ? { onResolveApproval } : {})}
+        {...(onChooseSandboxFolder ? { onChooseSandboxFolder } : {})}
+        {...(onGrantSandboxAccess ? { onGrantSandboxAccess } : {})}
       />
     );
   }
@@ -66,6 +74,8 @@ export function TimelineEntry({
       <ApprovalEntry
         item={item}
         {...(onResolveApproval ? { onResolve: onResolveApproval } : {})}
+        {...(onChooseSandboxFolder ? { onChooseSandboxFolder } : {})}
+        {...(onGrantSandboxAccess ? { onGrantSandboxAccess } : {})}
       />
     );
   }
@@ -131,6 +141,16 @@ export function TimelineEntry({
               <MarkdownContent text={item.text} {...(item.sources ? { sources: item.sources } : {})} />
             )}
           </div>
+          {item.finishReason === "incomplete" ? (
+            <div className="interrupted-response" role="note">
+              <span>The provider closed the response early.</span>
+              {onRegenerate && item.sequence !== undefined ? (
+                <button type="button" onClick={() => onRegenerate(item.sequence!)}>
+                  Regenerate response
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {!item.streaming && !item.intermediate ? (
             <MessageFooter
               text={item.text}
@@ -251,11 +271,15 @@ function ActivityGroup({
   selectedId,
   onSelect,
   onResolveApproval,
+  onChooseSandboxFolder,
+  onGrantSandboxAccess,
 }: {
   item: Extract<TimelineItem, { kind: "activity-group" }>;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onResolveApproval?: (id: string, decision: CommandApprovalDecision) => void;
+  onChooseSandboxFolder?: () => Promise<string | null>;
+  onGrantSandboxAccess?: (id: string, inputs: SandboxAccessInput[]) => Promise<void>;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
 
@@ -275,6 +299,8 @@ function ActivityGroup({
               selectedId={selectedId}
               onSelect={onSelect}
               {...(onResolveApproval ? { onResolveApproval } : {})}
+              {...(onChooseSandboxFolder ? { onChooseSandboxFolder } : {})}
+              {...(onGrantSandboxAccess ? { onGrantSandboxAccess } : {})}
             />
           ))}
         </div>
@@ -286,32 +312,119 @@ function ActivityGroup({
 function ApprovalEntry({
   item,
   onResolve,
+  onChooseSandboxFolder,
+  onGrantSandboxAccess,
 }: {
   item: Extract<TimelineItem, { kind: "approval" }>;
   onResolve?: (id: string, decision: CommandApprovalDecision) => void;
+  onChooseSandboxFolder?: () => Promise<string | null>;
+  onGrantSandboxAccess?: (id: string, inputs: SandboxAccessInput[]) => Promise<void>;
 }): JSX.Element {
+  const [folders, setFolders] = useState(item.suggestedPaths ?? []);
+  const [writable, setWritable] = useState(true);
+  const [scope, setScope] = useState<SandboxAccessInput["scope"]>("thread");
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [granting, setGranting] = useState(false);
+
   if (item.decision) {
     const label = item.decision === "deny"
       ? "Extra access denied"
       : item.decision === "once"
         ? "Extra access allowed once"
-        : "Unrestricted for this thread";
+        : item.decision === "response"
+          ? "Unrestricted access allowed for this response"
+        : item.decision === "sandbox"
+          ? "Folder added; command retried in the sandbox"
+          : "Extra access allowed for this thread";
     return <div className={`approval-result ${item.decision}`}>{label}</div>;
   }
+
+  const networkRequest = item.reason.includes("requests network access");
+  const scopeLabel = scope === "thread"
+    ? "for this thread"
+    : scope === "workspace"
+      ? "for this workspace"
+      : "in all workspaces";
+  const explanation = networkRequest
+    ? "Restricted mode blocks network access. You can allow this command to run with your normal user access."
+    : folders.length
+      ? `Allow ${writable ? "read and write" : "read"} access ${scopeLabel} and retry inside the sandbox.`
+      : "Snaffle could not identify the required folder. Choose one to retry inside the sandbox, or use Allow once to run this command outside it.";
+
+  async function chooseFolder(add = false): Promise<void> {
+    const selected = await onChooseSandboxFolder?.();
+    if (!selected) return;
+    setFolders((current) => add ? [...new Set([...current, selected])] : [selected]);
+  }
+
+  async function grantFolders(): Promise<void> {
+    if (!folders.length || !onGrantSandboxAccess) return;
+    setGranting(true);
+    try {
+      await onGrantSandboxAccess(item.id, folders.map((folder) => ({ path: folder, writable, scope })));
+    } finally {
+      setGranting(false);
+    }
+  }
+
+  const canGrantFolders = !networkRequest && Boolean(onChooseSandboxFolder && onGrantSandboxAccess);
 
   return (
     <section className="approval-card">
       <strong>Command needs extra access</strong>
       <code>{item.command}</code>
-      <p>
-        This command needs access unavailable in restricted execution in <code>{item.cwd}</code>.
-        Approval runs it outside the sandbox with your user access.
-      </p>
+      <p>{explanation}</p>
+      {folders.length ? (
+        <div className="approval-paths">
+          {folders.map((folder) => <code key={folder} title={folder}>{folder}</code>)}
+        </div>
+      ) : null}
       <div className="approval-actions">
+        {folders.length && canGrantFolders ? (
+          <button type="button" className="primary" disabled={granting} onClick={() => void grantFolders()}>
+            {granting ? "Adding…" : "Add to sandbox"}
+          </button>
+        ) : null}
+        {canGrantFolders && !folders.length ? (
+          <button type="button" onClick={() => void chooseFolder()}>Choose folder</button>
+        ) : null}
+        {!networkRequest ? (
+          <button type="button" onClick={() => onResolve?.(item.id, "once")}>Allow once</button>
+        ) : null}
+        {!networkRequest ? (
+          <button type="button" aria-expanded={optionsOpen} onClick={() => setOptionsOpen((open) => !open)}>Options</button>
+        ) : null}
         <button type="button" onClick={() => onResolve?.(item.id, "deny")}>Deny</button>
-        <button type="button" onClick={() => onResolve?.(item.id, "once")}>Allow once</button>
-        <button type="button" onClick={() => onResolve?.(item.id, "thread")}>Allow for this thread</button>
+        {networkRequest ? (
+          <>
+            <button type="button" onClick={() => onResolve?.(item.id, "once")}>Allow once</button>
+            <button type="button" onClick={() => onResolve?.(item.id, "thread")}>Unrestricted for this thread</button>
+          </>
+        ) : null}
       </div>
+      {optionsOpen ? (
+        <div className="approval-options">
+          {folders.length ? (
+            <>
+              <div className="approval-folder-options">
+                <button type="button" className={!writable ? "selected" : ""} onClick={() => setWritable(false)}>Read only</button>
+                <button type="button" className={writable ? "selected" : ""} onClick={() => setWritable(true)}>Read & write</button>
+              </div>
+              <div className="approval-folder-options three">
+                <button type="button" className={scope === "thread" ? "selected" : ""} onClick={() => setScope("thread")}>This thread</button>
+                <button type="button" className={scope === "workspace" ? "selected" : ""} onClick={() => setScope("workspace")}>This workspace</button>
+                <button type="button" className={scope === "global" ? "selected" : ""} onClick={() => setScope("global")}>All workspaces</button>
+              </div>
+              <button type="button" className="approval-add-folder" onClick={() => void chooseFolder(true)}>Add another folder</button>
+            </>
+          ) : null}
+          <div className="approval-host-access">
+            <span>Disable sandbox</span>
+            <button type="button" onClick={() => onResolve?.(item.id, "response")}>Unrestricted for this response</button>
+            <button type="button" onClick={() => onResolve?.(item.id, "thread")}>Unrestricted for this thread</button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

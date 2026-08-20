@@ -336,6 +336,34 @@ html[data-appearance="dark"] .jump-to-latest {
   padding-bottom: 3px;
 }
 
+.interrupted-response {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 9px 11px;
+  color: var(--status-warning-text);
+  background: var(--status-warning-background);
+  border-radius: 9px;
+  font-family: var(--font-secondary);
+  font-size: calc(12px * var(--interface-font-scale));
+}
+
+.interrupted-response button {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 7px;
+  font: inherit;
+}
+
+.interrupted-response button:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
 .model-change-marker {
   align-self: center;
   margin: 2px 0 8px;

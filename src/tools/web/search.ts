@@ -7,16 +7,26 @@ type OpenRouterAnnotation = {
   type?: unknown;
   url_citation?: { url?: unknown; title?: unknown; content?: unknown };
 };
+type DeepSeekBlock = {
+  type?: unknown;
+  text?: unknown;
+  citations?: DeepSeekCitation[];
+  content?: DeepSeekSearchResult[];
+};
+type DeepSeekCitation = { url?: unknown; title?: unknown };
+type DeepSeekSearchResult = { type?: unknown; url?: unknown; title?: unknown };
 
 export type WebSearchOptions = {
   webSearchEnabled?: boolean | undefined;
   backend?: WebSearchBackend | undefined;
   apiKey?: string | undefined;
   openRouterApiKey?: string | undefined;
+  deepSeekApiKey?: string | undefined;
   ketchPath?: string | undefined;
 };
 
 const OPENROUTER_SEARCH_MODEL = "openai/gpt-5.6-luna";
+const DEEPSEEK_SEARCH_MODEL = "deepseek-v4-flash";
 
 export function webSearchTool(options: WebSearchOptions): Tool | undefined {
   if (!options.webSearchEnabled) return undefined;
@@ -25,7 +35,11 @@ export function webSearchTool(options: WebSearchOptions): Tool | undefined {
     ? options.openRouterApiKey
       ? (query: string, maxResults: number, signal?: AbortSignal) => searchOpenRouter(options.openRouterApiKey!, query, maxResults, signal)
       : undefined
-    : options.ketchPath && (backend === "ddg" || backend === "exa" || options.apiKey)
+    : backend === "deepseek"
+      ? options.deepSeekApiKey
+        ? (query: string, maxResults: number, signal?: AbortSignal) => searchDeepSeek(options.deepSeekApiKey!, query, maxResults, signal)
+        : undefined
+      : options.ketchPath && (backend === "ddg" || backend === "exa" || options.apiKey)
       ? (query: string, maxResults: number, signal?: AbortSignal) => searchKetch(
           options.ketchPath!, backend, options.apiKey, query, maxResults, signal,
         )
@@ -110,7 +124,6 @@ async function searchOpenRouter(
       tools: [{
         type: "openrouter:web_search",
         parameters: {
-          engine: "exa",
           max_results: maxResults,
           max_total_results: maxResults,
           max_uses: 1,
@@ -145,6 +158,58 @@ function uniqueSources(annotations: OpenRouterAnnotation[]): { title: string; ur
     return [{
       title: typeof citation.title === "string" && citation.title ? citation.title : citation.url,
       url: citation.url,
+    }];
+  });
+}
+
+async function searchDeepSeek(
+  apiKey: string,
+  query: string,
+  maxResults: number,
+  signal?: AbortSignal,
+): Promise<SearchResult> {
+  const response = await fetch("https://api.deepseek.com/anthropic/v1/messages", {
+    method: "POST",
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000),
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: DEEPSEEK_SEARCH_MODEL,
+      max_tokens: 1_000,
+      system: "Search the web for the user's query. Return concise research notes grounded only in the sources. Do not ask follow-up questions.",
+      messages: [{ role: "user", content: query }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 1 }],
+    }),
+  });
+  if (!response.ok) throw new Error(`DeepSeek web search failed (${response.status}): ${(await response.text()).slice(0, 500)}`);
+  const data = await response.json() as { content?: DeepSeekBlock[] };
+  const blocks = data.content ?? [];
+  const sources = deepSeekSources(blocks).slice(0, maxResults);
+  const content = blocks.flatMap((block) => block.type === "text" && typeof block.text === "string"
+    ? [block.text.trim()]
+    : []).filter(Boolean).join("\n\n");
+  if (!content && !sources.length) throw new Error("DeepSeek web search returned no results");
+  return {
+    content: `${content || "Search completed."}${sources.length ? `\n\nSources:\n${sources.map((source) => `- [${source.title}](${source.url})`).join("\n")}` : ""}`,
+    sources,
+  };
+}
+
+function deepSeekSources(blocks: DeepSeekBlock[]): { title: string; url: string }[] {
+  const candidates = blocks.flatMap((block) => [
+    ...(block.citations ?? []),
+    ...(block.content ?? []).filter((result) => result.type === "web_search_result"),
+  ]);
+  const seen = new Set<string>();
+  return candidates.flatMap((source) => {
+    if (typeof source.url !== "string" || seen.has(source.url)) return [];
+    seen.add(source.url);
+    return [{
+      title: typeof source.title === "string" && source.title ? source.title : source.url,
+      url: source.url,
     }];
   });
 }

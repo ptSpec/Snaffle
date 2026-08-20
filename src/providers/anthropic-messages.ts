@@ -332,7 +332,7 @@ async function parseAnthropicStream(
 
   return responseFromBlocks(
     [...blocks.entries()].sort(([left], [right]) => left - right).map(([, block]) => completedBlock(block)),
-    finishReason,
+    !finished && finishReason === undefined ? "incomplete" : finishReason,
     usage,
   );
 }

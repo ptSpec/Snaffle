@@ -7,6 +7,7 @@ export function WebSettings({
   enabled,
   ketchAvailable,
   openRouterAvailable,
+  deepSeekAvailable,
   error,
   onEnabled,
   onBackend,
@@ -17,6 +18,7 @@ export function WebSettings({
   enabled: boolean;
   ketchAvailable: boolean;
   openRouterAvailable: boolean;
+  deepSeekAvailable: boolean;
   error: string | null;
   onEnabled: (enabled: boolean) => void;
   onBackend: (backend: WebSearchBackend) => void;
@@ -24,8 +26,9 @@ export function WebSettings({
 }): JSX.Element {
   const [apiKey, setApiKey] = useState("");
   const info = WEB_BACKENDS.find((item) => item.id === backend)!;
-  const ketchBackend = backend === "openrouter" ? undefined : backend;
-  const configured = ketchBackend ? configuredBackends.includes(ketchBackend) : openRouterAvailable;
+  const ketchBackend = backend === "openrouter" || backend === "deepseek" ? undefined : backend;
+  const providerAvailable = backend === "openrouter" ? openRouterAvailable : deepSeekAvailable;
+  const configured = ketchBackend ? configuredBackends.includes(ketchBackend) : providerAvailable;
 
   useEffect(() => setApiKey(""), [backend]);
 
@@ -34,7 +37,7 @@ export function WebSettings({
       <div className="settings-content">
         <p className="eyebrow">Settings</p>
         <h1>Web</h1>
-        <p className="settings-description">Choose one search connection. Direct providers run through bundled Ketch and return source results. OpenRouter Research returns a smaller synthesized answer and uses additional model tokens.</p>
+        <p className="settings-description">Choose one search connection. Direct providers run through bundled Ketch and return source results. Provider research uses an existing model connection to return a smaller synthesized answer.</p>
 
         <label className="setting-field text-setting">
           <span>
@@ -66,8 +69,10 @@ export function WebSettings({
 
         <div className="setting-field web-connection-status">
           <span>Connection status</span>
-          <strong>{backend === "openrouter"
-            ? openRouterAvailable ? "Ready · uses the existing OpenRouter key" : "OpenRouter key is unavailable"
+          <strong>{backend === "openrouter" || backend === "deepseek"
+            ? providerAvailable
+              ? `Ready · uses the existing ${backend === "openrouter" ? "OpenRouter" : "DeepSeek"} key`
+              : `${backend === "openrouter" ? "OpenRouter" : "DeepSeek"} key is unavailable`
             : ketchAvailable ? info.needsKey && !configured ? "API key required" : "Ready · powered by Ketch"
             : "Ketch is unavailable in this build"}</strong>
         </div>
@@ -121,4 +126,5 @@ export const WEB_BACKENDS: {
   { id: "brave", label: "Brave", description: "Direct web results through Ketch. Provider charges may apply.", needsKey: true, placeholder: "Brave API key" },
   { id: "firecrawl", label: "Firecrawl", description: "Direct search results through Ketch. Provider charges may apply.", needsKey: true, placeholder: "fc-…" },
   { id: "openrouter", label: "OpenRouter Research", description: "A small research model searches and returns a concise cited answer. Additional model charges apply." },
+  { id: "deepseek", label: "DeepSeek Research", description: "DeepSeek searches and returns a concise cited answer using its native web search. Additional model charges apply." },
 ];

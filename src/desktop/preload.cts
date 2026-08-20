@@ -90,6 +90,8 @@ const api: DesktopApi = {
   chooseSandboxFolder: () => ipcRenderer.invoke("desktop:choose-sandbox-folder"),
   addSandboxAccess: (threadId: string, input: SandboxAccessInput) =>
     ipcRenderer.invoke("desktop:add-sandbox-access", threadId, input),
+  grantCommandSandboxAccess: (id: string, inputs: SandboxAccessInput[]) =>
+    ipcRenderer.invoke("desktop:grant-command-sandbox-access", id, inputs),
   removeSandboxAccess: (threadId: string, grantId: string) =>
     ipcRenderer.invoke("desktop:remove-sandbox-access", threadId, grantId),
   resolveCommandApproval: (id: string, decision: CommandApprovalDecision) =>
@@ -105,6 +107,10 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:set-editor-launcher", command, argumentsTemplate),
   chooseEditorApplication: () => ipcRenderer.invoke("desktop:choose-editor-application"),
   setMaxSteps: (maxSteps: number) => ipcRenderer.invoke("desktop:set-max-steps", maxSteps),
+  setAutoTitleGeneration: (enabled: boolean) =>
+    ipcRenderer.invoke("desktop:set-auto-title-generation", enabled),
+  setSandboxNetworkEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke("desktop:set-sandbox-network-enabled", enabled),
   setProviderTimeoutMinutes: (minutes: number) =>
     ipcRenderer.invoke("desktop:set-provider-timeout", minutes),
   setProviderRetries: (retries: number) =>

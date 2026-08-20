@@ -22,6 +22,7 @@ import {
   type DesktopState,
   type DesktopThread,
   type DesktopUpdateState,
+  type StartRunInput,
   type SavedMessage,
 } from "../api.js";
 import type {
@@ -109,6 +110,7 @@ const initialState: DesktopState = {
   mcpEnabled: true,
   mcpServers: [],
   openRouterAvailable: false,
+  deepSeekAvailable: false,
   ketchAvailable: false,
   webSearchEnabled: false,
   webSearchBackend: "ddg",
@@ -132,6 +134,8 @@ const initialState: DesktopState = {
   editorCommand: "",
   editorArguments: "",
   maxSteps: 50,
+  autoTitleGeneration: true,
+  sandboxNetworkEnabled: true,
   providerTimeoutMinutes: 3,
   providerRetries: 4,
   subagent: {
@@ -156,6 +160,11 @@ const initialUpdateState: DesktopUpdateState = {
   status: "disabled",
   currentVersion: "",
   automatic: false,
+};
+
+type QueuedFollowUp = {
+  request: StartRunInput;
+  attachments: AttachmentPreview[];
 };
 
 export function App(): JSX.Element {
@@ -194,6 +203,7 @@ export function App(): JSX.Element {
   const [contextRefresh, setContextRefresh] = useState(0);
   const [compactingContext, setCompactingContext] = useState(false);
   const [explicitlyActiveTools, setExplicitlyActiveTools] = useState<string[]>([]);
+  const [, refreshQueuedFollowUps] = useState(0);
   const taskInput = useRef<HTMLTextAreaElement>(null);
   const timelineView = useRef<HTMLDivElement>(null);
   const timelineScrollTop = useRef(0);
@@ -334,11 +344,15 @@ export function App(): JSX.Element {
   const activeThreadId = useRef<string | null>(null);
   const threadTimelines = useRef(new Map<string, TimelineItem[]>());
   const threadAttachments = useRef(new Map<string, AttachmentPreview[]>());
+  const queuedFollowUps = useRef(new Map<string, QueuedFollowUp>());
   rightWidthValue.current = rightWidth;
   leftCollapsedValue.current = leftCollapsed;
   const running = desktopState.activeThreadId
     ? desktopState.runningThreadIds.includes(desktopState.activeThreadId)
     : false;
+  const queuedFollowUp = desktopState.activeThreadId
+    ? queuedFollowUps.current.get(desktopState.activeThreadId) ?? null
+    : null;
   const unsafeHostExecution = desktopState.activeThreadId
     ? desktopState.unsafeThreadIds.includes(desktopState.activeThreadId)
     : false;
@@ -508,9 +522,23 @@ export function App(): JSX.Element {
     let queuedEvents: DesktopRunEvent[] = [];
     let flushTimer: number | undefined;
 
+    function launchQueuedFollowUp(threadId: string, queued: QueuedFollowUp): void {
+      queuedFollowUps.current.delete(threadId);
+      refreshQueuedFollowUps((value) => value + 1);
+      void submitPreparedTask(queued).then((started) => {
+        if (started || activeThreadId.current === threadId) return;
+        queuedFollowUps.current.set(threadId, queued);
+        refreshQueuedFollowUps((value) => value + 1);
+      });
+    }
+
     function applyRunEvent({ threadId, event }: DesktopRunEvent): void {
+      const queued = event.type === "run.persisted"
+        ? queuedFollowUps.current.get(threadId)
+        : undefined;
       if (event.type === "run.persisted" && activeThreadId.current !== threadId) {
         threadTimelines.current.delete(threadId);
+        if (queued) launchQueuedFollowUp(threadId, queued);
         return;
       }
       if (event.type.startsWith("context.") && activeThreadId.current !== threadId) {
@@ -554,9 +582,29 @@ export function App(): JSX.Element {
           runningThreadIds: state.runningThreadIds.filter((id) => id !== threadId),
         }));
       }
+      if (event.type === "thread.title.generated") {
+        setDesktopState((state) => ({
+          ...state,
+          workspace: state.workspace
+            ? {
+                ...state.workspace,
+                threads: state.workspace.threads.map((thread) =>
+                  thread.id === threadId ? { ...thread, title: event.title } : thread
+                ),
+              }
+            : null,
+          workspaces: state.workspaces.map((workspace) => ({
+            ...workspace,
+            threads: workspace.threads.map((thread) =>
+              thread.id === threadId ? { ...thread, title: event.title } : thread
+            ),
+          })),
+        }));
+      }
       if (event.type === "run.persisted" || event.type.startsWith("context.")) {
         setContextRefresh((value) => value + 1);
       }
+      if (queued) launchQueuedFollowUp(threadId, queued);
     }
 
     function flushEvents(): void {
@@ -764,27 +812,54 @@ export function App(): JSX.Element {
       return;
     }
 
-    const request = {
+    const message = task.trim();
+    if (!message) return;
+    await submitTask(threadId, message, pendingAttachments, explicitlyActiveTools);
+  }
+
+  async function submitTask(
+    threadId: string,
+    message: string,
+    attachments: AttachmentPreview[],
+    activeTools: string[],
+  ): Promise<void> {
+    await submitPreparedTask(prepareRunRequest(threadId, message, attachments, activeTools));
+  }
+
+  function prepareRunRequest(
+    threadId: string,
+    message: string,
+    attachments: AttachmentPreview[],
+    activeTools: string[],
+  ): QueuedFollowUp {
+    const request: StartRunInput = {
       threadId,
-      task: task.trim(),
+      task: message,
       providerConnectionId: selectedProviderConnectionId,
       model: selectedModel,
       ...(effectiveReasoningEffort ? { reasoningEffort: effectiveReasoningEffort } : {}),
       contextLength: selectedContextLength,
       imageInputSupported: selectedModalities?.includes("image") !== false,
-      ...(pendingAttachments.length
-        ? { attachments: pendingAttachments.map(attachmentRef) }
+      ...(attachments.length
+        ? { attachments: attachments.map(attachmentRef) }
         : {}),
-      ...(explicitlyActiveTools.length ? { explicitlyActiveTools } : {}),
+      ...(activeTools.length ? { explicitlyActiveTools: activeTools } : {}),
     };
 
-    followTimeline.current = true;
-    appendUserMessage(request.threadId, request.task, pendingAttachments);
-    const sentAttachments = pendingAttachments;
-    const sentExplicitTools = explicitlyActiveTools;
-    setTask("");
-    setPendingAttachments([]);
-    setExplicitlyActiveTools([]);
+    return { request, attachments };
+  }
+
+  async function submitPreparedTask(followUp: QueuedFollowUp): Promise<boolean> {
+    const { request, attachments } = followUp;
+    const active = activeThreadId.current === request.threadId;
+
+    if (active) followTimeline.current = true;
+    appendUserMessage(request.threadId, request.task, attachments);
+    if (active) {
+      setTask("");
+      setPendingAttachments([]);
+      setExplicitlyActiveTools([]);
+    }
     threadAttachments.current.delete(request.threadId);
     setDesktopState((state) => ({
       ...state,
@@ -800,11 +875,52 @@ export function App(): JSX.Element {
         ...state,
         runningThreadIds: state.runningThreadIds.filter((id) => id !== request.threadId),
       }));
-      setPendingAttachments(sentAttachments);
-      setExplicitlyActiveTools(sentExplicitTools);
-      threadAttachments.current.set(request.threadId, sentAttachments);
+      if (active) {
+        setTask(request.task);
+        setPendingAttachments(attachments);
+        setExplicitlyActiveTools(request.explicitlyActiveTools ?? []);
+      }
+      threadAttachments.current.set(request.threadId, attachments);
       setError(errorMessage(cause));
+      return false;
     }
+    return true;
+  }
+
+  function queueFollowUp(): void {
+    const threadId = desktopState.activeThreadId;
+    const message = task.trim();
+    if (!running || !threadId || !message || queuedFollowUps.current.has(threadId)) return;
+    if (runBlocker) {
+      setError(runBlocker);
+      return;
+    }
+
+    queuedFollowUps.current.set(
+      threadId,
+      prepareRunRequest(threadId, message, pendingAttachments, explicitlyActiveTools),
+    );
+    setTask("");
+    setPendingAttachments([]);
+    setExplicitlyActiveTools([]);
+    threadAttachments.current.delete(threadId);
+    refreshQueuedFollowUps((value) => value + 1);
+    setError(null);
+  }
+
+  function cancelQueuedFollowUp(): void {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId) return;
+    const queued = queuedFollowUps.current.get(threadId);
+    if (!queued) return;
+
+    queuedFollowUps.current.delete(threadId);
+    setTask(queued.request.task);
+    setPendingAttachments(queued.attachments);
+    setExplicitlyActiveTools(queued.request.explicitlyActiveTools ?? []);
+    threadAttachments.current.set(threadId, queued.attachments);
+    refreshQueuedFollowUps((value) => value + 1);
+    window.requestAnimationFrame(() => taskInput.current?.focus());
   }
 
   async function restoreThread(sequence: number): Promise<void> {
@@ -822,6 +938,31 @@ export function App(): JSX.Element {
       threadAttachments.current.set(threadId, restoredAttachments);
       setPendingAttachments(restoredAttachments);
       window.requestAnimationFrame(() => taskInput.current?.focus());
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function regenerateResponse(assistantSequence: number): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId) return;
+    const user = [...timeline].reverse().find(
+      (item) => item.kind === "user" && item.sequence !== undefined && item.sequence < assistantSequence,
+    );
+    if (!user || user.kind !== "user" || user.sequence === undefined) {
+      setError("The original request is no longer available");
+      return;
+    }
+    const attachments = (user.attachments ?? []).map((attachment) => ({
+      ...attachment,
+      fingerprint: attachment.id,
+    }));
+
+    try {
+      const state = await window.desktop.restoreThread(threadId, user.sequence);
+      threadTimelines.current.delete(threadId);
+      showDesktopState(state);
+      await submitTask(threadId, user.text, attachments, []);
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -1102,6 +1243,19 @@ export function App(): JSX.Element {
     }
   }
 
+  async function grantCommandSandboxAccess(
+    id: string,
+    inputs: SandboxAccessInput[],
+  ): Promise<void> {
+    setError(null);
+    try {
+      setDesktopState(withoutConversation(await window.desktop.grantCommandSandboxAccess(id, inputs)));
+    } catch (cause) {
+      setError(errorMessage(cause));
+      throw cause;
+    }
+  }
+
   function showDesktopState(state: DesktopState): void {
     followTimeline.current = true;
     const threadChanged = activeThreadId.current !== state.activeThreadId;
@@ -1325,6 +1479,26 @@ export function App(): JSX.Element {
     try {
       await window.desktop.setMaxSteps(maxSteps);
       setDesktopState((state) => ({ ...state, maxSteps }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function setAutoTitleGeneration(autoTitleGeneration: boolean): Promise<void> {
+    try {
+      await window.desktop.setAutoTitleGeneration(autoTitleGeneration);
+      setDesktopState((state) => ({ ...state, autoTitleGeneration }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function setSandboxNetworkEnabled(sandboxNetworkEnabled: boolean): Promise<void> {
+    try {
+      await window.desktop.setSandboxNetworkEnabled(sandboxNetworkEnabled);
+      setDesktopState((state) => ({ ...state, sandboxNetworkEnabled }));
       setError(null);
     } catch (cause) {
       setError(errorMessage(cause));
@@ -1974,6 +2148,7 @@ export function App(): JSX.Element {
             editorCommand={desktopState.editorCommand}
             editorArguments={desktopState.editorArguments}
             maxSteps={desktopState.maxSteps}
+            autoTitleGeneration={desktopState.autoTitleGeneration}
             providerTimeoutMinutes={desktopState.providerTimeoutMinutes}
             providerRetries={desktopState.providerRetries}
             subagent={desktopState.subagent}
@@ -1982,6 +2157,7 @@ export function App(): JSX.Element {
             compactionThreshold={desktopState.compactionThreshold}
             ketchAvailable={desktopState.ketchAvailable}
             openRouterAvailable={desktopState.openRouterAvailable}
+            deepSeekAvailable={desktopState.deepSeekAvailable}
             webSearchEnabled={desktopState.webSearchEnabled}
             webSearchBackend={desktopState.webSearchBackend}
             webSearchKeyBackends={desktopState.webSearchKeyBackends}
@@ -2005,6 +2181,7 @@ export function App(): JSX.Element {
             onEditorLauncher={(command, argumentsTemplate) => void setEditorLauncher(command, argumentsTemplate)}
             onChooseEditor={() => void chooseEditorApplication()}
             onMaxSteps={(maxSteps) => void setMaxSteps(maxSteps)}
+            onAutoTitleGeneration={(enabled) => void setAutoTitleGeneration(enabled)}
             onProviderTimeoutMinutes={(minutes) => void setProviderTimeoutMinutes(minutes)}
             onProviderRetries={(retries) => void setProviderRetries(retries)}
             onSubagent={(profile) => void setSubagent(profile)}
@@ -2074,6 +2251,8 @@ export function App(): JSX.Element {
                     setRightCollapsed(false);
                   }}
                   onResolveApproval={(id, decision) => void resolveCommandApproval(id, decision)}
+                  onChooseSandboxFolder={() => window.desktop.chooseSandboxFolder()}
+                  onGrantSandboxAccess={grantCommandSandboxAccess}
                   savedId={
                     item.kind === "assistant"
                       ? savedIdFor(item)
@@ -2095,6 +2274,7 @@ export function App(): JSX.Element {
                     });
                   }}
                   {...(!running ? { onRestore: (sequence) => void restoreThread(sequence) } : {})}
+                  {...(!running ? { onRegenerate: (sequence) => void regenerateResponse(sequence) } : {})}
                   {...(!running ? { onFork: (sequence) => void forkThread(sequence) } : {})}
                 />
               ))}
@@ -2160,10 +2340,12 @@ export function App(): JSX.Element {
             unsafe={unsafeHostExecution}
             restrictedDetail={desktopState.restrictedHostDetail}
             sandboxAccess={desktopState.sandboxAccess}
+            sandboxNetworkEnabled={desktopState.sandboxNetworkEnabled}
             orbMotion={sendOrbMotion}
             blocker={runBlocker}
             error={error}
             platform={window.desktop.platform}
+            queuedMessage={queuedFollowUp?.request.task ?? null}
             onTask={setTask}
             onSubmit={(event) => void startRun(event)}
             onDragging={setDraggingAttachments}
@@ -2181,7 +2363,10 @@ export function App(): JSX.Element {
             onChooseSandboxLocation={() => window.desktop.chooseSandboxFolder()}
             onAddSandboxAccess={(input) => void addSandboxAccess(input)}
             onRemoveSandboxAccess={(grantId) => void removeSandboxAccess(grantId)}
+            onSandboxNetworkEnabled={(enabled) => void setSandboxNetworkEnabled(enabled)}
             onStop={() => void stopRun()}
+            onQueue={queueFollowUp}
+            onCancelQueued={cancelQueuedFollowUp}
             onSlashCommand={() => setCommandMode("slash")}
           />
           </section>

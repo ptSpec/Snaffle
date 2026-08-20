@@ -127,6 +127,7 @@ export type DesktopState = {
   mcpEnabled: boolean;
   mcpServers: McpServerConfig[];
   openRouterAvailable: boolean;
+  deepSeekAvailable: boolean;
   ketchAvailable: boolean;
   webSearchEnabled: boolean;
   webSearchBackend: WebSearchBackend;
@@ -150,6 +151,8 @@ export type DesktopState = {
   editorCommand: string;
   editorArguments: string;
   maxSteps: number;
+  autoTitleGeneration: boolean;
+  sandboxNetworkEnabled: boolean;
   providerTimeoutMinutes: number;
   providerRetries: number;
   subagent: SubagentProfile;
@@ -248,6 +251,7 @@ export interface DesktopApi {
   setThreadUnsafe(threadId: string, unsafe: boolean): Promise<DesktopState>;
   chooseSandboxFolder(): Promise<string | null>;
   addSandboxAccess(threadId: string, input: SandboxAccessInput): Promise<DesktopState>;
+  grantCommandSandboxAccess(id: string, inputs: SandboxAccessInput[]): Promise<DesktopState>;
   removeSandboxAccess(threadId: string, grantId: string): Promise<DesktopState>;
   resolveCommandApproval(id: string, decision: CommandApprovalDecision): Promise<DesktopState>;
   setTheme(themeId: string): Promise<void>;
@@ -258,6 +262,8 @@ export interface DesktopApi {
   setEditorLauncher(command: string, argumentsTemplate: string): Promise<void>;
   chooseEditorApplication(): Promise<string | null>;
   setMaxSteps(maxSteps: number): Promise<void>;
+  setAutoTitleGeneration(enabled: boolean): Promise<void>;
+  setSandboxNetworkEnabled(enabled: boolean): Promise<void>;
   setProviderTimeoutMinutes(minutes: number): Promise<void>;
   setProviderRetries(retries: number): Promise<void>;
   setSubagent(profile: SubagentProfile): Promise<void>;
