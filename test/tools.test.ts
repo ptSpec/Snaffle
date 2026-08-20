@@ -210,6 +210,7 @@ test("OpenRouter web search has one bounded server-side search", async (t) => {
   assert.deepEqual(request?.tools, [{
     type: "openrouter:web_search",
     parameters: {
+      engine: "exa",
       max_results: 3,
       max_total_results: 3,
       max_uses: 1,
