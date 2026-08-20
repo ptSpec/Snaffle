@@ -49,6 +49,9 @@
 .onboarding-card {
   position: relative;
   z-index: 1;
+  display: flex;
+  max-height: calc(100vh - 92px);
+  flex-direction: column;
   width: min(720px, calc(100vw - 92px));
   padding: 28px;
   background: color-mix(in srgb, var(--card-background) 94%, transparent);
@@ -131,7 +134,9 @@
 }
 
 .onboarding-sections {
+  min-height: 0;
   overflow: hidden;
+  overflow-y: auto;
   border: 1px solid var(--border-default);
   border-radius: 16px;
 }
@@ -163,16 +168,17 @@
   width: 29px;
   height: 29px;
   place-items: center;
-  color: var(--text-muted);
+  color: var(--text-strong);
   font-size: 12px;
   font-weight: 700;
-  background: var(--control-background);
+  background: color-mix(in srgb, var(--text-primary) 28%, var(--surface));
   border-radius: 9px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 14%, transparent);
 }
 
 .onboarding-step.done {
   color: var(--status-success-text);
-  background: color-mix(in srgb, var(--success) 32%, var(--surface));
+  background: color-mix(in srgb, var(--success) 42%, var(--surface));
   box-shadow: 0 0 12px color-mix(in srgb, var(--success) 20%, transparent);
 }
 
@@ -549,5 +555,9 @@
   .onboarding-shell {
     place-items: start center;
     padding-block: 28px;
+  }
+
+  .onboarding-card {
+    max-height: calc(100vh - 56px);
   }
 }

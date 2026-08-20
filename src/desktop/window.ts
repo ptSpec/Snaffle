@@ -21,10 +21,11 @@ export function createDesktopWindow(
   development: boolean,
 ): BrowserWindow {
   const workArea = screen.getPrimaryDisplay().workAreaSize;
+  const preferredHeight = process.platform === "win32" ? 960 : 860;
   const window = new BrowserWindow({
     title: PROJECT.name,
     width: Math.min(1360, workArea.width),
-    height: Math.min(860, workArea.height),
+    height: Math.min(preferredHeight, workArea.height),
     minWidth: Math.min(980, workArea.width),
     minHeight: Math.min(640, workArea.height),
     ...(process.platform === "darwin" ? {} : { icon: applicationIcon() }),
