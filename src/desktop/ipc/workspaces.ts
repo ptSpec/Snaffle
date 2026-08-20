@@ -108,6 +108,8 @@ export function registerWorkspaceIpc(options: {
     if (options.runningWorkspace(workspaceId)) {
       throw new Error("A workspace with a running thread cannot be removed");
     }
+    const workspace = (await state(false)).workspaces.find((item) => item.id === workspaceId);
+    if (workspace) options.threadsDeleted(workspace.threads.map((thread) => thread.id));
     options.workspaceRemoved(workspaceId);
     await store.removeWorkspace(workspaceId);
     return state();

@@ -20,6 +20,7 @@ import { initialMessages } from "../../context/prompt.js";
 import { projectContext } from "../../context/projection.js";
 import { estimateContextCharacters, estimateContextTokens } from "../../context/budget.js";
 import { probeNativeSandbox } from "../../execution/native/sandbox.js";
+import { threadScratchDirectory } from "../../execution/scratch.js";
 import { LocalWorkspace, type CommandApprovalRequest } from "../../execution/workspace.js";
 import {
   isReasoningEffort,
@@ -53,6 +54,7 @@ export type RunIpc = {
 
 export function registerRunIpc(options: {
   store: DesktopStore;
+  scratchRoot: string;
   attachments: AttachmentStore;
   compactor: ContextCompactor;
   state: (includeConversation?: boolean) => Promise<DesktopState>;
@@ -72,6 +74,7 @@ export function registerRunIpc(options: {
   settings: () => {
     maxSteps: number;
     autoTitleGeneration: boolean;
+    sandboxNetworkEnabled: boolean;
     providerTimeoutMinutes: number;
     providerRetries: number;
     compactionMode: CompactionMode;
@@ -171,6 +174,8 @@ export function registerRunIpc(options: {
       unrestricted ? "unsafe" : "restricted",
       (request) => requestApproval(threadId, workspace, request),
       sandboxAccess,
+      threadScratchDirectory(options.scratchRoot, threadId),
+      settings.sandboxNetworkEnabled,
     );
     const run = {
       controller,

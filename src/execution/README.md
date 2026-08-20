@@ -14,9 +14,9 @@ Every backend should preserve the same workspace-relative file and command behav
 
 - File operations accept relative paths and absolute paths only when their canonical target remains inside the workspace; symlink escapes are rejected.
 - Model-controlled commands are restricted by default and receive no provider credentials.
-- On macOS and Linux, users may grant specific additional folders to restricted shell commands as read-only or read/write for one thread, workspace, or all workspaces. A blocked command can add a folder and retry inside the sandbox. Global grants live in `~/.snaffle/sandbox-access.json`; restricted tools cannot modify that personal configuration. File tools remain workspace-only and workspace Git metadata remains protected.
-- Restricted commands share one private temporary directory for the run. It is exposed through `$TMPDIR` and removed when the run finishes.
-- Network access requires an explicit command request and harness-owned approval.
+- On macOS and Linux, users may grant specific additional folders to restricted shell commands as read-only or read/write for one thread, workspace, or all workspaces. A blocked command can add a folder and retry inside the sandbox. Global grants and the `network: "allow" | "deny"` setting live in `~/.snaffle/sandbox-access.json`; network access defaults to `allow`, and restricted tools cannot modify that personal configuration. File tools remain workspace-only and workspace Git metadata remains protected.
+- Restricted desktop commands share one private `$TMPDIR` per thread. It survives follow-up responses and app restarts, is removed with the thread, and is cleaned after five days of inactivity. Other runtimes retain their run-scoped temporary directory.
+- Restricted commands may use the network by default. A global setting can keep sandboxed shell commands offline without changing their filesystem boundary.
 - Cancellation terminates active child work where the platform supports it and prevents pending work from starting.
 - `run_command` defaults to two minutes and accepts an explicit timeout up to five minutes.
 - Restricted native execution is not a VM and must not be described as providing quotas it does not enforce.

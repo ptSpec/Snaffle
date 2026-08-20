@@ -19,6 +19,7 @@ export type SandboxAccessInput = Pick<SandboxAccessGrant, "path" | "writable" | 
 
 type GlobalAccessConfig = {
   version: 1;
+  network?: "allow" | "deny";
   folders: Array<{
     path: string;
     access: "read-only" | "read-write";
@@ -34,22 +35,10 @@ export function globalSandboxAccessFile(): string {
 }
 
 export async function globalSandboxAccess(): Promise<SandboxAccessGrant[]> {
-  await mkdir(personalSnaffleDirectory(), { recursive: true });
-  let value: unknown;
-  try {
-    value = JSON.parse(await readFile(globalSandboxAccessFile(), "utf8"));
-  } catch (error) {
-    if (isMissing(error)) return [];
-    console.warn(`Ignoring invalid sandbox access config: ${errorMessage(error)}`);
-    return [];
-  }
-  if (!isGlobalAccessConfig(value)) {
-    console.warn(`Ignoring invalid sandbox access config at ${globalSandboxAccessFile()}`);
-    return [];
-  }
+  const config = await readGlobalAccessConfig();
 
   const grants: SandboxAccessGrant[] = [];
-  for (const folder of value.folders) {
+  for (const folder of config.folders) {
     try {
       const canonical = await realpath(folder.path);
       if (!(await stat(canonical)).isDirectory()) continue;
@@ -64,6 +53,15 @@ export async function globalSandboxAccess(): Promise<SandboxAccessGrant[]> {
     }
   }
   return grants;
+}
+
+export async function globalSandboxNetworkAllowed(): Promise<boolean> {
+  return (await readGlobalAccessConfig()).network !== "deny";
+}
+
+export async function setGlobalSandboxNetworkAllowed(allowed: boolean): Promise<void> {
+  const config = await readGlobalAccessConfig();
+  await writeGlobalAccessConfig({ ...config, network: allowed ? "allow" : "deny" });
 }
 
 export async function addGlobalSandboxAccess(access: SandboxAccess): Promise<void> {
@@ -89,15 +87,34 @@ export function mergeSandboxAccess(
 }
 
 async function writeGlobalSandboxAccess(grants: SandboxAccessGrant[]): Promise<void> {
-  const directory = personalSnaffleDirectory();
-  await mkdir(directory, { recursive: true });
-  const config: GlobalAccessConfig = {
-    version: 1,
+  const config = await readGlobalAccessConfig();
+  await writeGlobalAccessConfig({
+    ...config,
     folders: grants.map((grant) => ({
       path: grant.path,
       access: grant.writable ? "read-write" : "read-only",
     })),
-  };
+  });
+}
+
+async function readGlobalAccessConfig(): Promise<GlobalAccessConfig> {
+  await mkdir(personalSnaffleDirectory(), { recursive: true });
+  let value: unknown;
+  try {
+    value = JSON.parse(await readFile(globalSandboxAccessFile(), "utf8"));
+  } catch (error) {
+    if (isMissing(error)) return { version: 1, network: "allow", folders: [] };
+    console.warn(`Ignoring invalid sandbox access config: ${errorMessage(error)}`);
+    return { version: 1, network: "allow", folders: [] };
+  }
+  if (isGlobalAccessConfig(value)) return value;
+  console.warn(`Ignoring invalid sandbox access config at ${globalSandboxAccessFile()}`);
+  return { version: 1, network: "allow", folders: [] };
+}
+
+async function writeGlobalAccessConfig(config: GlobalAccessConfig): Promise<void> {
+  const directory = personalSnaffleDirectory();
+  await mkdir(directory, { recursive: true });
   const temporary = path.join(directory, `.sandbox-access-${randomUUID()}.tmp`);
   await writeFile(temporary, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
   await rename(temporary, globalSandboxAccessFile());
@@ -106,7 +123,9 @@ async function writeGlobalSandboxAccess(grants: SandboxAccessGrant[]): Promise<v
 function isGlobalAccessConfig(value: unknown): value is GlobalAccessConfig {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const config = value as Record<string, unknown>;
-  return config.version === 1 && Array.isArray(config.folders) && config.folders.every((folder) => {
+  return config.version === 1 &&
+    (config.network === undefined || config.network === "allow" || config.network === "deny") &&
+    Array.isArray(config.folders) && config.folders.every((folder) => {
     if (!folder || typeof folder !== "object" || Array.isArray(folder)) return false;
     const entry = folder as Record<string, unknown>;
     return typeof entry.path === "string" && path.isAbsolute(entry.path) &&

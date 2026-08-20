@@ -19,7 +19,7 @@ export const MarkdownContent = memo(function MarkdownContent({
   return (
     <ReactMarkdown
       components={markdownComponents}
-      remarkPlugins={[remarkGfm, remarkMath, inlineSources(sources)]}
+      remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: false }], inlineSources(sources)]}
       rehypePlugins={[rehypeKatex]}
       skipHtml
     >
@@ -45,7 +45,7 @@ function normalizeLatexDelimiters(text: string): string {
       ? part
       : part
           .replace(/\\\[([\s\S]*?)\\\]/g, (_match, math: string) => `\n\n$$\n${math.trim()}\n$$\n\n`)
-          .replace(/\\\(([^\n]*?)\\\)/g, (_match, math: string) => `$${math}$`))
+          .replace(/\\\(([^\n]*?)\\\)/g, (_match, math: string) => `$$${math}$$`))
     .join("");
 }
 

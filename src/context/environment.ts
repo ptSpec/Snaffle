@@ -3,11 +3,17 @@ import type { Message } from "../protocol.js";
 
 const sessionStartedAt = new Date();
 
-export function currentEnvironmentMessage(now = sessionStartedAt): Message {
-  return { role: "system", content: currentEnvironmentContent(now) };
+export function currentEnvironmentMessage(executionEnvironment?: string): Message {
+  return {
+    role: "system",
+    content: currentEnvironmentContent(sessionStartedAt, executionEnvironment),
+  };
 }
 
-export function currentEnvironmentContent(now = sessionStartedAt): string {
+export function currentEnvironmentContent(
+  now = sessionStartedAt,
+  executionEnvironment?: string,
+): string {
   const platform = process.platform === "darwin"
     ? "macOS"
     : process.platform === "win32"
@@ -26,7 +32,8 @@ export function currentEnvironmentContent(now = sessionStartedAt): string {
 - Preferred language: ${language} (${locale}); use it unless the user asks for another language
 - Platform: ${platform} ${process.arch}
 - Workspace: current project root; use workspace-relative paths
-- Shell: ${shell}`;
+- Shell: ${shell}${executionEnvironment ? `
+- Execution: ${executionEnvironment}` : ""}`;
 }
 
 export function withCurrentEnvironment(messages: Message[], environment: Message): Message[] {

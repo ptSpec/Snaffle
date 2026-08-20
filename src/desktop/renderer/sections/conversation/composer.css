@@ -1069,6 +1069,12 @@ html[data-appearance="light"] .model-provider-mark.logo.allowance-critical::afte
   border-bottom: 1px solid color-mix(in srgb, var(--border-default) 65%, transparent);
 }
 
+.sandbox-network-access {
+  display: grid;
+  gap: 7px;
+  padding-top: 8px;
+}
+
 .sandbox-access-heading,
 .sandbox-location,
 .sandbox-location-actions {

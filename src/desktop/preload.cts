@@ -109,6 +109,8 @@ const api: DesktopApi = {
   setMaxSteps: (maxSteps: number) => ipcRenderer.invoke("desktop:set-max-steps", maxSteps),
   setAutoTitleGeneration: (enabled: boolean) =>
     ipcRenderer.invoke("desktop:set-auto-title-generation", enabled),
+  setSandboxNetworkEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke("desktop:set-sandbox-network-enabled", enabled),
   setProviderTimeoutMinutes: (minutes: number) =>
     ipcRenderer.invoke("desktop:set-provider-timeout", minutes),
   setProviderRetries: (retries: number) =>

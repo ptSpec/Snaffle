@@ -135,6 +135,7 @@ const initialState: DesktopState = {
   editorArguments: "",
   maxSteps: 50,
   autoTitleGeneration: true,
+  sandboxNetworkEnabled: true,
   providerTimeoutMinutes: 3,
   providerRetries: 4,
   subagent: {
@@ -1494,6 +1495,16 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setSandboxNetworkEnabled(sandboxNetworkEnabled: boolean): Promise<void> {
+    try {
+      await window.desktop.setSandboxNetworkEnabled(sandboxNetworkEnabled);
+      setDesktopState((state) => ({ ...state, sandboxNetworkEnabled }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   async function setEditorFontSize(editorFontSize: number): Promise<void> {
     try {
       await window.desktop.setEditorFontSize(editorFontSize);
@@ -2329,6 +2340,7 @@ export function App(): JSX.Element {
             unsafe={unsafeHostExecution}
             restrictedDetail={desktopState.restrictedHostDetail}
             sandboxAccess={desktopState.sandboxAccess}
+            sandboxNetworkEnabled={desktopState.sandboxNetworkEnabled}
             orbMotion={sendOrbMotion}
             blocker={runBlocker}
             error={error}
@@ -2351,6 +2363,7 @@ export function App(): JSX.Element {
             onChooseSandboxLocation={() => window.desktop.chooseSandboxFolder()}
             onAddSandboxAccess={(input) => void addSandboxAccess(input)}
             onRemoveSandboxAccess={(grantId) => void removeSandboxAccess(grantId)}
+            onSandboxNetworkEnabled={(enabled) => void setSandboxNetworkEnabled(enabled)}
             onStop={() => void stopRun()}
             onQueue={queueFollowUp}
             onCancelQueued={cancelQueuedFollowUp}

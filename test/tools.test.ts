@@ -210,7 +210,6 @@ test("OpenRouter web search has one bounded server-side search", async (t) => {
   assert.deepEqual(request?.tools, [{
     type: "openrouter:web_search",
     parameters: {
-      engine: "exa",
       max_results: 3,
       max_total_results: 3,
       max_uses: 1,
@@ -474,6 +473,7 @@ test("restricted commands stay inside the workspace", async (t) => {
   const inside = await workspace.run("printf ok > generated.txt", undefined, 5000);
   const temporaryWrite = await workspace.run("printf persistent > \"$TMPDIR/persistent\"", undefined, 5000);
   const temporaryRead = await workspace.run("cat \"$TMPDIR/persistent\"", undefined, 5000);
+  const temporaryGitWrite = await workspace.run("mkdir -p \"$TMPDIR/repo/.git\" && touch \"$TMPDIR/repo/.git/config\"", undefined, 5000);
   const listing = await workspace.run("ls -la", undefined, 5000);
   const nestedDirectory = await workspace.run("cd nested && pwd", undefined, 5000);
   const outsideRead = await workspace.run(`cat ${JSON.stringify(secret)}`, undefined, 5000);
@@ -484,6 +484,7 @@ test("restricted commands stay inside the workspace", async (t) => {
   assert.equal(inside.exitCode, 0);
   assert.equal(temporaryWrite.exitCode, 0);
   assert.equal(temporaryRead.stdout, "persistent");
+  assert.equal(temporaryGitWrite.exitCode, 0);
   assert.equal(listing.exitCode, 0);
   assert.equal(nestedDirectory.exitCode, 0);
   assert.equal(await readFile(path.join(root, "generated.txt"), "utf8"), "ok");
@@ -538,23 +539,6 @@ test("restricted commands can be approved once or for the thread", async (t) => 
   assert.equal(after.exitCode, 0);
   assert.equal(approvals, 2);
   assert.equal(await readFile(path.join(root, ".git/after"), "utf8"), "after");
-});
-
-test("network commands request approval before restricted execution", async (t) => {
-  const root = await mkdtemp(path.join(tmpdir(), "network-approval-test-"));
-  t.after(() => rm(root, { recursive: true, force: true }));
-  let reason = "";
-  const workspace = new LocalWorkspace(root, "restricted", async (request) => {
-    reason = request.reason;
-    return "once";
-  });
-  t.after(() => workspace.close());
-
-  const result = await workspace.run("printf approved", undefined, 5000, true);
-
-  assert.equal(result.stdout, "approved");
-  assert.equal(result.approval, "once");
-  assert.match(reason, /requests network access/);
 });
 
 test("restricted commands can retry with a newly granted folder", async (t) => {

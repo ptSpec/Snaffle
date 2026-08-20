@@ -44,6 +44,7 @@ export function Composer({
   unsafe,
   restrictedDetail,
   sandboxAccess,
+  sandboxNetworkEnabled,
   orbMotion,
   blocker,
   error,
@@ -66,6 +67,7 @@ export function Composer({
   onChooseSandboxLocation,
   onAddSandboxAccess,
   onRemoveSandboxAccess,
+  onSandboxNetworkEnabled,
   onStop,
   onQueue,
   onCancelQueued,
@@ -236,9 +238,30 @@ export function Composer({
             <p>
               {unsafe
                 ? "Shell commands run as your user and can access host files, network, and inherited environment. File tools remain workspace-only."
-                : <>Shell commands can write in this workspace and use private temporary files.<br />Other host files, network access, and workspace Git metadata remain protected.</>}
+                : <>Shell commands can write in this workspace, use private temporary files, and {sandboxNetworkEnabled ? "use the network" : "cannot use the network"}.<br />Other host files and workspace Git metadata remain protected.</>}
             </p>
             {!unsafe && platform !== "win32" ? (
+              <>
+              <div className="sandbox-network-access">
+                <div className="sandbox-access-heading">
+                  <span>Network access</span>
+                  <small>Restricted commands</small>
+                </div>
+                <div className="sandbox-location-options" aria-label="Network access">
+                  <button
+                    type="button"
+                    className={sandboxNetworkEnabled ? "selected" : ""}
+                    disabled={running}
+                    onClick={() => onSandboxNetworkEnabled(true)}
+                  >Allow</button>
+                  <button
+                    type="button"
+                    className={!sandboxNetworkEnabled ? "selected" : ""}
+                    disabled={running}
+                    onClick={() => onSandboxNetworkEnabled(false)}
+                  >Deny</button>
+                </div>
+              </div>
               <div className="sandbox-access">
                 <div className="sandbox-access-heading">
                   <span>Additional locations</span>
@@ -355,6 +378,7 @@ export function Composer({
                   >+ Add location</button>
                 )}
               </div>
+              </>
             ) : !unsafe && platform === "win32" ? (
               <small className="sandbox-access-unavailable">
                 Additional sandbox folders are unavailable on Windows.
@@ -569,6 +593,7 @@ type ComposerProps = {
   unsafe: boolean;
   restrictedDetail: string;
   sandboxAccess: SandboxAccessGrant[];
+  sandboxNetworkEnabled: boolean;
   orbMotion: OrbMotion;
   blocker: string | null;
   error: string | null;
@@ -591,6 +616,7 @@ type ComposerProps = {
   onChooseSandboxLocation(): Promise<string | null>;
   onAddSandboxAccess(input: SandboxAccessInput): void;
   onRemoveSandboxAccess(grantId: string): void;
+  onSandboxNetworkEnabled(enabled: boolean): void;
   onStop(): void;
   onQueue(): void;
   onCancelQueued(): void;

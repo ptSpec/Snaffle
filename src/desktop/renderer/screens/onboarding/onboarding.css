@@ -2,7 +2,8 @@
   position: relative;
   display: grid;
   min-width: 900px;
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
   align-items: safe center;
   justify-items: center;
   overflow: auto;
@@ -11,6 +12,16 @@
     radial-gradient(circle at 18% 12%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 34%),
     radial-gradient(circle at 82% 88%, color-mix(in srgb, var(--success) 7%, transparent), transparent 32%),
     var(--app-background);
+}
+
+.onboarding-shell::before {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 40px;
+  content: "";
+  -webkit-app-region: drag;
 }
 
 .onboarding-glow {
