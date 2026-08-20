@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, screen } from "electron";
 import path from "node:path";
 import { PROJECT } from "../identity.js";
 import type { Theme } from "./themes/index.js";
@@ -20,12 +20,13 @@ export function createDesktopWindow(
   appearance: WindowAppearance,
   development: boolean,
 ): BrowserWindow {
+  const workArea = screen.getPrimaryDisplay().workAreaSize;
   const window = new BrowserWindow({
     title: PROJECT.name,
-    width: 1360,
-    height: 860,
-    minWidth: 980,
-    minHeight: 640,
+    width: Math.min(1360, workArea.width),
+    height: Math.min(860, workArea.height),
+    minWidth: Math.min(980, workArea.width),
+    minHeight: Math.min(640, workArea.height),
     ...(process.platform === "darwin" ? {} : { icon: applicationIcon() }),
     backgroundColor: appearance.theme.colors.background,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
