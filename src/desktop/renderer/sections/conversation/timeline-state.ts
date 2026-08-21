@@ -51,6 +51,8 @@ export type TimelineItem =
       details?: SubagentActivity;
       durationMs?: number;
       presentation?: ToolPresentation;
+      startedAt?: number;
+      completedAt?: number;
     };
 
 export type KeepableTimelineItem = Extract<TimelineItem, { kind: "assistant" }>;
@@ -315,7 +317,7 @@ export function addRunEvent(
           item.step !== event.step ||
           item.index !== event.index,
       ),
-      { id: event.call.id, kind: "tool", call: event.call, phase: "running" },
+      { id: event.call.id, kind: "tool", call: event.call, phase: "running", startedAt: Date.now() },
     ]);
     return;
   }
@@ -344,6 +346,10 @@ export function addRunEvent(
         ...(event.exitCode === undefined ? {} : { exitCode: event.exitCode }),
         ...(event.durationMs === undefined ? {} : { durationMs: event.durationMs }),
         ...(event.presentation ? { presentation: event.presentation } : {}),
+        ...(runningCall?.kind === "tool" && runningCall.startedAt !== undefined
+          ? { startedAt: runningCall.startedAt }
+          : {}),
+        completedAt: Date.now(),
         ...(event.details
           ? { details: event.details }
           : runningCall?.kind === "tool" && runningCall.details
@@ -476,6 +482,30 @@ export function findTimelineItem(items: TimelineItem[], id: string | null): Time
     }
   }
   return null;
+}
+
+export function modelCallsForReasoning(
+  items: TimelineItem[],
+): Map<string, Extract<TimelineItem, { kind: "assistant" }>> {
+  const calls = new Map<string, Extract<TimelineItem, { kind: "assistant" }>>();
+  const pendingReasoning: string[] = [];
+
+  function visit(entries: TimelineItem[]): void {
+    for (const item of entries) {
+      if (item.kind === "activity-group") {
+        visit(item.items);
+      } else if (item.kind === "reasoning") {
+        pendingReasoning.push(item.id);
+      } else if (item.kind === "assistant") {
+        for (const reasoningId of pendingReasoning.splice(0)) calls.set(reasoningId, item);
+      } else if (item.kind === "user") {
+        pendingReasoning.length = 0;
+      }
+    }
+  }
+
+  visit(items);
+  return calls;
 }
 
 function collapseCompletedRuns(items: TimelineItem[]): TimelineItem[] {

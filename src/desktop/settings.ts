@@ -12,6 +12,7 @@ import type { ModelToolSurfaces } from "../capabilities/surface.js";
 export type SavedSettings = {
   onboardingComplete?: unknown;
   themeId?: unknown;
+  animationsEnabled?: unknown;
   interfaceFont?: unknown;
   primaryFont?: unknown;
   secondaryFont?: unknown;
@@ -47,6 +48,7 @@ export type SavedSettings = {
 export type SettingsUpdate = {
   onboardingComplete?: boolean;
   themeId?: string;
+  animationsEnabled?: boolean;
   interfaceFont?: FontId;
   primaryFont?: FontId;
   secondaryFont?: FontId;

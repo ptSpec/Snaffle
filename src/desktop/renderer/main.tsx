@@ -55,6 +55,7 @@ const query = new URLSearchParams(window.location.search);
 const requestedTheme = query.get("theme") ?? "";
 const initialTheme = themeById(requestedTheme) ?? DEFAULT_THEME;
 document.documentElement.dataset.theme = initialTheme.id;
+document.documentElement.dataset.animations = query.get("animations") === "off" ? "off" : "on";
 document.documentElement.dataset.appearance = initialTheme.appearance;
 document.documentElement.dataset.accentedTheme = String(Boolean(initialTheme.accented));
 document.documentElement.style.colorScheme = initialTheme.appearance;

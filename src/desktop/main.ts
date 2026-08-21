@@ -123,6 +123,7 @@ let updates: DesktopUpdates;
 const mcpManager = new McpManager();
 let configuredMcpServers: McpServerConfig[] = [];
 let activeTheme: Theme = DEFAULT_THEME;
+let animationsEnabled = true;
 let interfaceFont: FontId = DEFAULT_FONTS.interface;
 let primaryFont: FontId = DEFAULT_FONTS.primary;
 let secondaryFont: FontId = DEFAULT_FONTS.secondary;
@@ -170,6 +171,7 @@ async function start(): Promise<void> {
     typeof settings.themeId === "string"
       ? themeById(settings.themeId) ?? DEFAULT_THEME
       : DEFAULT_THEME;
+  animationsEnabled = settings.animationsEnabled !== false;
   interfaceFont = fontById(settings.interfaceFont)?.id ?? DEFAULT_FONTS.interface;
   primaryFont = fontById(settings.primaryFont)?.id ?? DEFAULT_FONTS.primary;
   secondaryFont = fontById(settings.secondaryFont)?.id ?? DEFAULT_FONTS.secondary;
@@ -269,6 +271,7 @@ async function start(): Promise<void> {
 function createWindow(): void {
   mainWindow = createDesktopWindow(rendererPath, preloadPath, {
     theme: activeTheme,
+    animationsEnabled,
     interfaceFont,
     primaryFont,
     secondaryFont,
@@ -446,6 +449,12 @@ function registerIpc(): void {
         height: 40,
       });
     }
+  });
+
+  ipcMain.handle("desktop:set-animations-enabled", (_event, value: unknown): void => {
+    if (typeof value !== "boolean") throw new Error("Animations must be enabled or disabled");
+    animationsEnabled = value;
+    saveSettings({ animationsEnabled });
   });
 
   ipcMain.handle("desktop:set-typography", (_event, interfaceValue: unknown, primary: unknown, secondary: unknown, code: unknown): void => {
@@ -754,6 +763,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     restrictedHostAvailable: sandbox.available,
     restrictedHostDetail: sandbox.detail,
     themeId: activeTheme.id,
+    animationsEnabled,
     interfaceFont,
     primaryFont,
     secondaryFont,

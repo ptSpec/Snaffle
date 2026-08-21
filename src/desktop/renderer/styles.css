@@ -1,4 +1,5 @@
 @import "./styles/base.css";
+@import "./components/execution-tree.css";
 @import "./sections/sidebar/sidebar.css";
 @import "./sections/conversation/conversation.css";
 @import "./sections/conversation/activity.css";

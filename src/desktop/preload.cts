@@ -97,6 +97,8 @@ const api: DesktopApi = {
   resolveCommandApproval: (id: string, decision: CommandApprovalDecision) =>
     ipcRenderer.invoke("desktop:resolve-command-approval", id, decision),
   setTheme: (themeId: string) => ipcRenderer.invoke("desktop:set-theme", themeId),
+  setAnimationsEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke("desktop:set-animations-enabled", enabled),
   setTypography: (interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId) =>
     ipcRenderer.invoke("desktop:set-typography", interfaceFont, primary, secondary, code),
   setTypographyScale: (role: "interface" | "conversation", value: number) =>
