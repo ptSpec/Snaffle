@@ -8,6 +8,7 @@ import {
   isFileMutationTool,
   type FileChangeSummary,
 } from "./file-tool-preview.js";
+import { ExecutionToolPreview, isExecutionPreviewTool } from "./execution-tool-preview.js";
 import { CopyIcon, MarkdownContent } from "./markdown.js";
 import {
   toolGeneratingLabel,
@@ -24,7 +25,7 @@ export function TimelineEntry({
   previousModel,
   selectedId,
   turnRunning = false,
-  activeFileToolId = null,
+  activeToolPreviewId = null,
   fileChangeSummary,
   reasoningModelCalls,
   onSelect,
@@ -48,7 +49,7 @@ export function TimelineEntry({
   previousModel?: string | undefined;
   selectedId: string | null;
   turnRunning?: boolean;
-  activeFileToolId?: string | null;
+  activeToolPreviewId?: string | null;
   fileChangeSummary?: FileChangeSummary | undefined;
   reasoningModelCalls?: ReadonlyMap<string, ModelCallTimelineItem>;
   onSelect: (id: string) => void;
@@ -77,7 +78,7 @@ export function TimelineEntry({
         item={item}
         selectedId={selectedId}
         turnRunning={turnRunning}
-        activeFileToolId={activeFileToolId}
+        activeToolPreviewId={activeToolPreviewId}
         {...(reasoningModelCalls ? { reasoningModelCalls } : {})}
         onSelect={onSelect}
         {...(onOpenFile ? { onOpenFile } : {})}
@@ -148,11 +149,24 @@ export function TimelineEntry({
           item={item}
           selected={item.id === selectedId}
           turnRunning={turnRunning}
-          autoExpanded={item.id === activeFileToolId}
+          autoExpanded={item.id === activeToolPreviewId}
           statusClass={status.className}
           duration={item.durationMs ? formatDuration(item.durationMs) : undefined}
           onSelect={() => onSelect(item.id)}
           {...(onOpenFile ? { onOpenFile } : {})}
+        />
+      );
+    }
+    if (isExecutionPreviewTool(item.call.name)) {
+      return (
+        <ExecutionToolPreview
+          item={item}
+          selected={item.id === selectedId}
+          turnRunning={turnRunning}
+          autoExpanded={item.id === activeToolPreviewId}
+          statusClass={status.className}
+          duration={item.durationMs ? formatDuration(item.durationMs) : undefined}
+          onSelect={() => onSelect(item.id)}
         />
       );
     }
@@ -332,7 +346,7 @@ function ActivityGroup({
   item,
   selectedId,
   turnRunning,
-  activeFileToolId,
+  activeToolPreviewId,
   reasoningModelCalls,
   onSelect,
   onOpenFile,
@@ -343,7 +357,7 @@ function ActivityGroup({
   item: Extract<TimelineItem, { kind: "activity-group" }>;
   selectedId: string | null;
   turnRunning: boolean;
-  activeFileToolId: string | null;
+  activeToolPreviewId: string | null;
   reasoningModelCalls?: ReadonlyMap<string, ModelCallTimelineItem>;
   onSelect: (id: string) => void;
   onOpenFile?: (path: string) => void;
@@ -380,7 +394,7 @@ function ActivityGroup({
                     item={child}
                     selectedId={selectedId}
                     turnRunning={turnRunning}
-                    activeFileToolId={activeFileToolId}
+                    activeToolPreviewId={activeToolPreviewId}
                     {...(reasoningModelCalls ? { reasoningModelCalls } : {})}
                     onSelect={onSelect}
                     {...(onOpenFile ? { onOpenFile } : {})}

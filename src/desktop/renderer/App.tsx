@@ -81,7 +81,7 @@ import {
 } from "./sections/conversation/timeline.js";
 import {
   fileChangeSummaries,
-  latestFileMutationToolId,
+  latestToolPreviewId,
 } from "./sections/conversation/file-tool-preview.js";
 import {
   addRunEvent,
@@ -713,8 +713,8 @@ export function App(): JSX.Element {
   const reasoningModelCalls = useMemo(() => modelCallsForReasoning(timeline), [timeline]);
   const previousAssistantModels = useMemo(() => modelTransitions(timeline), [timeline]);
   const answerFileChanges = useMemo(() => fileChangeSummaries(timeline), [timeline]);
-  const activeFileToolId = useMemo(
-    () => running ? latestFileMutationToolId(timeline) : null,
+  const activeToolPreviewId = useMemo(
+    () => running ? latestToolPreviewId(timeline) : null,
     [running, timeline],
   );
   const currentTurnItemIds = useMemo(() => {
@@ -2322,7 +2322,7 @@ export function App(): JSX.Element {
                   previousModel={previousAssistantModels.get(item.id)}
                   selectedId={selectedItemId}
                   turnRunning={running && currentTurnItemIds.has(item.id)}
-                  activeFileToolId={activeFileToolId}
+                  activeToolPreviewId={activeToolPreviewId}
                   fileChangeSummary={answerFileChanges.get(item.id)}
                   reasoningModelCalls={reasoningModelCalls}
                   onSelect={(id) => {

@@ -785,6 +785,10 @@
   margin-bottom: 0;
 }
 
+.activity-group-item .message.assistant.intermediate {
+  padding-left: 6px;
+}
+
 .activity-group-item .tool-row {
   width: fit-content;
   padding: 5.5px 6px;

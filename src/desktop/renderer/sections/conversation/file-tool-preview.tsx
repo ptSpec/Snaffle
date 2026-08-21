@@ -351,7 +351,7 @@ export function fileChangeTurns(items: TimelineItem[]): FileChangeTurn[] {
   return turns;
 }
 
-export function latestFileMutationToolId(items: TimelineItem[]): string | null {
+export function latestToolPreviewId(items: TimelineItem[]): string | null {
   let latest: string | null = null;
   let turnFinished = false;
 
@@ -359,7 +359,7 @@ export function latestFileMutationToolId(items: TimelineItem[]): string | null {
     if (item.kind === "activity-group") {
       for (const child of item.items) visit(child);
     } else if (item.kind === "tool") {
-      latest = isFileMutationTool(item.call.name) ? item.id : null;
+      latest = isToolPreviewName(item.call.name) ? item.id : null;
     } else if (item.kind === "assistant" && !item.streaming && !item.intermediate) {
       turnFinished = true;
     }
@@ -374,6 +374,10 @@ export function latestFileMutationToolId(items: TimelineItem[]): string | null {
   }
   for (const item of items.slice(start)) visit(item);
   return turnFinished ? null : latest;
+}
+
+function isToolPreviewName(name: string): boolean {
+  return isFileMutationTool(name) || name === "run_command" || name === "search_files" || name === "read_file";
 }
 
 function textLines(text: string): string[] {

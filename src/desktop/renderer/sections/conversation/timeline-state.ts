@@ -52,6 +52,7 @@ export type TimelineItem =
       durationMs?: number;
       presentation?: ToolPresentation;
       startedAt?: number;
+      completedAt?: number;
     };
 
 export type KeepableTimelineItem = Extract<TimelineItem, { kind: "assistant" }>;
@@ -348,6 +349,7 @@ export function addRunEvent(
         ...(runningCall?.kind === "tool" && runningCall.startedAt !== undefined
           ? { startedAt: runningCall.startedAt }
           : {}),
+        completedAt: Date.now(),
         ...(event.details
           ? { details: event.details }
           : runningCall?.kind === "tool" && runningCall.details
