@@ -71,8 +71,13 @@ export function ExecutionToolPreview({
         aria-expanded={open}
         title="Inspect tool call and toggle result"
         onClick={() => {
-          onSelect();
-          if (!autoReveal) {
+          if (!selected) {
+            onSelect();
+            if (!autoReveal) {
+              manuallyToggled.current = true;
+              setOpen(true);
+            }
+          } else if (!autoReveal) {
             manuallyToggled.current = true;
             setOpen((current) => !current);
           }
@@ -147,9 +152,37 @@ type WebFetchData = {
 type PreviewData = CommandData | SearchData | ReadData | WebSearchData | WebFetchData;
 
 function CommandPreview({ preview, running }: { preview: CommandData; running: boolean }): JSX.Element {
+  const [copied, setCopied] = useState(false);
+
+  async function copyCommand(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(preview.command);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1_200);
+    } catch {
+      setCopied(false);
+    }
+  }
+
   return (
     <>
-      <div className="execution-command-line"><span aria-hidden="true">$</span><code>{preview.command}</code>{running ? <i aria-hidden="true" /> : null}</div>
+      <div className="execution-command-line">
+        <span aria-hidden="true">$</span>
+        <code>{preview.command}</code>
+        {running ? <i aria-hidden="true" /> : null}
+        <button
+          type="button"
+          onClick={() => void copyCommand()}
+          aria-label={copied ? "Command copied" : "Copy command"}
+          title={copied ? "Copied" : "Copy command"}
+        >
+          {copied ? (
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8 3 3 6-7" /></svg>
+          ) : (
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8" height="8" rx="1.5" /><path d="M3 10H2.5A1.5 1.5 0 0 1 1 8.5v-6A1.5 1.5 0 0 1 2.5 1h6A1.5 1.5 0 0 1 10 2.5V3" /></svg>
+          )}
+        </button>
+      </div>
       {running ? <RunningIndicator label="Running command" /> : (
         <>
           {preview.lines.length ? <ResultLines lines={preview.lines} /> : <p className="execution-tool-empty">No command output.</p>}

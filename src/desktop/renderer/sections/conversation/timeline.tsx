@@ -856,8 +856,12 @@ function ReasoningEntry({
         aria-expanded={open}
         onClick={() => {
           if (onInspect) {
-            onInspect();
-            setOpen(disclosureCommand ? (current) => !current : selected ? item.streaming : true);
+            if (!selected) {
+              onInspect();
+              setOpen(true);
+            } else if (!item.streaming) {
+              setOpen((current) => !current);
+            }
           } else {
             setOpen((current) => !current);
           }

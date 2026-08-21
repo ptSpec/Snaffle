@@ -84,6 +84,37 @@
   animation: execution-cursor 850ms steps(1) infinite;
 }
 
+.execution-command-line > button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  align-self: center;
+  place-items: center;
+  margin: -4px -4px -4px auto;
+  padding: 0;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+}
+
+.execution-command-line > button:hover,
+.execution-command-line > button:focus-visible {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
+.execution-command-line > button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
 .execution-tool-running {
   display: flex;
   min-height: 48px;

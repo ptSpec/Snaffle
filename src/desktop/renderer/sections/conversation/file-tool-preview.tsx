@@ -157,8 +157,13 @@ export function FileToolPreview({
         aria-expanded={open}
         title="Inspect tool call and toggle changes"
         onClick={() => {
-          onSelect();
-          if (!autoReveal) {
+          if (!selected) {
+            onSelect();
+            if (!autoReveal) {
+              manuallyToggled.current = true;
+              setOpen(true);
+            }
+          } else if (!autoReveal) {
             manuallyToggled.current = true;
             setOpen((current) => !current);
           }
