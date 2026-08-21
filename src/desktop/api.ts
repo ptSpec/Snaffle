@@ -140,6 +140,7 @@ export type DesktopState = {
   restrictedHostAvailable: boolean;
   restrictedHostDetail: string;
   themeId: string;
+  animationsEnabled: boolean;
   interfaceFont: FontId;
   primaryFont: FontId;
   secondaryFont: FontId;
@@ -255,6 +256,7 @@ export interface DesktopApi {
   removeSandboxAccess(threadId: string, grantId: string): Promise<DesktopState>;
   resolveCommandApproval(id: string, decision: CommandApprovalDecision): Promise<DesktopState>;
   setTheme(themeId: string): Promise<void>;
+  setAnimationsEnabled(enabled: boolean): Promise<void>;
   setTypography(interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId): Promise<void>;
   setTypographyScale(role: "interface" | "conversation", value: number): Promise<void>;
   setCodeBlockFontSize(size: number): Promise<void>;

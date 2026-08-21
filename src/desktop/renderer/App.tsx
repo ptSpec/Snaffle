@@ -133,6 +133,7 @@ const initialState: DesktopState = {
   restrictedHostAvailable: false,
   restrictedHostDetail: "Checking restricted execution…",
   themeId: document.documentElement.dataset.theme ?? DEFAULT_THEME.id,
+  animationsEnabled: document.documentElement.dataset.animations !== "off",
   interfaceFont: fontById(document.documentElement.dataset.interfaceFont)?.id ?? DEFAULT_FONTS.interface,
   primaryFont: fontById(document.documentElement.dataset.primaryFont)?.id ?? DEFAULT_FONTS.primary,
   secondaryFont: fontById(document.documentElement.dataset.secondaryFont)?.id ?? DEFAULT_FONTS.secondary,
@@ -494,6 +495,10 @@ export function App(): JSX.Element {
   useEffect(() => {
     document.documentElement.style.setProperty("--editor-font-size", `${desktopState.editorFontSize}px`);
   }, [desktopState.editorFontSize]);
+
+  useEffect(() => {
+    applyAnimationsEnabled(desktopState.animationsEnabled);
+  }, [desktopState.animationsEnabled]);
 
   useEffect(() => {
     applyTypography(desktopState.interfaceFont, desktopState.primaryFont, desktopState.secondaryFont, desktopState.codeFont);
@@ -1524,7 +1529,7 @@ export function App(): JSX.Element {
       window.requestAnimationFrame(() => {
         timelineView.current
           ?.querySelector<HTMLElement>(`[data-timeline-id="${CSS.escape(id)}"]`)
-          ?.scrollIntoView({ block: "center", behavior: "smooth" });
+          ?.scrollIntoView({ block: "center", behavior: motionAllowed() ? "smooth" : "auto" });
       });
     });
   }
@@ -1545,6 +1550,17 @@ export function App(): JSX.Element {
       await window.desktop.setTheme(theme.id);
       applyTheme(theme);
       setDesktopState((state) => ({ ...state, themeId: theme.id }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function setAnimationsEnabled(animationsEnabled: boolean): Promise<void> {
+    try {
+      await window.desktop.setAnimationsEnabled(animationsEnabled);
+      applyAnimationsEnabled(animationsEnabled);
+      setDesktopState((state) => ({ ...state, animationsEnabled }));
       setError(null);
     } catch (cause) {
       setError(errorMessage(cause));
@@ -1806,6 +1822,7 @@ export function App(): JSX.Element {
     try {
       await Promise.all([
         window.desktop.setTheme(DEFAULT_THEME.id),
+        window.desktop.setAnimationsEnabled(true),
         window.desktop.setTypography(DEFAULT_FONTS.interface, DEFAULT_FONTS.primary, DEFAULT_FONTS.secondary, DEFAULT_FONTS.code),
         window.desktop.setTypographyScale("interface", DEFAULT_FONT_SCALE),
         window.desktop.setTypographyScale("conversation", DEFAULT_FONT_SCALE),
@@ -1813,12 +1830,14 @@ export function App(): JSX.Element {
         window.desktop.setEditorFontSize(DEFAULT_EDITOR_FONT_SIZE),
       ]);
       applyTheme(DEFAULT_THEME);
+      applyAnimationsEnabled(true);
       applyTypography(DEFAULT_FONTS.interface, DEFAULT_FONTS.primary, DEFAULT_FONTS.secondary, DEFAULT_FONTS.code);
       applyTypographyScale("interface", DEFAULT_FONT_SCALE);
       applyTypographyScale("conversation", DEFAULT_FONT_SCALE);
       setDesktopState((state) => ({
         ...state,
         themeId: DEFAULT_THEME.id,
+        animationsEnabled: true,
         interfaceFont: DEFAULT_FONTS.interface,
         primaryFont: DEFAULT_FONTS.primary,
         secondaryFont: DEFAULT_FONTS.secondary,
@@ -2213,6 +2232,7 @@ export function App(): JSX.Element {
           <Settings
             page={settingsPage}
             themeId={desktopState.themeId}
+            animationsEnabled={desktopState.animationsEnabled}
             interfaceFont={desktopState.interfaceFont}
             primaryFont={desktopState.primaryFont}
             secondaryFont={desktopState.secondaryFont}
@@ -2250,6 +2270,7 @@ export function App(): JSX.Element {
             error={error}
             onResetAppearance={() => void resetAppearance()}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
+            onAnimationsEnabled={(enabled) => void setAnimationsEnabled(enabled)}
             onTypography={(interfaceFont, primary, secondary, code) => void setTypography(interfaceFont, primary, secondary, code)}
             onTypographyScale={(role, value) => void setTypographyScale(role, value)}
             onCodeBlockFontSize={(size) => void setCodeBlockFontSize(size)}
@@ -2596,6 +2617,16 @@ function applyTheme(theme: Theme): void {
   for (const [name, value] of Object.entries(theme.colors)) {
     document.documentElement.style.setProperty(`--${name}`, value);
   }
+}
+
+function applyAnimationsEnabled(enabled: boolean): void {
+  document.documentElement.dataset.animations = enabled ? "on" : "off";
+  window.dispatchEvent(new Event("animations-setting-change"));
+}
+
+function motionAllowed(): boolean {
+  return document.documentElement.dataset.animations !== "off"
+    && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function applyTypography(interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId): void {

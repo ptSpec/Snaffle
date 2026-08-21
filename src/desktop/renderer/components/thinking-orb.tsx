@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 export type OrbMotion = "active" | "settling" | "stopped";
 
@@ -25,11 +25,23 @@ export function ThinkingOrb({
   const orb = useRef<SVGSVGElement>(null);
   const phase = useRef(0);
   const id = useId().replaceAll(":", "");
+  const [motionDisabled, setMotionDisabled] = useState(() => shouldDisableMotion(preview));
+
+  useEffect(() => {
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = (): void => setMotionDisabled(shouldDisableMotion(preview));
+    preference.addEventListener("change", update);
+    window.addEventListener("animations-setting-change", update);
+    update();
+    return () => {
+      preference.removeEventListener("change", update);
+      window.removeEventListener("animations-setting-change", update);
+    };
+  }, [preview]);
 
   useEffect(() => {
     if (!orb.current) return;
     const layers = [...orb.current.querySelectorAll<SVGEllipseElement>("ellipse")];
-    const reducedMotion = !preview && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let frame = 0;
     let previous = performance.now();
     const start = previous;
@@ -94,11 +106,11 @@ export function ThinkingOrb({
       frame = window.requestAnimationFrame(animate);
     }
 
-    if (reducedMotion) drawIdle(0);
+    if (motionDisabled) drawIdle(0);
     else if (motion === "stopped" && !preview) drawIdle(0);
     else frame = window.requestAnimationFrame(animate);
     return () => window.cancelAnimationFrame(frame);
-  }, [motion, preview, speed]);
+  }, [motion, motionDisabled, preview, speed]);
 
   const clipId = `thinking-orb-clip-${id}`;
   const blueId = `thinking-orb-blue-${id}`;
@@ -187,4 +199,9 @@ export function ThinkingOrb({
       </g>
     </svg>
   );
+}
+
+function shouldDisableMotion(preview: boolean): boolean {
+  return document.documentElement.dataset.animations === "off"
+    || (!preview && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 }

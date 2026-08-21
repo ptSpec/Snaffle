@@ -59,7 +59,7 @@ export function ExecutionToolPreview({
         title="Inspect tool call and toggle result"
         onClick={() => {
           onSelect();
-          if (!autoExpanded) setOpen((current) => !current);
+          if (!autoExpanded) setOpen(!selected);
         }}
       >
         <PreviewIcon kind={preview.kind} />
@@ -150,7 +150,6 @@ function SearchPreview({ preview, running }: { preview: SearchData; running: boo
 function ReadPreview({ preview, running }: { preview: ReadData; running: boolean }): JSX.Element {
   return (
     <>
-      <header className="execution-read-heading"><FileIcon /><strong>{preview.path}</strong><small>from line {preview.offset}</small></header>
       {running ? (
         <div className="execution-read-loading" aria-label="Reading file">
           {Array.from({ length: 6 }, (_, index) => <span key={index} style={{ width: `${76 - (index % 3) * 13}%` }} />)}

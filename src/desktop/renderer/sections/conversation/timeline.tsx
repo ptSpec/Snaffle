@@ -824,8 +824,12 @@ function ReasoningEntry({
         type="button"
         aria-expanded={open}
         onClick={() => {
-          onInspect?.();
-          setOpen((current) => !current);
+          if (onInspect) {
+            onInspect();
+            setOpen(selected ? item.streaming : true);
+          } else {
+            setOpen((current) => !current);
+          }
         }}
         title={onInspect ? "Inspect model call and toggle thinking" : "Toggle thinking"}
       >

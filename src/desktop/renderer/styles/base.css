@@ -81,6 +81,24 @@
   font-synthesis: none;
 }
 
+html[data-animations="off"] *,
+html[data-animations="off"] *::before,
+html[data-animations="off"] *::after {
+  scroll-behavior: auto !important;
+  transition: none !important;
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
 html[data-appearance="dark"] {
   --pane-depth-shadow: rgb(0 0 0 / 0.46);
 }

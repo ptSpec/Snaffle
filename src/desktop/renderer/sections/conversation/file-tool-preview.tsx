@@ -140,7 +140,7 @@ export function FileToolPreview({
         title="Inspect tool call and toggle changes"
         onClick={() => {
           onSelect();
-          if (!autoExpanded) setOpen((current) => !current);
+          if (!autoExpanded) setOpen(!selected);
         }}
       >
         <svg className="tool-row-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">

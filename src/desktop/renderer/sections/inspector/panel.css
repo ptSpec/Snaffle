@@ -142,6 +142,46 @@
   overflow: auto;
 }
 
+.inspector-tab-view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.inspector-tab-view.enter-forward {
+  animation: inspector-tab-enter-forward 190ms cubic-bezier(0.2, 0.75, 0.3, 1) both;
+}
+
+.inspector-tab-view.enter-back {
+  animation: inspector-tab-enter-back 190ms cubic-bezier(0.2, 0.75, 0.3, 1) both;
+}
+
+@keyframes inspector-tab-enter-forward {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes inspector-tab-enter-back {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 .inspector-content {
   box-sizing: border-box;
   overflow-x: hidden;
@@ -738,6 +778,8 @@ html[data-appearance="light"] .change-detail-heading .change-back:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .inspector-tab-view.enter-forward,
+  .inspector-tab-view.enter-back,
   .change-detail-heading .change-back,
   .change-back-icon {
     animation: none;

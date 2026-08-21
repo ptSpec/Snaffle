@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CodeSelectionInput, DesktopWorkspace } from "../../../api.js";
 import type { TimelineItem } from "../conversation/timeline-state.js";
 import { ExecutionOverview } from "./overview.js";
@@ -11,6 +11,7 @@ export type FileEditorRequest = { workspaceId: string; path: string; requestId: 
 export type ChangesTurnRequest = { turnId: string; requestId: number };
 
 const ChangesPanel = lazy(() => import("./changes/panel.js"));
+const TAB_POSITION: Record<InspectorTab, number> = { inspect: 0, changes: 1, git: 2 };
 
 export function InspectorPanel({
   workspace,
@@ -63,6 +64,21 @@ export function InspectorPanel({
   const overviewScrollTop = useRef(0);
   const followLiveRun = useRef(true);
   const wasRunning = useRef(false);
+  const [tabTransition, setTabTransition] = useState<{
+    tab: InspectorTab;
+    direction: "none" | "forward" | "back";
+  }>({ tab, direction: "none" });
+  const tabDirection = tabTransition.tab === tab
+    ? tabTransition.direction
+    : TAB_POSITION[tab] > TAB_POSITION[tabTransition.tab] ? "forward" : "back";
+  const tabEntranceDirection = tab === "inspect" ? "none" : tabDirection;
+
+  useLayoutEffect(() => {
+    setTabTransition((current) => current.tab === tab ? current : {
+      tab,
+      direction: TAB_POSITION[tab] > TAB_POSITION[current.tab] ? "forward" : "back",
+    });
+  }, [tab]);
 
   useLayoutEffect(() => {
     if (!selectedItem && contentRef.current) contentRef.current.scrollTop = overviewScrollTop.current;
@@ -127,51 +143,56 @@ export function InspectorPanel({
         </div>
       </div>
 
-      {tab === "inspect" ? (
-        <div className="inspector-content" ref={contentRef} onScroll={trackOverviewScroll}>
-          {selectedItem ? (
-            <div className="inspector-view inspector-view-detail">
-              <button className="execution-back" type="button" onClick={() => onSelect(null)}>
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="m9.75 3.5-4.5 4.5 4.5 4.5" />
-                </svg>
-                <span>Back</span>
-              </button>
-              <Inspector
-                item={selectedItem}
-                timeline={timeline}
-                instructions={modelInstructions}
-                tools={toolSpecs}
-              />
-            </div>
-          ) : (
-            <div className="inspector-view inspector-view-overview">
-              <ExecutionOverview
-                timeline={timeline}
-                running={running}
-                selectedModel={selectedModel}
-                selectedProviderConnectionId={selectedProviderConnectionId}
-                providerNames={providerNames}
-                onSelect={selectFromOverview}
-                onNavigateTurn={onNavigateTurn}
-              />
-            </div>
-          )}
-        </div>
-      ) : tab === "changes" ? (
-        <Suspense fallback={<p className="inspector-empty">Loading changes…</p>}>
-          <ChangesPanel timeline={timeline} request={changesTurnRequest} />
-        </Suspense>
-      ) : (
-        <GitPanel
-          workspace={workspace}
-          running={running}
-          request={fileEditorRequest}
-          onEditorOpen={onEditorOpen}
-          onRepositoryState={onGitRepositoryState}
-          onAskSelection={onAskSelection}
-        />
-      )}
+      <div
+        className={`inspector-tab-view${tabEntranceDirection === "none" ? "" : ` enter-${tabEntranceDirection}`}`}
+        key={tab}
+      >
+        {tab === "inspect" ? (
+          <div className="inspector-content" ref={contentRef} onScroll={trackOverviewScroll}>
+            {selectedItem ? (
+              <div className="inspector-view inspector-view-detail">
+                <button className="execution-back" type="button" onClick={() => onSelect(null)}>
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="m9.75 3.5-4.5 4.5 4.5 4.5" />
+                  </svg>
+                  <span>Back</span>
+                </button>
+                <Inspector
+                  item={selectedItem}
+                  timeline={timeline}
+                  instructions={modelInstructions}
+                  tools={toolSpecs}
+                />
+              </div>
+            ) : (
+              <div className="inspector-view inspector-view-overview">
+                <ExecutionOverview
+                  timeline={timeline}
+                  running={running}
+                  selectedModel={selectedModel}
+                  selectedProviderConnectionId={selectedProviderConnectionId}
+                  providerNames={providerNames}
+                  onSelect={selectFromOverview}
+                  onNavigateTurn={onNavigateTurn}
+                />
+              </div>
+            )}
+          </div>
+        ) : tab === "changes" ? (
+          <Suspense fallback={<p className="inspector-empty">Loading changes…</p>}>
+            <ChangesPanel timeline={timeline} request={changesTurnRequest} />
+          </Suspense>
+        ) : (
+          <GitPanel
+            workspace={workspace}
+            running={running}
+            request={fileEditorRequest}
+            onEditorOpen={onEditorOpen}
+            onRepositoryState={onGitRepositoryState}
+            onAskSelection={onAskSelection}
+          />
+        )}
+      </div>
     </>
   );
 }
