@@ -7,7 +7,7 @@ The renderer owns presentation and local interaction state. It receives typed da
 - `App.tsx` composes the three panels and top-level navigation. Keep new feature behavior in its owning screen or section instead of growing this file by default.
 - `sections/sidebar/` owns workspace and thread navigation.
 - `sections/conversation/` owns the timeline, composer, attachments, Markdown, Mermaid, context display, and Keep Aside.
-- `sections/inspector/` owns trace, usage, subagent, and Git inspection.
+- `sections/inspector/` owns trace, usage, subagent, per-turn built-in-tool changes, and Git inspection.
 - `sections/terminal/` owns the explicit user terminal surface.
 - `screens/settings/`, `screens/search/`, and `screens/bookmarks/` replace the conversation for application-level flows.
 - `components/` contains controls genuinely reused across regions.

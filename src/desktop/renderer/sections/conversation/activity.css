@@ -75,6 +75,332 @@
   white-space: nowrap;
 }
 
+.file-tool-entry {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 0 10px;
+}
+
+.file-tool-entry > .tool-row {
+  margin-bottom: 0;
+}
+
+.file-tool-entry.open > .tool-row {
+  position: relative;
+  z-index: 1;
+  padding: 6px 8px;
+  background: var(--code-background);
+  border: 1px solid var(--border-default);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+}
+
+.file-tool-entry.open > .tool-row:hover,
+.file-tool-entry.open > .tool-row.selected {
+  color: var(--text-primary);
+  background: var(--code-background);
+}
+
+.file-tool-chevron {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  margin: 0 2px 0 1px;
+  border-right: 1.5px solid currentcolor;
+  border-bottom: 1.5px solid currentcolor;
+  transform: rotate(-45deg);
+  transition: transform 160ms ease;
+}
+
+.file-tool-chevron.open {
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+.file-tool-preview-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 180ms ease;
+}
+
+.file-tool-preview-reveal.open {
+  grid-template-rows: 1fr;
+}
+
+.file-tool-preview-reveal-content {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.file-tool-preview {
+  width: min(680px, 100%);
+  margin-top: 6px;
+  overflow: hidden;
+  color: var(--code-text);
+  background: var(--code-background);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+}
+
+.file-tool-entry.open .file-tool-preview {
+  margin-top: 0;
+  border-top-left-radius: 0;
+}
+
+.file-tool-preview pre {
+  max-height: 260px;
+  margin: 0;
+  overflow: auto;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 0;
+  font: calc(12px * var(--interface-font-scale))/1.5 var(--font-code);
+}
+
+.file-tool-preview code {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+}
+
+.file-tool-preview-line {
+  display: flex;
+  min-width: 100%;
+  padding: 0 9px 0 7px;
+  white-space: pre;
+  border-left: 3px solid transparent;
+}
+
+.file-tool-preview-line.hunk {
+  color: var(--text-faint);
+  background: color-mix(in srgb, var(--panel) 74%, transparent);
+}
+
+.file-tool-preview-prefix {
+  width: 14px;
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  user-select: none;
+}
+
+.file-tool-preview-line.added .file-tool-preview-prefix {
+  color: var(--diff-added-text);
+}
+
+.file-tool-preview-line.removed .file-tool-preview-prefix {
+  color: var(--diff-removed-text);
+}
+
+.file-tool-preview-text {
+  position: relative;
+  display: inline-block;
+}
+
+.file-tool-preview-line.removed .file-tool-preview-text::after {
+  position: absolute;
+  top: 55%;
+  right: 0;
+  left: 0;
+  height: 1px;
+  content: "";
+  background: color-mix(in srgb, var(--diff-removed-text) 72%, transparent);
+  transform-origin: left;
+}
+
+.file-tool-preview.animating .file-tool-preview-line.removed .file-tool-preview-text::after {
+  transform: scaleX(0);
+  animation: file-tool-strike 260ms ease-out var(--file-tool-delay) forwards;
+}
+
+.file-tool-preview.animating .file-tool-preview-line.added {
+  opacity: 0;
+  transform: translateY(3px);
+  animation: file-tool-line-in 180ms ease-out var(--file-tool-delay) forwards;
+}
+
+.file-tool-preview-truncated {
+  display: block;
+  padding: 5px 9px;
+  color: var(--text-faint);
+  text-align: center;
+  background: var(--panel);
+  border-top: 1px solid var(--border-default);
+}
+
+.file-tool-open {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 9px;
+  color: var(--text-faint);
+  font-size: calc(11px * var(--interface-font-scale));
+  background: var(--panel);
+  border: 0;
+  border-top: 1px solid var(--border-default);
+}
+
+.file-tool-open:hover {
+  color: var(--text-muted);
+  background: var(--hover-background);
+}
+
+.file-tool-open:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--border-focus);
+}
+
+.file-change-summary {
+  width: min(760px, 100%);
+  margin: 18px 0 5px;
+  overflow: hidden;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--card-background) 72%, var(--app-background));
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  font-size: calc(13px * var(--interface-font-scale));
+}
+
+.file-change-summary header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.file-change-summary-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--app-background) 75%, transparent);
+  border-radius: 8px;
+}
+
+.file-change-summary-icon svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.file-change-summary-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.file-change-summary-copy strong {
+  color: var(--text-primary);
+  font-weight: 550;
+}
+
+.file-change-summary b,
+.file-change-counts b {
+  color: var(--diff-added-text);
+  font-weight: 500;
+}
+
+.file-change-summary i,
+.file-change-counts i {
+  color: var(--diff-removed-text);
+  font-style: normal;
+}
+
+.file-change-summary header > button {
+  margin-left: auto;
+  padding: 5px 10px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+}
+
+.file-change-summary header > button:hover,
+.file-change-summary li > button:hover {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
+.file-change-summary button:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--border-focus);
+}
+
+.file-change-summary ul {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 5px 0;
+  list-style: none;
+}
+
+.file-change-summary li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 0 7px 0 13px;
+}
+
+.file-change-summary li > button,
+.file-change-summary li > span:first-child {
+  min-width: 0;
+  padding: 6px 5px;
+  overflow: hidden;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-change-counts {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 5px;
+  margin-left: auto;
+  padding-right: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes file-tool-strike {
+  to { transform: scaleX(1); }
+}
+
+@keyframes file-tool-line-in {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .file-tool-preview-reveal,
+  .file-tool-chevron {
+    transition: none;
+  }
+
+  .file-tool-preview.animating .file-tool-preview-line.added {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+
+  .file-tool-preview.animating .file-tool-preview-line.removed .file-tool-preview-text::after {
+    transform: scaleX(1);
+    animation: none;
+  }
+}
+
 .active-plan {
   width: fit-content;
   max-width: min(760px, 100%);
@@ -453,6 +779,7 @@
 
 .activity-group-item .reasoning-block,
 .activity-group-item .activity-row,
+.activity-group-item .file-tool-entry,
 .activity-group-item .tool-row,
 .activity-group-item .message {
   margin-bottom: 0;

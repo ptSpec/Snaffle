@@ -9,12 +9,16 @@ const GitEditor = lazy(() => import("./editor.js"));
 export function GitPanel({
   workspace,
   running,
+  request,
   onEditorOpen,
+  onRepositoryState,
   onAskSelection,
 }: {
   workspace: DesktopWorkspace | null;
   running: boolean;
+  request: { workspaceId: string; path: string; requestId: number } | null;
   onEditorOpen(open: boolean): void;
+  onRepositoryState(ready: boolean): void;
   onAskSelection(input: CodeSelectionInput): Promise<void>;
 }): JSX.Element {
   const [changes, setChanges] = useState<GitChanges | null>(null);
@@ -33,21 +37,25 @@ export function GitPanel({
   const [failure, setFailure] = useState<string | null>(null);
   const editor = useRef<GitEditorHandle>(null);
 
-  const refresh = useCallback(async (): Promise<void> => {
-    if (!workspace) return;
+  const refresh = useCallback(async (): Promise<GitChanges | null> => {
+    if (!workspace) return null;
     setLoading(true);
     setFailure(null);
     try {
       const next = await window.desktop.getGitChanges(workspace.id);
+      onRepositoryState(next.state === "ready");
       setChanges(next);
       setPreviewVersion((current) => current + 1);
       setSelectedPath((current) => next.files.some((file) => file.path === current && file.editable) ? current : null);
+      return next;
     } catch (error) {
+      onRepositoryState(false);
       setFailure(errorMessage(error));
+      return null;
     } finally {
       setLoading(false);
     }
-  }, [workspace]);
+  }, [onRepositoryState, workspace]);
 
   useEffect(() => {
     setChanges(null);
@@ -63,6 +71,18 @@ export function GitPanel({
   useEffect(() => {
     if (workspace && !running) void refresh();
   }, [refresh, running, workspace]);
+
+  useEffect(() => {
+    if (!workspace || !request || request.workspaceId !== workspace.id) return;
+    let current = true;
+    void refresh().then((next) => {
+      if (!current || !next) return;
+      const file = next.files.find((entry) => entry.path === request.path && entry.editable);
+      if (file) setSelectedPath(file.path);
+      else setFailure(`Cannot open ${request.path} in the Git editor because it is not an editable working-tree change.`);
+    });
+    return () => { current = false; };
+  }, [refresh, request, workspace]);
 
   useEffect(() => {
     if (!workspace || running) return;
@@ -125,9 +145,12 @@ export function GitPanel({
     setLoading(true);
     setFailure(null);
     try {
-      setChanges(await window.desktop.initializeGitRepository(workspace.id));
+      const next = await window.desktop.initializeGitRepository(workspace.id);
+      setChanges(next);
+      onRepositoryState(next.state === "ready");
       setPreviewVersion((current) => current + 1);
     } catch (error) {
+      onRepositoryState(false);
       setFailure(errorMessage(error));
     } finally {
       setLoading(false);

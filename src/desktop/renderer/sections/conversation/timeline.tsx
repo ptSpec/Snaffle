@@ -2,6 +2,12 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AttachmentRef } from "../../../../attachments/types.js";
 import type { CommandApprovalDecision } from "../../../../protocol.js";
 import { MAX_KEPT_ASIDE_MESSAGES, type SandboxAccessInput } from "../../../api.js";
+import {
+  FileChangeSummaryCard,
+  FileToolPreview,
+  isFileMutationTool,
+  type FileChangeSummary,
+} from "./file-tool-preview.js";
 import { CopyIcon, MarkdownContent } from "./markdown.js";
 import {
   toolGeneratingLabel,
@@ -17,8 +23,13 @@ export function TimelineEntry({
   item,
   previousModel,
   selectedId,
+  turnRunning = false,
+  activeFileToolId = null,
+  fileChangeSummary,
   reasoningModelCalls,
   onSelect,
+  onOpenFile,
+  onReviewChanges,
   onEditUser,
   onResolveApproval,
   onChooseSandboxFolder,
@@ -36,8 +47,13 @@ export function TimelineEntry({
   item: TimelineItem;
   previousModel?: string | undefined;
   selectedId: string | null;
+  turnRunning?: boolean;
+  activeFileToolId?: string | null;
+  fileChangeSummary?: FileChangeSummary | undefined;
   reasoningModelCalls?: ReadonlyMap<string, ModelCallTimelineItem>;
   onSelect: (id: string) => void;
+  onOpenFile?: (path: string) => void;
+  onReviewChanges?: () => void;
   onEditUser?: (text: string) => void;
   onResolveApproval?: (id: string, decision: CommandApprovalDecision) => void;
   onChooseSandboxFolder?: () => Promise<string | null>;
@@ -60,8 +76,11 @@ export function TimelineEntry({
       <ActivityGroup
         item={item}
         selectedId={selectedId}
+        turnRunning={turnRunning}
+        activeFileToolId={activeFileToolId}
         {...(reasoningModelCalls ? { reasoningModelCalls } : {})}
         onSelect={onSelect}
+        {...(onOpenFile ? { onOpenFile } : {})}
         {...(onResolveApproval ? { onResolveApproval } : {})}
         {...(onChooseSandboxFolder ? { onChooseSandboxFolder } : {})}
         {...(onGrantSandboxAccess ? { onGrantSandboxAccess } : {})}
@@ -123,7 +142,21 @@ export function TimelineEntry({
     const status = toolStatus(item);
     const title = item.presentation?.title ?? mcpToolName(item.call) ?? item.call.name;
     const subtitle = item.presentation?.subtitle;
-    return (
+    if (isFileMutationTool(item.call.name)) {
+      return (
+        <FileToolPreview
+          item={item}
+          selected={item.id === selectedId}
+          turnRunning={turnRunning}
+          autoExpanded={item.id === activeFileToolId}
+          statusClass={status.className}
+          duration={item.durationMs ? formatDuration(item.durationMs) : undefined}
+          onSelect={() => onSelect(item.id)}
+          {...(onOpenFile ? { onOpenFile } : {})}
+        />
+      );
+    }
+    const row = (
       <button
         className={item.id === selectedId ? `tool-row ${status.className} selected` : `tool-row ${status.className}`}
         type="button"
@@ -142,6 +175,7 @@ export function TimelineEntry({
         {item.durationMs ? <time>{formatDuration(item.durationMs)}</time> : null}
       </button>
     );
+    return row;
   }
 
   if (item.kind === "assistant") {
@@ -162,6 +196,13 @@ export function TimelineEntry({
               <MarkdownContent text={item.text} {...(item.sources ? { sources: item.sources } : {})} />
             )}
           </div>
+          {!item.streaming && !item.intermediate && fileChangeSummary ? (
+            <FileChangeSummaryCard
+              summary={fileChangeSummary}
+              {...(onOpenFile ? { onOpenFile } : {})}
+              {...(onReviewChanges ? { onReview: onReviewChanges } : {})}
+            />
+          ) : null}
           {item.finishReason === "incomplete" ? (
             <div className="interrupted-response" role="note">
               <span>The provider closed the response early.</span>
@@ -290,16 +331,22 @@ function mcpToolName(call: { name: string; input: unknown }): string | undefined
 function ActivityGroup({
   item,
   selectedId,
+  turnRunning,
+  activeFileToolId,
   reasoningModelCalls,
   onSelect,
+  onOpenFile,
   onResolveApproval,
   onChooseSandboxFolder,
   onGrantSandboxAccess,
 }: {
   item: Extract<TimelineItem, { kind: "activity-group" }>;
   selectedId: string | null;
+  turnRunning: boolean;
+  activeFileToolId: string | null;
   reasoningModelCalls?: ReadonlyMap<string, ModelCallTimelineItem>;
   onSelect: (id: string) => void;
+  onOpenFile?: (path: string) => void;
   onResolveApproval?: (id: string, decision: CommandApprovalDecision) => void;
   onChooseSandboxFolder?: () => Promise<string | null>;
   onGrantSandboxAccess?: (id: string, inputs: SandboxAccessInput[]) => Promise<void>;
@@ -332,8 +379,11 @@ function ActivityGroup({
                   <TimelineEntry
                     item={child}
                     selectedId={selectedId}
+                    turnRunning={turnRunning}
+                    activeFileToolId={activeFileToolId}
                     {...(reasoningModelCalls ? { reasoningModelCalls } : {})}
                     onSelect={onSelect}
+                    {...(onOpenFile ? { onOpenFile } : {})}
                     {...(onResolveApproval ? { onResolveApproval } : {})}
                     {...(onChooseSandboxFolder ? { onChooseSandboxFolder } : {})}
                     {...(onGrantSandboxAccess ? { onGrantSandboxAccess } : {})}
@@ -770,7 +820,6 @@ function ReasoningEntry({
           aria-hidden="true"
         />
         <strong>{reasoningStatus(item, now)}</strong>
-        {item.streaming ? <span className="activity-spinner" aria-hidden="true" /> : null}
         {item.text ? <span className="reasoning-chevron" aria-hidden="true" /> : null}
         {durationMs !== undefined ? (
           <time className="reasoning-duration">{formatDuration(durationMs)}</time>

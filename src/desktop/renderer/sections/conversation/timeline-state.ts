@@ -51,6 +51,7 @@ export type TimelineItem =
       details?: SubagentActivity;
       durationMs?: number;
       presentation?: ToolPresentation;
+      startedAt?: number;
     };
 
 export type KeepableTimelineItem = Extract<TimelineItem, { kind: "assistant" }>;
@@ -315,7 +316,7 @@ export function addRunEvent(
           item.step !== event.step ||
           item.index !== event.index,
       ),
-      { id: event.call.id, kind: "tool", call: event.call, phase: "running" },
+      { id: event.call.id, kind: "tool", call: event.call, phase: "running", startedAt: Date.now() },
     ]);
     return;
   }
@@ -344,6 +345,9 @@ export function addRunEvent(
         ...(event.exitCode === undefined ? {} : { exitCode: event.exitCode }),
         ...(event.durationMs === undefined ? {} : { durationMs: event.durationMs }),
         ...(event.presentation ? { presentation: event.presentation } : {}),
+        ...(runningCall?.kind === "tool" && runningCall.startedAt !== undefined
+          ? { startedAt: runningCall.startedAt }
+          : {}),
         ...(event.details
           ? { details: event.details }
           : runningCall?.kind === "tool" && runningCall.details
