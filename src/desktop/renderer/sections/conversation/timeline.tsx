@@ -19,6 +19,7 @@ import {
 } from "./timeline-state.js";
 
 type ModelCallTimelineItem = Extract<TimelineItem, { kind: "assistant" }>;
+type ActivityDisclosureCommand = { id: number; open: boolean };
 
 export function TimelineEntry({
   item,
@@ -26,6 +27,7 @@ export function TimelineEntry({
   selectedId,
   turnRunning = false,
   activeToolPreviewId = null,
+  activityDisclosureCommand,
   fileChangeSummary,
   reasoningModelCalls,
   onSelect,
@@ -50,6 +52,7 @@ export function TimelineEntry({
   selectedId: string | null;
   turnRunning?: boolean;
   activeToolPreviewId?: string | null;
+  activityDisclosureCommand?: ActivityDisclosureCommand | null;
   fileChangeSummary?: FileChangeSummary | undefined;
   reasoningModelCalls?: ReadonlyMap<string, ModelCallTimelineItem>;
   onSelect: (id: string) => void;
@@ -95,6 +98,7 @@ export function TimelineEntry({
       <ReasoningEntry
         item={item}
         selected={Boolean(modelCall && modelCall.id === selectedId)}
+        {...(activityDisclosureCommand !== undefined ? { disclosureCommand: activityDisclosureCommand } : {})}
         {...(modelCall ? {
           durationMs: modelCall.durationMs,
           onInspect: () => onSelect(modelCall.id),
@@ -152,6 +156,7 @@ export function TimelineEntry({
           autoExpanded={item.id === activeToolPreviewId}
           statusClass={status.className}
           duration={item.durationMs ? formatDuration(item.durationMs) : undefined}
+          {...(activityDisclosureCommand !== undefined ? { disclosureCommand: activityDisclosureCommand } : {})}
           onSelect={() => onSelect(item.id)}
           {...(onOpenFile ? { onOpenFile } : {})}
         />
@@ -166,6 +171,7 @@ export function TimelineEntry({
           autoExpanded={item.id === activeToolPreviewId}
           statusClass={status.className}
           duration={item.durationMs ? formatDuration(item.durationMs) : undefined}
+          {...(activityDisclosureCommand !== undefined ? { disclosureCommand: activityDisclosureCommand } : {})}
           onSelect={() => onSelect(item.id)}
         />
       );
@@ -366,6 +372,7 @@ function ActivityGroup({
   onGrantSandboxAccess?: (id: string, inputs: SandboxAccessInput[]) => Promise<void>;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
+  const [disclosureCommand, setDisclosureCommand] = useState<ActivityDisclosureCommand | null>(null);
   const items = item.items.filter(isVisibleActivityItem);
 
   if (!items.length) return <></>;
@@ -383,30 +390,49 @@ function ActivityGroup({
         </span>
       </summary>
       {open ? (
-        <div className="execution-tree activity-group-body">
-          {items.map((child) => {
-            const childStatus = activityItemStatus(child);
-            return (
-              <div className={`execution-tree-item ${childStatus} activity-group-item`} key={child.id}>
-                <span className="execution-tree-marker" aria-hidden="true" />
-                <div className="execution-tree-content">
-                  <TimelineEntry
-                    item={child}
-                    selectedId={selectedId}
-                    turnRunning={turnRunning}
-                    activeToolPreviewId={activeToolPreviewId}
-                    {...(reasoningModelCalls ? { reasoningModelCalls } : {})}
-                    onSelect={onSelect}
-                    {...(onOpenFile ? { onOpenFile } : {})}
-                    {...(onResolveApproval ? { onResolveApproval } : {})}
-                    {...(onChooseSandboxFolder ? { onChooseSandboxFolder } : {})}
-                    {...(onGrantSandboxAccess ? { onGrantSandboxAccess } : {})}
-                  />
+        <>
+          {!turnRunning ? (
+            <div className="activity-group-actions">
+              <button
+                type="button"
+                onClick={() => setDisclosureCommand((current) => ({ id: (current?.id ?? 0) + 1, open: true }))}
+              >
+                Expand all
+              </button>
+              <button
+                type="button"
+                onClick={() => setDisclosureCommand((current) => ({ id: (current?.id ?? 0) + 1, open: false }))}
+              >
+                Collapse all
+              </button>
+            </div>
+          ) : null}
+          <div className="execution-tree activity-group-body">
+            {items.map((child) => {
+              const childStatus = activityItemStatus(child);
+              return (
+                <div className={`execution-tree-item ${childStatus} activity-group-item`} key={child.id}>
+                  <span className="execution-tree-marker" aria-hidden="true" />
+                  <div className="execution-tree-content">
+                    <TimelineEntry
+                      item={child}
+                      selectedId={selectedId}
+                      turnRunning={turnRunning}
+                      activeToolPreviewId={activeToolPreviewId}
+                      activityDisclosureCommand={disclosureCommand}
+                      {...(reasoningModelCalls ? { reasoningModelCalls } : {})}
+                      onSelect={onSelect}
+                      {...(onOpenFile ? { onOpenFile } : {})}
+                      {...(onResolveApproval ? { onResolveApproval } : {})}
+                      {...(onChooseSandboxFolder ? { onChooseSandboxFolder } : {})}
+                      {...(onGrantSandboxAccess ? { onGrantSandboxAccess } : {})}
+                    />
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </>
       ) : null}
     </details>
   );
@@ -792,11 +818,13 @@ function ReasoningEntry({
   item,
   selected,
   durationMs,
+  disclosureCommand,
   onInspect,
 }: {
   item: Extract<TimelineItem, { kind: "reasoning" }>;
   selected: boolean;
   durationMs?: number | undefined;
+  disclosureCommand?: ActivityDisclosureCommand | null;
   onInspect?: () => void;
 }): JSX.Element {
   const [open, setOpen] = useState(item.streaming);
@@ -805,6 +833,9 @@ function ReasoningEntry({
   const followText = useRef(true);
 
   useEffect(() => setOpen(item.streaming), [item.streaming]);
+  useEffect(() => {
+    if (disclosureCommand) setOpen(disclosureCommand.open);
+  }, [disclosureCommand]);
   useEffect(() => {
     if (!item.retryAt) return;
     setNow(Date.now());
@@ -825,8 +856,12 @@ function ReasoningEntry({
         aria-expanded={open}
         onClick={() => {
           if (onInspect) {
-            onInspect();
-            setOpen(selected ? item.streaming : true);
+            if (!selected) {
+              onInspect();
+              setOpen(true);
+            } else if (!item.streaming) {
+              setOpen((current) => !current);
+            }
           } else {
             setOpen((current) => !current);
           }
