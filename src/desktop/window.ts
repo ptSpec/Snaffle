@@ -6,6 +6,7 @@ import type { FontId } from "./typography.js";
 
 export type WindowAppearance = {
   theme: Theme;
+  animationsEnabled: boolean;
   interfaceFont: FontId;
   primaryFont: FontId;
   secondaryFont: FontId;
@@ -57,6 +58,7 @@ export function createDesktopWindow(
   void window.loadFile(rendererPath, {
     query: {
       theme: appearance.theme.id,
+      animations: appearance.animationsEnabled ? "on" : "off",
       interfaceFont: appearance.interfaceFont,
       primaryFont: appearance.primaryFont,
       secondaryFont: appearance.secondaryFont,

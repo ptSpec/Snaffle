@@ -28,6 +28,7 @@ import { UpdateSettings } from "./updates.js";
 export function Settings({
   page,
   themeId,
+  animationsEnabled,
   interfaceFont,
   primaryFont,
   secondaryFont,
@@ -65,6 +66,7 @@ export function Settings({
   error,
   onResetAppearance,
   onSelectTheme,
+  onAnimationsEnabled,
   onTypography,
   onTypographyScale,
   onCodeBlockFontSize,
@@ -96,6 +98,7 @@ export function Settings({
 }: {
   page: SettingsPage;
   themeId: string;
+  animationsEnabled: boolean;
   interfaceFont: FontId;
   primaryFont: FontId;
   secondaryFont: FontId;
@@ -133,6 +136,7 @@ export function Settings({
   error: string | null;
   onResetAppearance: () => void;
   onSelectTheme: (themeId: string) => void;
+  onAnimationsEnabled: (enabled: boolean) => void;
   onTypography: (interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId) => void;
   onTypographyScale: (role: "interface" | "conversation", value: number) => void;
   onCodeBlockFontSize: (size: number) => void;
@@ -392,6 +396,19 @@ export function Settings({
             />
           </section>
         </div>
+
+        <label className="setting-field">
+          <span>
+            <strong>Animations</strong>
+            <small>Animate interface transitions and active processing indicators.</small>
+          </span>
+          <input
+            className="selection-checkbox"
+            type="checkbox"
+            checked={animationsEnabled}
+            onChange={(event) => onAnimationsEnabled(event.target.checked)}
+          />
+        </label>
 
         <section className="setup-again">
           <span>

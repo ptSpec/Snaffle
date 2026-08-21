@@ -63,7 +63,12 @@ import { Onboarding } from "./screens/onboarding/onboarding.js";
 import { Bookmarks, type BookmarksPage } from "./screens/bookmarks/bookmarks.js";
 import { Search } from "./screens/search/search.js";
 import { Sidebar, type AppView, type SettingsPage } from "./sections/sidebar/sidebar.js";
-import { InspectorPanel, type InspectorTab } from "./sections/inspector/panel.js";
+import {
+  InspectorPanel,
+  type ChangesTurnRequest,
+  type FileEditorRequest,
+  type InspectorTab,
+} from "./sections/inspector/panel.js";
 import type { OrbMotion } from "./components/thinking-orb.js";
 import { Composer } from "./sections/conversation/composer.js";
 import type { SandboxAccessInput } from "../../execution/access.js";
@@ -75,8 +80,13 @@ import {
   TimelineEntry,
 } from "./sections/conversation/timeline.js";
 import {
+  fileChangeSummaries,
+  latestToolPreviewId,
+} from "./sections/conversation/file-tool-preview.js";
+import {
   addRunEvent,
   findTimelineItem,
+  modelCallsForReasoning,
   newTimelineId,
   timelineFromEntries,
   type SaveableTimelineItem,
@@ -123,6 +133,7 @@ const initialState: DesktopState = {
   restrictedHostAvailable: false,
   restrictedHostDetail: "Checking restricted execution…",
   themeId: document.documentElement.dataset.theme ?? DEFAULT_THEME.id,
+  animationsEnabled: document.documentElement.dataset.animations !== "off",
   interfaceFont: fontById(document.documentElement.dataset.interfaceFont)?.id ?? DEFAULT_FONTS.interface,
   primaryFont: fontById(document.documentElement.dataset.primaryFont)?.id ?? DEFAULT_FONTS.primary,
   secondaryFont: fontById(document.documentElement.dataset.secondaryFont)?.id ?? DEFAULT_FONTS.secondary,
@@ -191,6 +202,9 @@ export function App(): JSX.Element {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("inspect");
+  const [fileEditorRequest, setFileEditorRequest] = useState<FileEditorRequest | null>(null);
+  const [changesTurnRequest, setChangesTurnRequest] = useState<ChangesTurnRequest | null>(null);
+  const [gitRepositoryReady, setGitRepositoryReady] = useState(false);
   const [view, setView] = useState<AppView>("conversation");
   const [commandMode, setCommandMode] = useState<"all" | "slash" | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -333,8 +347,12 @@ export function App(): JSX.Element {
   }, []);
   const followTimeline = useRef(true);
   const leftAutoCollapsed = useRef(false);
-  const fileEditorExpanded = useRef(false);
-  const layoutBeforeFileEditor = useRef<{
+  const rightPanelFocused = useRef(false);
+  const inspectorTabValue = useRef<InspectorTab>(inspectorTab);
+  const gitEditorOpen = useRef(false);
+  const fileEditorRequestId = useRef(0);
+  const changesTurnRequestId = useRef(0);
+  const layoutBeforeRightPanelFocus = useRef<{
     rightWidth: number;
     leftCollapsed: boolean;
     leftAutoCollapsed: boolean;
@@ -347,6 +365,7 @@ export function App(): JSX.Element {
   const queuedFollowUps = useRef(new Map<string, QueuedFollowUp>());
   rightWidthValue.current = rightWidth;
   leftCollapsedValue.current = leftCollapsed;
+  inspectorTabValue.current = inspectorTab;
   const running = desktopState.activeThreadId
     ? desktopState.runningThreadIds.includes(desktopState.activeThreadId)
     : false;
@@ -359,12 +378,12 @@ export function App(): JSX.Element {
       : false
   );
 
-  const expandFileEditor = useCallback((expanded: boolean): void => {
-    if (fileEditorExpanded.current === expanded) return;
-    fileEditorExpanded.current = expanded;
+  const setRightPanelFocus = useCallback((focused: boolean): void => {
+    if (rightPanelFocused.current === focused) return;
+    rightPanelFocused.current = focused;
 
-    if (expanded) {
-      layoutBeforeFileEditor.current = {
+    if (focused) {
+      layoutBeforeRightPanelFocus.current = {
         rightWidth: rightWidthValue.current,
         leftCollapsed: leftCollapsedValue.current,
         leftAutoCollapsed: leftAutoCollapsed.current,
@@ -376,13 +395,54 @@ export function App(): JSX.Element {
       return;
     }
 
-    const previous = layoutBeforeFileEditor.current;
-    layoutBeforeFileEditor.current = null;
+    const previous = layoutBeforeRightPanelFocus.current;
+    layoutBeforeRightPanelFocus.current = null;
     if (!previous) return;
     leftAutoCollapsed.current = previous.leftAutoCollapsed;
     setRightWidth(previous.rightWidth);
     setLeftCollapsed(previous.leftCollapsed);
   }, []);
+
+  const selectInspectorTab = useCallback((tab: InspectorTab): void => {
+    inspectorTabValue.current = tab;
+    setInspectorTab(tab);
+    setRightPanelFocus(tab === "git" && gitEditorOpen.current);
+  }, [setRightPanelFocus]);
+
+  const handleGitEditorOpen = useCallback((open: boolean): void => {
+    gitEditorOpen.current = open;
+    if (inspectorTabValue.current === "git") setRightPanelFocus(open);
+  }, [setRightPanelFocus]);
+
+  const openBuiltInFileEditor = useCallback((path: string): void => {
+    const workspaceId = desktopState.workspace?.id;
+    if (!workspaceId) return;
+    fileEditorRequestId.current += 1;
+    setFileEditorRequest({ workspaceId, path, requestId: fileEditorRequestId.current });
+    selectInspectorTab("git");
+    setRightCollapsed(false);
+  }, [desktopState.workspace?.id, selectInspectorTab]);
+
+  const reviewAgentChanges = useCallback((turnId: string): void => {
+    changesTurnRequestId.current += 1;
+    setChangesTurnRequest({ turnId, requestId: changesTurnRequestId.current });
+    selectInspectorTab("changes");
+    setRightPanelFocus(true);
+    setRightCollapsed(false);
+  }, [selectInspectorTab, setRightPanelFocus]);
+
+  useEffect(() => {
+    const workspace = desktopState.workspace;
+    let current = true;
+    setGitRepositoryReady(false);
+    if (workspace) {
+      void window.desktop.getGitChanges(workspace.id).then(
+        (changes) => { if (current) setGitRepositoryReady(changes.state === "ready"); },
+        () => { if (current) setGitRepositoryReady(false); },
+      );
+    }
+    return () => { current = false; };
+  }, [desktopState.workspace?.id]);
 
   useLayoutEffect(() => {
     const input = taskInput.current;
@@ -437,6 +497,10 @@ export function App(): JSX.Element {
   }, [desktopState.editorFontSize]);
 
   useEffect(() => {
+    applyAnimationsEnabled(desktopState.animationsEnabled);
+  }, [desktopState.animationsEnabled]);
+
+  useEffect(() => {
     applyTypography(desktopState.interfaceFont, desktopState.primaryFont, desktopState.secondaryFont, desktopState.codeFont);
   }, [desktopState.interfaceFont, desktopState.primaryFont, desktopState.secondaryFont, desktopState.codeFont]);
 
@@ -455,7 +519,7 @@ export function App(): JSX.Element {
       }
       if (view !== "conversation" || rightCollapsed) return;
 
-      if (fileEditorExpanded.current) {
+      if (rightPanelFocused.current) {
         const expandedWidth = focusedEditorWidth();
         if (rightWidth !== expandedWidth) setRightWidth(expandedWidth);
         return;
@@ -651,7 +715,22 @@ export function App(): JSX.Element {
     () => findTimelineItem(timeline, selectedItemId),
     [selectedItemId, timeline],
   );
+  const reasoningModelCalls = useMemo(() => modelCallsForReasoning(timeline), [timeline]);
   const previousAssistantModels = useMemo(() => modelTransitions(timeline), [timeline]);
+  const answerFileChanges = useMemo(() => fileChangeSummaries(timeline), [timeline]);
+  const activeToolPreviewId = useMemo(
+    () => running ? latestToolPreviewId(timeline) : null,
+    [running, timeline],
+  );
+  const currentTurnItemIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (let index = timeline.length - 1; index >= 0; index -= 1) {
+      const item = timeline[index];
+      if (!item || item.kind === "user") break;
+      ids.add(item.id);
+    }
+    return ids;
+  }, [timeline]);
   const visibleLeftWidth = leftCollapsed ? 0 : leftWidth;
   const visibleRightWidth = view !== "conversation" || rightCollapsed ? 0 : rightWidth;
   const terminalVisible = view === "conversation" && terminalOpen && Boolean(desktopState.workspace);
@@ -1450,7 +1529,7 @@ export function App(): JSX.Element {
       window.requestAnimationFrame(() => {
         timelineView.current
           ?.querySelector<HTMLElement>(`[data-timeline-id="${CSS.escape(id)}"]`)
-          ?.scrollIntoView({ block: "center", behavior: "smooth" });
+          ?.scrollIntoView({ block: "center", behavior: motionAllowed() ? "smooth" : "auto" });
       });
     });
   }
@@ -1471,6 +1550,17 @@ export function App(): JSX.Element {
       await window.desktop.setTheme(theme.id);
       applyTheme(theme);
       setDesktopState((state) => ({ ...state, themeId: theme.id }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function setAnimationsEnabled(animationsEnabled: boolean): Promise<void> {
+    try {
+      await window.desktop.setAnimationsEnabled(animationsEnabled);
+      applyAnimationsEnabled(animationsEnabled);
+      setDesktopState((state) => ({ ...state, animationsEnabled }));
       setError(null);
     } catch (cause) {
       setError(errorMessage(cause));
@@ -1732,6 +1822,7 @@ export function App(): JSX.Element {
     try {
       await Promise.all([
         window.desktop.setTheme(DEFAULT_THEME.id),
+        window.desktop.setAnimationsEnabled(true),
         window.desktop.setTypography(DEFAULT_FONTS.interface, DEFAULT_FONTS.primary, DEFAULT_FONTS.secondary, DEFAULT_FONTS.code),
         window.desktop.setTypographyScale("interface", DEFAULT_FONT_SCALE),
         window.desktop.setTypographyScale("conversation", DEFAULT_FONT_SCALE),
@@ -1739,12 +1830,14 @@ export function App(): JSX.Element {
         window.desktop.setEditorFontSize(DEFAULT_EDITOR_FONT_SIZE),
       ]);
       applyTheme(DEFAULT_THEME);
+      applyAnimationsEnabled(true);
       applyTypography(DEFAULT_FONTS.interface, DEFAULT_FONTS.primary, DEFAULT_FONTS.secondary, DEFAULT_FONTS.code);
       applyTypographyScale("interface", DEFAULT_FONT_SCALE);
       applyTypographyScale("conversation", DEFAULT_FONT_SCALE);
       setDesktopState((state) => ({
         ...state,
         themeId: DEFAULT_THEME.id,
+        animationsEnabled: true,
         interfaceFont: DEFAULT_FONTS.interface,
         primaryFont: DEFAULT_FONTS.primary,
         secondaryFont: DEFAULT_FONTS.secondary,
@@ -2095,10 +2188,10 @@ export function App(): JSX.Element {
   return (
     <main className={`app-shell platform-${window.desktop.platform}`}>
       <section
-        className={`workspace-shell${terminalVisible ? " terminal-open" : ""}${fileEditorExpanded.current ? " file-editor-focused" : ""}`}
+        className={`workspace-shell${terminalVisible ? " terminal-open" : ""}${rightPanelFocused.current ? " right-panel-focused" : ""}`}
         style={{
-          gridTemplateColumns: fileEditorExpanded.current
-            ? "0px 0px minmax(0, 1fr)"
+          gridTemplateColumns: rightPanelFocused.current
+            ? `0px minmax(360px, 1fr) ${rightWidth}px`
             : `${visibleLeftWidth}px minmax(360px, 1fr) ${visibleRightWidth}px`,
           gridTemplateRows: terminalVisible
             ? "minmax(0, 1fr) var(--terminal-height)"
@@ -2139,6 +2232,7 @@ export function App(): JSX.Element {
           <Settings
             page={settingsPage}
             themeId={desktopState.themeId}
+            animationsEnabled={desktopState.animationsEnabled}
             interfaceFont={desktopState.interfaceFont}
             primaryFont={desktopState.primaryFont}
             secondaryFont={desktopState.secondaryFont}
@@ -2176,6 +2270,7 @@ export function App(): JSX.Element {
             error={error}
             onResetAppearance={() => void resetAppearance()}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
+            onAnimationsEnabled={(enabled) => void setAnimationsEnabled(enabled)}
             onTypography={(interfaceFont, primary, secondary, code) => void setTypography(interfaceFont, primary, secondary, code)}
             onTypographyScale={(role, value) => void setTypographyScale(role, value)}
             onCodeBlockFontSize={(size) => void setCodeBlockFontSize(size)}
@@ -2225,7 +2320,6 @@ export function App(): JSX.Element {
           <section
             className="conversation view-enter"
             aria-label="Conversation"
-            aria-hidden={fileEditorExpanded.current}
           >
           <div className="timeline-shell">
             <div
@@ -2248,11 +2342,17 @@ export function App(): JSX.Element {
                   item={item}
                   previousModel={previousAssistantModels.get(item.id)}
                   selectedId={selectedItemId}
+                  turnRunning={running && currentTurnItemIds.has(item.id)}
+                  activeToolPreviewId={activeToolPreviewId}
+                  fileChangeSummary={answerFileChanges.get(item.id)}
+                  reasoningModelCalls={reasoningModelCalls}
                   onSelect={(id) => {
-                    setSelectedItemId(id);
-                    setInspectorTab("inspect");
+                    setSelectedItemId((current) => current === id ? null : id);
+                    selectInspectorTab("inspect");
                     setRightCollapsed(false);
                   }}
+                  {...(gitRepositoryReady ? { onOpenFile: openBuiltInFileEditor } : {})}
+                  onReviewChanges={() => reviewAgentChanges(item.id)}
                   onResolveApproval={(id, decision) => void resolveCommandApproval(id, decision)}
                   onChooseSandboxFolder={() => window.desktop.chooseSandboxFolder()}
                   onGrantSandboxAccess={grantCommandSandboxAccess}
@@ -2392,13 +2492,19 @@ export function App(): JSX.Element {
               modelInstructions={desktopState.modelInstructions}
               toolSpecs={desktopState.toolSpecs}
               tab={inspectorTab}
-              onTab={setInspectorTab}
+              fileEditorRequest={fileEditorRequest}
+              changesTurnRequest={changesTurnRequest}
+              focused={rightPanelFocused.current}
+              onTab={selectInspectorTab}
+              onEnterFocus={() => setRightPanelFocus(true)}
+              onExitFocus={() => selectInspectorTab("inspect")}
               onSelect={setSelectedItemId}
               onNavigateTurn={scrollToTimelineItem}
-              onEditorOpen={expandFileEditor}
+              onEditorOpen={handleGitEditorOpen}
+              onGitRepositoryState={setGitRepositoryReady}
               onAskSelection={attachCodeSelection}
               onCollapse={() => {
-                expandFileEditor(false);
+                setRightPanelFocus(false);
                 setRightCollapsed(true);
               }}
             />
@@ -2416,12 +2522,12 @@ export function App(): JSX.Element {
           />
         ) : null}
 
-        {fileEditorExpanded.current ? null : leftCollapsed ? (
+        {rightPanelFocused.current ? null : leftCollapsed ? (
           <button
             className="panel-reopen left"
             type="button"
             onClick={() => {
-              expandFileEditor(false);
+              setRightPanelFocus(false);
               leftAutoCollapsed.current = false;
               setLeftCollapsed(false);
             }}
@@ -2450,7 +2556,7 @@ export function App(): JSX.Element {
           >
             <span className="pane-icon right" aria-hidden="true" />
           </button>
-        ) : fileEditorExpanded.current ? null : (
+        ) : rightPanelFocused.current ? null : (
           <div
             className="column-resizer right-resizer"
             style={{ right: rightWidth }}
@@ -2469,7 +2575,7 @@ export function App(): JSX.Element {
 }
 
 function focusedEditorWidth(): number {
-  return window.innerWidth;
+  return Math.max(0, Math.min(Math.round(window.innerWidth * 0.65), window.innerWidth - 360));
 }
 
 function mergeStreamEvent(previous: DesktopRunEvent, next: DesktopRunEvent): boolean {
@@ -2511,6 +2617,16 @@ function applyTheme(theme: Theme): void {
   for (const [name, value] of Object.entries(theme.colors)) {
     document.documentElement.style.setProperty(`--${name}`, value);
   }
+}
+
+function applyAnimationsEnabled(enabled: boolean): void {
+  document.documentElement.dataset.animations = enabled ? "on" : "off";
+  window.dispatchEvent(new Event("animations-setting-change"));
+}
+
+function motionAllowed(): boolean {
+  return document.documentElement.dataset.animations !== "off"
+    && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function applyTypography(interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId): void {

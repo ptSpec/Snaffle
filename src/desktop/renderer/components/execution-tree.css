@@ -1,0 +1,75 @@
+.execution-tree {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  --execution-tree-background: var(--app-background);
+}
+
+.execution-tree::before {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 3px;
+  width: 1px;
+  content: "";
+  background: var(--border-default);
+  pointer-events: none;
+}
+
+.execution-tree-item {
+  position: relative;
+  min-width: 0;
+  padding-left: 21px;
+}
+
+.execution-tree-item::before {
+  position: absolute;
+  top: 12px;
+  left: 3px;
+  width: 13px;
+  height: 1px;
+  content: "";
+  background: var(--border-default);
+  pointer-events: none;
+}
+
+.execution-tree-marker {
+  position: absolute;
+  z-index: 1;
+  top: 9px;
+  left: 13px;
+  width: 7px;
+  height: 7px;
+  background: var(--execution-status-color, var(--text-faint));
+  border: 1px solid var(--execution-tree-background);
+  border-radius: 50%;
+}
+
+.execution-tree-item.completed,
+.execution-status-dot.completed {
+  --execution-status-color: var(--status-success-text);
+}
+
+.execution-tree-item.running,
+.execution-status-dot.running {
+  --execution-status-color: var(--accent);
+}
+
+.execution-tree-item.warning,
+.execution-status-dot.warning {
+  --execution-status-color: var(--status-warning-text);
+}
+
+.execution-tree-item.failed,
+.execution-status-dot.failed {
+  --execution-status-color: var(--status-danger-text);
+}
+
+.execution-status-dot {
+  background: var(--execution-status-color, var(--text-faint));
+}
+
+.execution-tree-content {
+  min-width: 0;
+}

@@ -81,6 +81,24 @@
   font-synthesis: none;
 }
 
+html[data-animations="off"] *,
+html[data-animations="off"] *::before,
+html[data-animations="off"] *::after {
+  scroll-behavior: auto !important;
+  transition: none !important;
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
 html[data-appearance="dark"] {
   --pane-depth-shadow: rgb(0 0 0 / 0.46);
 }
@@ -314,11 +332,11 @@ body.resizing-columns .column-resizer::after {
   transform: translateX(50%);
 }
 
-.right-resizer::before {
+.right-resizer::before,
+.workspace-shell.right-panel-focused > .inspector::before {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 4px;
   width: 14px;
   content: "";
   pointer-events: none;
@@ -329,6 +347,19 @@ body.resizing-columns .column-resizer::after {
   );
   filter: blur(2.5px);
   mask-image: linear-gradient(180deg, transparent, black 28%, black 72%, transparent);
+}
+
+.right-resizer::before {
+  left: 4px;
+}
+
+.workspace-shell.right-panel-focused > .inspector {
+  position: relative;
+}
+
+.workspace-shell.right-panel-focused > .inspector::before {
+  z-index: 12;
+  left: 0;
 }
 
 .left-sidebar::after {
@@ -379,11 +410,6 @@ body.resizing-columns .workspace-shell {
   z-index: 1;
   overflow: hidden;
   border-radius: 14px 0 0 14px;
-}
-
-.workspace-shell.file-editor-focused > .conversation {
-  visibility: hidden;
-  pointer-events: none;
 }
 
 .workspace-shell > .inspector {

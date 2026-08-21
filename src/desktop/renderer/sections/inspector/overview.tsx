@@ -211,7 +211,7 @@ function TurnOverview({
           className={`execution-events-reveal${open ? " open" : ""}`}
           aria-hidden={!open}
         >
-          <div className="execution-events">
+          <div className="execution-tree execution-events">
             {events.length ? events.map((event, index) => (
               <ExecutionTimelineEvent
                 key={event.item.id}
@@ -250,9 +250,9 @@ function ExecutionTimelineEvent({
     const status = tool.phase === "running" ? "running" : tool.isError ? "failed" : "completed";
     const profile = subagentProfile(tool.details);
     return (
-      <div className={`execution-event tool ${status}`}>
-        <span className="execution-event-marker" aria-hidden="true" />
-        <div className="execution-event-content">
+      <div className={`execution-tree-item execution-event tool ${status}`}>
+        <span className="execution-tree-marker" aria-hidden="true" />
+        <div className="execution-tree-content execution-event-content">
           <button className="execution-event-copy" type="button" onClick={() => onSelect(tool.id)}>
             <strong>{tool.call.name}{profile ? <ProfileBadge profile={profile} /> : null}</strong>
             <small className={`execution-event-status ${status}`}>
@@ -294,9 +294,9 @@ function ExecutionTimelineEvent({
   if (event.type === "image-cache") {
     const activity = event.item;
     return (
-      <div className="execution-event cache">
-        <span className="execution-event-marker" aria-hidden="true" />
-        <div className="execution-event-content">
+      <div className="execution-tree-item execution-event cache">
+        <span className="execution-tree-marker" aria-hidden="true" />
+        <div className="execution-tree-content execution-event-content">
           <button className="execution-event-copy" type="button" onClick={() => onSelect(activity.id)}>
             <strong>{activity.activity === "description" ? "Image description cache" : "Image inspection cache"}</strong>
             <small>{activity.imageName} · local cache reuse</small>
@@ -321,9 +321,9 @@ function ExecutionTimelineEvent({
   const detail = call.usage ? compactUsage(call.usage) : "Usage unavailable";
 
   return (
-    <div className="execution-event model">
-      <span className="execution-event-marker" aria-hidden="true" />
-      <div className="execution-event-content">
+    <div className="execution-tree-item execution-event model">
+      <span className="execution-tree-marker" aria-hidden="true" />
+      <div className="execution-tree-content execution-event-content">
         {contextChanged ? (
           <p className="execution-event-context">{responseModel} · {provider}</p>
         ) : null}
