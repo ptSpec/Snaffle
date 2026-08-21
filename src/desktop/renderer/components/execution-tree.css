@@ -34,6 +34,17 @@
   pointer-events: none;
 }
 
+.execution-tree-item:last-child::after {
+  position: absolute;
+  top: 13px;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  content: "";
+  background: var(--execution-tree-background);
+  pointer-events: none;
+}
+
 .execution-tree-marker {
   position: absolute;
   z-index: 1;

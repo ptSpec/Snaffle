@@ -154,6 +154,10 @@ html[data-theme="snaffle-sage"] {
   box-sizing: border-box;
 }
 
+:focus-visible {
+  outline-color: var(--border-focus);
+}
+
 code,
 pre,
 kbd,
