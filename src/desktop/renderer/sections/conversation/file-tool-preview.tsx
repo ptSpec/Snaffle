@@ -88,6 +88,7 @@ export function FileToolPreview({
   autoExpanded,
   statusClass,
   duration,
+  disclosureCommand,
   onSelect,
   onOpenFile,
 }: {
@@ -97,6 +98,7 @@ export function FileToolPreview({
   autoExpanded: boolean;
   statusClass: string;
   duration?: string | undefined;
+  disclosureCommand?: { id: number; open: boolean } | null;
   onSelect(): void;
   onOpenFile?: (path: string) => void;
 }): JSX.Element | null {
@@ -111,6 +113,10 @@ export function FileToolPreview({
   const autoReveal = autoExpanded && document.documentElement.dataset.animations !== "off";
   const [open, setOpen] = useState(autoReveal);
   const manuallyToggled = useRef(false);
+
+  useEffect(() => {
+    if (disclosureCommand) setOpen(disclosureCommand.open);
+  }, [disclosureCommand]);
 
   useEffect(() => {
     if (!autoReveal && document.documentElement.dataset.animations === "off") {
@@ -154,7 +160,7 @@ export function FileToolPreview({
           onSelect();
           if (!autoReveal) {
             manuallyToggled.current = true;
-            setOpen(!selected);
+            setOpen((current) => !current);
           }
         }}
       >
@@ -392,7 +398,7 @@ export function latestToolPreviewId(items: TimelineItem[]): string | null {
 }
 
 function isToolPreviewName(name: string): boolean {
-  return isFileMutationTool(name) || name === "run_command" || name === "search_files" || name === "read_file" || name === "web_search";
+  return isFileMutationTool(name) || name === "run_command" || name === "search_files" || name === "read_file" || name === "web_search" || name === "web_fetch";
 }
 
 function textLines(text: string): string[] {

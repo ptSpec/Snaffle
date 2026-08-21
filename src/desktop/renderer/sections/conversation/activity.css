@@ -833,6 +833,29 @@
   font-size: calc(11px * var(--interface-font-scale));
 }
 
+.activity-group-actions {
+  display: flex;
+  justify-content: flex-start;
+  max-width: calc(760px - 14px);
+  gap: 2px;
+  margin: 5px 0 -6px 14px;
+}
+
+.activity-group-actions button {
+  padding: 4px 6px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font: inherit;
+  font-size: calc(11px * var(--interface-font-scale));
+}
+
+.activity-group-actions button:hover {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
 .activity-group-body {
   max-width: calc(760px - 14px);
   gap: 3.3px;
@@ -885,6 +908,28 @@
   grid-template-columns: minmax(0, auto) auto;
   width: fit-content;
   padding: 5.5px 6px;
+}
+
+.activity-group-item time {
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-group-item .tool-row time,
+.activity-group-item .reasoning-duration {
+  box-sizing: border-box;
+  min-width: 50px;
+  margin-left: 2px;
+  padding-inline: 7px;
+  text-align: center;
+  border-left: 1px solid var(--border-default);
+}
+
+.activity-group-item .reasoning-duration {
+  order: 2;
+}
+
+.activity-group-item .reasoning-chevron {
+  order: 3;
 }
 
 .reasoning-block > .activity-disclosure-summary {

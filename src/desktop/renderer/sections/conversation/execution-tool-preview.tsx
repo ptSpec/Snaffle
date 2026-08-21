@@ -10,7 +10,7 @@ const READ_LINES = 18;
 const WEB_SOURCES = 6;
 
 export function isExecutionPreviewTool(name: string): boolean {
-  return name === "run_command" || name === "search_files" || name === "read_file" || name === "web_search";
+  return name === "run_command" || name === "search_files" || name === "read_file" || name === "web_search" || name === "web_fetch";
 }
 
 export function ExecutionToolPreview({
@@ -20,6 +20,7 @@ export function ExecutionToolPreview({
   autoExpanded,
   statusClass,
   duration,
+  disclosureCommand,
   onSelect,
 }: {
   item: ToolItem;
@@ -28,12 +29,17 @@ export function ExecutionToolPreview({
   autoExpanded: boolean;
   statusClass: string;
   duration?: string | undefined;
+  disclosureCommand?: { id: number; open: boolean } | null;
   onSelect(): void;
 }): JSX.Element | null {
   const preview = previewFor(item);
   const autoReveal = autoExpanded && document.documentElement.dataset.animations !== "off";
   const [open, setOpen] = useState(autoReveal);
   const manuallyToggled = useRef(false);
+
+  useEffect(() => {
+    if (disclosureCommand) setOpen(disclosureCommand.open);
+  }, [disclosureCommand]);
 
   useEffect(() => {
     if (!autoReveal && document.documentElement.dataset.animations === "off") {
@@ -68,7 +74,7 @@ export function ExecutionToolPreview({
           onSelect();
           if (!autoReveal) {
             manuallyToggled.current = true;
-            setOpen(!selected);
+            setOpen((current) => !current);
           }
         }}
       >
@@ -90,6 +96,7 @@ export function ExecutionToolPreview({
             {preview.kind === "search" ? <SearchPreview preview={preview} running={item.phase === "running"} /> : null}
             {preview.kind === "read" ? <ReadPreview preview={preview} running={item.phase === "running"} /> : null}
             {preview.kind === "web" ? <WebSearchPreview preview={preview} running={item.phase === "running"} /> : null}
+            {preview.kind === "fetch" ? <WebFetchPreview preview={preview} running={item.phase === "running"} /> : null}
           </div>
         </div>
       </div>
@@ -131,7 +138,13 @@ type WebSearchData = {
   query: string;
   domains: string[];
 };
-type PreviewData = CommandData | SearchData | ReadData | WebSearchData;
+type WebFetchData = {
+  kind: "fetch";
+  title: string;
+  subtitle: string;
+  domain: string;
+};
+type PreviewData = CommandData | SearchData | ReadData | WebSearchData | WebFetchData;
 
 function CommandPreview({ preview, running }: { preview: CommandData; running: boolean }): JSX.Element {
   return (
@@ -210,6 +223,17 @@ function WebSearchPreview({ preview, running }: { preview: WebSearchData; runnin
   );
 }
 
+function WebFetchPreview({ preview, running }: { preview: WebFetchData; running: boolean }): JSX.Element {
+  return (
+    <div className={running ? "execution-web-sources fetching" : "execution-web-sources"}>
+      <span className="execution-web-source">
+        <i aria-hidden="true">{preview.domain[0]}</i>
+        <small>{preview.domain}</small>
+      </span>
+    </div>
+  );
+}
+
 function ResultLines({ lines }: { lines: string[] }): JSX.Element {
   return (
     <pre className="execution-command-output"><code>{lines.map((line, index) => (
@@ -238,6 +262,7 @@ function previewFor(item: ToolItem): PreviewData | null {
   if (item.call.name === "search_files") return searchData(item, input);
   if (item.call.name === "read_file") return readData(item, input);
   if (item.call.name === "web_search") return webSearchData(item, input);
+  if (item.call.name === "web_fetch") return webFetchData(item, input);
   return null;
 }
 
@@ -322,16 +347,32 @@ function webSearchData(item: ToolItem, input: Record<string, unknown>): WebSearc
   };
 }
 
+function webFetchData(item: ToolItem, input: Record<string, unknown>): WebFetchData | null {
+  const url = stringValue(input.url);
+  if (!url) return null;
+  return {
+    kind: "fetch",
+    title: item.isError ? "Fetch failed" : item.phase === "running" ? "Fetching page" : "Fetched page",
+    subtitle: url,
+    domain: domainName(url) ?? url,
+  };
+}
+
 function sourceDomains(content: string): string[] {
   const domains = new Set<string>();
   for (const match of content.matchAll(/https?:\/\/[^\s)\]]+/g)) {
-    try {
-      domains.add(new URL(match[0].replace(/[.,;:]+$/, "")).hostname.replace(/^www\./, ""));
-    } catch {
-      // Ignore malformed URLs in untrusted search output.
-    }
+    const domain = domainName(match[0].replace(/[.,;:]+$/, ""));
+    if (domain) domains.add(domain);
   }
   return [...domains];
+}
+
+function domainName(rawUrl: string): string | undefined {
+  try {
+    return new URL(rawUrl).hostname.replace(/^www\./, "");
+  } catch {
+    return undefined;
+  }
 }
 
 function PreviewIcon({ kind }: { kind: PreviewData["kind"] }): JSX.Element {
@@ -339,7 +380,7 @@ function PreviewIcon({ kind }: { kind: PreviewData["kind"] }): JSX.Element {
     return <svg className="tool-row-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="1.5" y="3" width="13" height="10" rx="2" /><path d="m4 6 2 2-2 2M8 10h3" /></svg>;
   }
   if (kind === "search") return <SearchIcon className="tool-row-icon" />;
-  if (kind === "web") return <GlobeIcon className="tool-row-icon" />;
+  if (kind === "web" || kind === "fetch") return <GlobeIcon className="tool-row-icon" />;
   return <FileIcon className="tool-row-icon" />;
 }
 
