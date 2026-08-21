@@ -44,6 +44,8 @@ export function FileChangeSummaryCard({
   onOpenFile?: (path: string) => void;
   onReview?: () => void;
 }): JSX.Element {
+  const changedLines = summary.added + summary.removed;
+  const addedWidth = changedLines ? summary.added / changedLines * 100 : 0;
   return (
     <section className="file-change-summary" aria-label={summary.label}>
       <header>
@@ -56,12 +58,16 @@ export function FileChangeSummaryCard({
         <span className="file-change-summary-copy">
           <strong>{summary.label}</strong>
           <span><b>+{summary.added}</b> <i>−{summary.removed}</i></span>
+          <span className="file-change-balance" aria-hidden="true">
+            <span style={{ width: `${addedWidth}%` }} />
+            <span style={{ width: `${100 - addedWidth}%` }} />
+          </span>
         </span>
         {onReview ? <button type="button" onClick={onReview}>Review</button> : null}
       </header>
       <ul>
         {summary.files.map((file) => (
-          <li key={file.path}>
+          <li className={onOpenFile ? "interactive" : undefined} key={file.path}>
             {onOpenFile ? (
               <button type="button" onClick={() => onOpenFile(file.path)} title={`Open ${file.path}`}>
                 {file.path}
