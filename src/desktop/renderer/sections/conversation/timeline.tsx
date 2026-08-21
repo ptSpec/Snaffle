@@ -11,11 +11,13 @@ import {
   type TimelineItem,
 } from "./timeline-state.js";
 
+type ModelCallTimelineItem = Extract<TimelineItem, { kind: "assistant" }>;
 
 export function TimelineEntry({
   item,
   previousModel,
   selectedId,
+  reasoningModelCalls,
   onSelect,
   onEditUser,
   onResolveApproval,
@@ -34,6 +36,7 @@ export function TimelineEntry({
   item: TimelineItem;
   previousModel?: string | undefined;
   selectedId: string | null;
+  reasoningModelCalls?: ReadonlyMap<string, ModelCallTimelineItem>;
   onSelect: (id: string) => void;
   onEditUser?: (text: string) => void;
   onResolveApproval?: (id: string, decision: CommandApprovalDecision) => void;
@@ -57,6 +60,7 @@ export function TimelineEntry({
       <ActivityGroup
         item={item}
         selectedId={selectedId}
+        {...(reasoningModelCalls ? { reasoningModelCalls } : {})}
         onSelect={onSelect}
         {...(onResolveApproval ? { onResolveApproval } : {})}
         {...(onChooseSandboxFolder ? { onChooseSandboxFolder } : {})}
@@ -65,7 +69,19 @@ export function TimelineEntry({
     );
   }
 
-  if (item.kind === "reasoning") return <ReasoningEntry item={item} />;
+  if (item.kind === "reasoning") {
+    const modelCall = reasoningModelCalls?.get(item.id);
+    return (
+      <ReasoningEntry
+        item={item}
+        selected={Boolean(modelCall && modelCall.id === selectedId)}
+        {...(modelCall ? {
+          durationMs: modelCall.durationMs,
+          onInspect: () => onSelect(modelCall.id),
+        } : {})}
+      />
+    );
+  }
 
   if (item.kind === "context") return <ContextEntry item={item} />;
 
@@ -114,11 +130,16 @@ export function TimelineEntry({
         onClick={() => onSelect(item.id)}
       >
         <ToolIcon name={item.call.name} />
-        <strong>{title}</strong>
-        {item.call.inputRepair ? (
-          <span className="tool-healed" title={item.call.inputRepair}>healed</span>
-        ) : null}
-        <span>{subtitle ? `${subtitle} · ${status.label}` : status.label}</span>
+        <span className="tool-row-copy">
+          <span className="tool-row-title">
+            <strong>{title}</strong>
+            {item.call.inputRepair ? (
+              <span className="tool-healed" title={item.call.inputRepair}>healed</span>
+            ) : null}
+          </span>
+          <span className="tool-row-status">{subtitle ? `${subtitle} · ${status.label}` : status.label}</span>
+        </span>
+        {item.durationMs ? <time>{formatDuration(item.durationMs)}</time> : null}
       </button>
     );
   }
@@ -269,6 +290,7 @@ function mcpToolName(call: { name: string; input: unknown }): string | undefined
 function ActivityGroup({
   item,
   selectedId,
+  reasoningModelCalls,
   onSelect,
   onResolveApproval,
   onChooseSandboxFolder,
@@ -276,12 +298,16 @@ function ActivityGroup({
 }: {
   item: Extract<TimelineItem, { kind: "activity-group" }>;
   selectedId: string | null;
+  reasoningModelCalls?: ReadonlyMap<string, ModelCallTimelineItem>;
   onSelect: (id: string) => void;
   onResolveApproval?: (id: string, decision: CommandApprovalDecision) => void;
   onChooseSandboxFolder?: () => Promise<string | null>;
   onGrantSandboxAccess?: (id: string, inputs: SandboxAccessInput[]) => Promise<void>;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
+  const items = item.items.filter(isVisibleActivityItem);
+
+  if (!items.length) return <></>;
 
   return (
     <details
@@ -289,24 +315,60 @@ function ActivityGroup({
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
-      <summary>Work details</summary>
+      <summary className="activity-disclosure-summary">
+        <span className="activity-summary-copy">
+          <strong>Work details</strong>
+          <small>{activityGroupMetadata(items)}</small>
+        </span>
+      </summary>
       {open ? (
-        <div className="activity-group-body">
-          {item.items.map((child) => (
-            <TimelineEntry
-              key={child.id}
-              item={child}
-              selectedId={selectedId}
-              onSelect={onSelect}
-              {...(onResolveApproval ? { onResolveApproval } : {})}
-              {...(onChooseSandboxFolder ? { onChooseSandboxFolder } : {})}
-              {...(onGrantSandboxAccess ? { onGrantSandboxAccess } : {})}
-            />
-          ))}
+        <div className="execution-tree activity-group-body">
+          {items.map((child) => {
+            const childStatus = activityItemStatus(child);
+            return (
+              <div className={`execution-tree-item ${childStatus} activity-group-item`} key={child.id}>
+                <span className="execution-tree-marker" aria-hidden="true" />
+                <div className="execution-tree-content">
+                  <TimelineEntry
+                    item={child}
+                    selectedId={selectedId}
+                    {...(reasoningModelCalls ? { reasoningModelCalls } : {})}
+                    onSelect={onSelect}
+                    {...(onResolveApproval ? { onResolveApproval } : {})}
+                    {...(onChooseSandboxFolder ? { onChooseSandboxFolder } : {})}
+                    {...(onGrantSandboxAccess ? { onGrantSandboxAccess } : {})}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </details>
   );
+}
+
+function isVisibleActivityItem(item: TimelineItem): boolean {
+  return item.kind !== "assistant" || Boolean(item.text);
+}
+
+type ActivityStatus = "running" | "completed" | "warning" | "failed";
+
+function activityItemStatus(item: TimelineItem): ActivityStatus {
+  if (item.kind === "reasoning" && item.streaming) return "running";
+  if (item.kind === "tool-preparing" || (item.kind === "tool" && item.phase === "running")) return "running";
+  if (item.kind === "error" || (item.kind === "tool" && item.isError)) return "failed";
+  if (item.kind === "retry" || (item.kind === "tool" && typeof item.exitCode === "number" && item.exitCode !== 0)) {
+    return "warning";
+  }
+  return "completed";
+}
+
+function activityGroupMetadata(items: TimelineItem[]): string {
+  const toolCount = items.filter((item) => item.kind === "tool").length;
+  const parts = [`${items.length} step${items.length === 1 ? "" : "s"}`];
+  if (toolCount) parts.push(`${toolCount} tool${toolCount === 1 ? "" : "s"}`);
+  return parts.join(" · ");
 }
 
 function ApprovalEntry({
@@ -664,8 +726,14 @@ function ToolIcon({ name }: { name: string }): JSX.Element {
 
 function ReasoningEntry({
   item,
+  selected,
+  durationMs,
+  onInspect,
 }: {
   item: Extract<TimelineItem, { kind: "reasoning" }>;
+  selected: boolean;
+  durationMs?: number | undefined;
+  onInspect?: () => void;
 }): JSX.Element {
   const [open, setOpen] = useState(item.streaming);
   const [now, setNow] = useState(Date.now());
@@ -686,28 +754,45 @@ function ReasoningEntry({
   }, [item.text, item.streaming, open]);
 
   return (
-    <details
-      className="reasoning-block"
-      open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
-      <summary>
-        <span>{reasoningStatus(item, now)}</span>
+    <div className={selected ? "reasoning-block selected" : "reasoning-block"}>
+      <button
+        className="activity-disclosure-summary"
+        type="button"
+        aria-expanded={open}
+        onClick={() => {
+          onInspect?.();
+          setOpen((current) => !current);
+        }}
+        title={onInspect ? "Inspect model call and toggle thinking" : "Toggle thinking"}
+      >
+        <span
+          className={`execution-status-dot activity-summary-dot ${item.streaming ? "running" : "completed"}`}
+          aria-hidden="true"
+        />
+        <strong>{reasoningStatus(item, now)}</strong>
         {item.streaming ? <span className="activity-spinner" aria-hidden="true" /> : null}
-      </summary>
-      {item.text ? (
-        <div
-          ref={textRef}
-          className="reasoning-text"
-          onScroll={(event) => {
-            const text = event.currentTarget;
-            followText.current = text.scrollHeight - text.scrollTop - text.clientHeight < 24;
-          }}
-        >
-          {item.text}
+        {item.text ? <span className="reasoning-chevron" aria-hidden="true" /> : null}
+        {durationMs !== undefined ? (
+          <time className="reasoning-duration">{formatDuration(durationMs)}</time>
+        ) : null}
+      </button>
+      <div className={open ? "reasoning-reveal open" : "reasoning-reveal"} aria-hidden={!open}>
+        <div className="reasoning-reveal-content">
+          {item.text ? (
+            <div
+              ref={textRef}
+              className="reasoning-text"
+              onScroll={(event) => {
+                const text = event.currentTarget;
+                followText.current = text.scrollHeight - text.scrollTop - text.clientHeight < 24;
+              }}
+            >
+              {item.text}
+            </div>
+          ) : null}
         </div>
-      ) : null}
-    </details>
+      </div>
+    </div>
   );
 }
 
@@ -721,6 +806,10 @@ function reasoningStatus(
     return seconds > 0 ? `Retrying in ${seconds}s…` : "Retrying now…";
   }
   return item.streaming ? "Thinking…" : "Thinking";
+}
+
+function formatDuration(durationMs: number): string {
+  return durationMs < 1_000 ? `${durationMs}ms` : `${(durationMs / 1_000).toFixed(1)}s`;
 }
 
 function ContextEntry({ item }: { item: Extract<TimelineItem, { kind: "context" }> }): JSX.Element {

@@ -481,77 +481,18 @@
 }
 
 .execution-events {
-  position: relative;
-  display: grid;
-  min-height: 0;
   overflow: hidden;
-  gap: 3px;
   margin: 0;
+  --execution-tree-background: var(--inspector-background);
 }
 
-.execution-events::before {
-  position: absolute;
-  top: 12px;
-  bottom: 12px;
-  left: 3px;
-  width: 1px;
-  content: "";
-  background: var(--border-default);
-}
-
-.execution-event {
-  position: relative;
-  min-width: 0;
-  padding-left: 21px;
-}
-
-.execution-event::before {
-  position: absolute;
-  top: 12px;
-  left: 3px;
-  width: 13px;
-  height: 1px;
-  content: "";
-  background: var(--border-default);
-  pointer-events: none;
-}
-
-.execution-event-marker {
-  position: absolute;
-  z-index: 1;
-  top: 9px;
-  left: 13px;
-  width: 7px;
-  height: 7px;
+.execution-event.model > .execution-tree-marker {
   background: var(--accent);
-  border: 1px solid var(--inspector-background);
-  border-radius: 50%;
 }
 
-.execution-event.cache .execution-event-marker {
+.execution-event.cache > .execution-tree-marker {
   background: var(--usage-cached);
   border-radius: 1px;
-}
-
-.execution-event.tool .execution-event-marker {
-  background: var(--execution-event-color, var(--text-faint));
-  border-radius: 50%;
-}
-
-.execution-event.tool.completed .execution-event-marker {
-  --execution-event-color: var(--status-success-text);
-}
-
-.execution-event.tool.running .execution-event-marker {
-  --execution-event-color: var(--accent);
-}
-
-.execution-event.tool.failed .execution-event-marker {
-  --execution-event-color: var(--status-danger-text);
-}
-
-.execution-event.tool {
-  padding-left: 21px;
 }
 
 .execution-event-content {

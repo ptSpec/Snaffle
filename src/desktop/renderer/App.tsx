@@ -77,6 +77,7 @@ import {
 import {
   addRunEvent,
   findTimelineItem,
+  modelCallsForReasoning,
   newTimelineId,
   timelineFromEntries,
   type SaveableTimelineItem,
@@ -651,6 +652,7 @@ export function App(): JSX.Element {
     () => findTimelineItem(timeline, selectedItemId),
     [selectedItemId, timeline],
   );
+  const reasoningModelCalls = useMemo(() => modelCallsForReasoning(timeline), [timeline]);
   const previousAssistantModels = useMemo(() => modelTransitions(timeline), [timeline]);
   const visibleLeftWidth = leftCollapsed ? 0 : leftWidth;
   const visibleRightWidth = view !== "conversation" || rightCollapsed ? 0 : rightWidth;
@@ -2248,8 +2250,9 @@ export function App(): JSX.Element {
                   item={item}
                   previousModel={previousAssistantModels.get(item.id)}
                   selectedId={selectedItemId}
+                  reasoningModelCalls={reasoningModelCalls}
                   onSelect={(id) => {
-                    setSelectedItemId(id);
+                    setSelectedItemId((current) => current === id ? null : id);
                     setInspectorTab("inspect");
                     setRightCollapsed(false);
                   }}
