@@ -837,10 +837,18 @@
   max-width: calc(760px - 14px);
   gap: 3.3px;
   margin: 10px 0 5px 14px;
+  animation: activity-group-drop 180ms cubic-bezier(0.2, 0.75, 0.3, 1) both;
 }
 
 .activity-group-body::before {
   top: 14px;
+}
+
+@keyframes activity-group-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
 }
 
 .activity-group-item .reasoning-block,

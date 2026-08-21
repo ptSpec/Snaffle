@@ -121,7 +121,7 @@ const markdownComponents: Components = {
           <>
             <span>{children}</span>
             <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M6 3h7v7M13 3 6 10M12 9v4H3V4h4" />
+              <path d="m5 11 6-6M6 5h5v5" />
             </svg>
           </>
         ) : children}
