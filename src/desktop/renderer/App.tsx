@@ -220,6 +220,7 @@ export function App(): JSX.Element {
   const [, refreshQueuedFollowUps] = useState(0);
   const taskInput = useRef<HTMLTextAreaElement>(null);
   const timelineView = useRef<HTMLDivElement>(null);
+  const timelineContent = useRef<HTMLDivElement>(null);
   const timelineScrollTop = useRef(0);
   const executionMode = useRef<HTMLDetailsElement>(null);
   const composerAdd = useRef<HTMLDetailsElement>(null);
@@ -458,6 +459,19 @@ export function App(): JSX.Element {
       setShowJumpToLatest(false);
     }
   }, [timeline]);
+
+  useLayoutEffect(() => {
+    const timeline = timelineView.current;
+    const content = timelineContent.current;
+    if (view !== "conversation" || !timeline || !content) return;
+    const observer = new ResizeObserver(() => {
+      if (!followTimeline.current) return;
+      timeline.scrollTop = timeline.scrollHeight;
+      setShowJumpToLatest(false);
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [view]);
 
   useLayoutEffect(() => {
     if (view !== "conversation") return;
@@ -2336,52 +2350,54 @@ export function App(): JSX.Element {
                 setShowJumpToLatest(distanceFromBottom > view.clientHeight * 0.4);
               }}
             >
-              {timeline.map((item) => (
-                <TimelineEntry
-                  key={item.id}
-                  item={item}
-                  previousModel={previousAssistantModels.get(item.id)}
-                  selectedId={selectedItemId}
-                  turnRunning={running && currentTurnItemIds.has(item.id)}
-                  activeToolPreviewId={activeToolPreviewId}
-                  fileChangeSummary={answerFileChanges.get(item.id)}
-                  reasoningModelCalls={reasoningModelCalls}
-                  onSelect={(id) => {
-                    setSelectedItemId((current) => current === id ? null : id);
-                    selectInspectorTab("inspect");
-                    setRightCollapsed(false);
-                  }}
-                  {...(gitRepositoryReady ? { onOpenFile: openBuiltInFileEditor } : {})}
-                  onReviewChanges={() => reviewAgentChanges(item.id)}
-                  onResolveApproval={(id, decision) => void resolveCommandApproval(id, decision)}
-                  onChooseSandboxFolder={() => window.desktop.chooseSandboxFolder()}
-                  onGrantSandboxAccess={grantCommandSandboxAccess}
-                  savedId={
-                    item.kind === "assistant"
-                      ? savedIdFor(item)
-                      : undefined
-                  }
-                  onToggleSaved={(message, savedId) => void toggleSavedMessage(message, savedId)}
-                  keptAside={isKeptAside(item)}
-                  canKeepAside={desktopState.keptAside.length < MAX_KEPT_ASIDE_MESSAGES}
-                  onToggleKeptAside={toggleKeptAside}
-                  {...(!running
-                    ? { onToggleAttachmentContext: (message, attachment) => void toggleAttachmentContext(message, attachment) }
-                    : {})}
-                  onEditUser={(text) => {
-                    setTask(text);
-                    window.requestAnimationFrame(() => {
-                      const input = taskInput.current;
-                      input?.focus();
-                      input?.setSelectionRange(text.length, text.length);
-                    });
-                  }}
-                  {...(!running ? { onRestore: (sequence) => void restoreThread(sequence) } : {})}
-                  {...(!running ? { onRegenerate: (sequence) => void regenerateResponse(sequence) } : {})}
-                  {...(!running ? { onFork: (sequence) => void forkThread(sequence) } : {})}
-                />
-              ))}
-              {running ? <ActivePlan items={timeline} /> : null}
+              <div ref={timelineContent}>
+                {timeline.map((item) => (
+                  <TimelineEntry
+                    key={item.id}
+                    item={item}
+                    previousModel={previousAssistantModels.get(item.id)}
+                    selectedId={selectedItemId}
+                    turnRunning={running && currentTurnItemIds.has(item.id)}
+                    activeToolPreviewId={activeToolPreviewId}
+                    fileChangeSummary={answerFileChanges.get(item.id)}
+                    reasoningModelCalls={reasoningModelCalls}
+                    onSelect={(id) => {
+                      setSelectedItemId((current) => current === id ? null : id);
+                      selectInspectorTab("inspect");
+                      setRightCollapsed(false);
+                    }}
+                    {...(gitRepositoryReady ? { onOpenFile: openBuiltInFileEditor } : {})}
+                    onReviewChanges={() => reviewAgentChanges(item.id)}
+                    onResolveApproval={(id, decision) => void resolveCommandApproval(id, decision)}
+                    onChooseSandboxFolder={() => window.desktop.chooseSandboxFolder()}
+                    onGrantSandboxAccess={grantCommandSandboxAccess}
+                    savedId={
+                      item.kind === "assistant"
+                        ? savedIdFor(item)
+                        : undefined
+                    }
+                    onToggleSaved={(message, savedId) => void toggleSavedMessage(message, savedId)}
+                    keptAside={isKeptAside(item)}
+                    canKeepAside={desktopState.keptAside.length < MAX_KEPT_ASIDE_MESSAGES}
+                    onToggleKeptAside={toggleKeptAside}
+                    {...(!running
+                      ? { onToggleAttachmentContext: (message, attachment) => void toggleAttachmentContext(message, attachment) }
+                      : {})}
+                    onEditUser={(text) => {
+                      setTask(text);
+                      window.requestAnimationFrame(() => {
+                        const input = taskInput.current;
+                        input?.focus();
+                        input?.setSelectionRange(text.length, text.length);
+                      });
+                    }}
+                    {...(!running ? { onRestore: (sequence) => void restoreThread(sequence) } : {})}
+                    {...(!running ? { onRegenerate: (sequence) => void regenerateResponse(sequence) } : {})}
+                    {...(!running ? { onFork: (sequence) => void forkThread(sequence) } : {})}
+                  />
+                ))}
+                {running ? <ActivePlan items={timeline} /> : null}
+              </div>
             </div>
             <AsideShelf
               messages={desktopState.keptAside}

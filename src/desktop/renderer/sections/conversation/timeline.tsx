@@ -211,7 +211,7 @@ export function TimelineEntry({
         >
           <div className={item.streaming ? "markdown-content streaming" : "markdown-content"}>
             {item.streaming ? (
-              <>{item.text}<span className="streaming-cursor" aria-hidden="true" /></>
+              <>{streamingText(item.text)}<span className="streaming-cursor" aria-hidden="true" /></>
             ) : (
               <MarkdownContent text={item.text} {...(item.sources ? { sources: item.sources } : {})} />
             )}
@@ -889,7 +889,7 @@ function ReasoningEntry({
                 followText.current = text.scrollHeight - text.scrollTop - text.clientHeight < 24;
               }}
             >
-              {item.text}
+              {reasoningText(item.text)}
             </div>
           ) : null}
         </div>
@@ -912,6 +912,14 @@ function reasoningStatus(
 
 function formatDuration(durationMs: number): string {
   return durationMs < 1_000 ? `${durationMs}ms` : `${(durationMs / 1_000).toFixed(1)}s`;
+}
+
+function streamingText(text: string): string {
+  return text.replace(/^(?:[ \t]*\r?\n)+/, "");
+}
+
+function reasoningText(text: string): string {
+  return streamingText(text).replace(/(?:\r?\n[ \t]*)+$/, "");
 }
 
 function ContextEntry({ item }: { item: Extract<TimelineItem, { kind: "context" }> }): JSX.Element {
