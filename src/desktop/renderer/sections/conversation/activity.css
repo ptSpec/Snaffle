@@ -88,6 +88,8 @@
 .file-tool-entry.open > .tool-row {
   position: relative;
   z-index: 1;
+  box-sizing: border-box;
+  width: min(680px, 100%);
   padding: 6px 8px;
   background: var(--code-background);
   border: 1px solid var(--border-default);
@@ -145,6 +147,7 @@
 .file-tool-entry.open .file-tool-preview {
   margin-top: 0;
   border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 .file-tool-preview pre {
@@ -818,6 +821,11 @@
 
 .activity-group > .activity-disclosure-summary {
   grid-template-columns: minmax(0, auto);
+  padding: 2px 18px 2px 6px;
+}
+
+.activity-group > .activity-disclosure-summary::after {
+  right: 5px;
 }
 
 .activity-summary-copy small {
