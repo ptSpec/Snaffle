@@ -14,14 +14,14 @@ This domain owns workspace file access, command execution, cancellation, and bac
 Every backend should preserve the same workspace-relative file and command behavior so tools do not need backend-specific logic.
 
 - File operations accept relative paths and absolute paths only when their canonical target remains inside the workspace; symlink escapes are rejected.
-- Model-controlled commands are restricted by default on macOS and Linux and receive no provider credentials. Microsandbox is an advanced experimental alternative there and the selected restricted engine on Windows. Missing restricted execution blocks a run; host execution is explicit.
+- Model-controlled commands are restricted by default on macOS and Linux and receive no provider credentials. Windows starts with unrestricted host execution while Microsandbox remains experimental. Once restricted execution is selected, an unavailable engine blocks the run instead of silently falling back.
 - Users may grant specific additional folders to restricted shell commands as read-only or read/write for one thread, workspace, or all workspaces. Native execution can request a grant after an OS denial and retry. Microsandbox applies explicit grants when the next VM starts and does not infer host access from missing guest paths. Global grants and the `network: "allow" | "deny"` setting live in `~/.snaffle/sandbox-access.json`; restricted tools cannot modify that personal configuration. File tools remain workspace-only and workspace Git metadata remains protected.
 - Restricted desktop commands share one private `$TMPDIR` per thread. Native execution receives its protected host path; Microsandbox sees it only as `/tmp/snaffle`. It survives follow-up responses and app restarts, is removed with the thread, and is cleaned after five days of inactivity.
 - Restricted commands may use the network by default. A global setting can keep sandboxed shell commands offline without changing their filesystem boundary.
 - Cancellation terminates active child work where the platform supports it and prevents pending work from starting.
 - `run_command` defaults to two minutes and accepts an explicit timeout up to five minutes.
 - Restricted native execution is not a VM and must not be described as providing quotas it does not enforce.
-- Restricted native execution remains unavailable on Windows. The shared sandbox popover selects Microsandbox there and still offers explicit unsafe host execution.
+- Restricted native execution remains unavailable on Windows. Threads start with unrestricted host execution there and the shared sandbox popover offers Microsandbox as the restricted option.
 - The workspace supplies the model-facing command environment. Host platform and shell metadata must not contradict a VM or future remote execution target.
 
 ## Microsandbox beta

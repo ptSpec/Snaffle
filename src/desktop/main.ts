@@ -769,7 +769,9 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
         : []
     ),
     runningThreadIds: runs.runningThreadIds(),
-    unsafeThreadIds: runs.unsafeThreadIds(),
+    unsafeThreadIds: runs.unsafeThreadIds(
+      state.workspaces.flatMap((item) => item.threads.map((thread) => thread.id)),
+    ),
     sandboxAccess: mergeSandboxAccess(
       await globalSandboxAccess(),
       workspace && state.activeThreadId

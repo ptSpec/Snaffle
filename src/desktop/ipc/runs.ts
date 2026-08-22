@@ -50,7 +50,7 @@ import type { DesktopStore } from "../store.js";
 
 export type RunIpc = {
   runningThreadIds(): string[];
-  unsafeThreadIds(): string[];
+  unsafeThreadIds(threadIds: string[]): string[];
   isThreadRunning(threadId: string): boolean;
   isWorkspaceRunning(workspaceId: string): boolean;
   forgetThreads(threadIds: string[]): void;
@@ -99,7 +99,7 @@ export function registerRunIpc(options: {
     steering: string[];
     acceptingSteering: boolean;
   }>();
-  const unsafe = new Set<string>();
+  const unrestrictedThreads = new Map<string, boolean>();
   const providerCapacity = new ProviderCapacity();
   const implementCapacity = new ProviderCapacity();
   const approvals = new Map<string, {
@@ -153,7 +153,7 @@ export function registerRunIpc(options: {
     const selectedThread = selectedWorkspace.threads.find((thread) => thread.id === input.threadId);
     if (!selectedThread) throw new Error("The selected thread no longer exists");
     if (active.has(input.threadId)) throw new Error("This thread is already running");
-    const unrestricted = unsafe.has(input.threadId);
+    const unrestricted = isThreadUnrestricted(input.threadId);
     const settings = options.settings();
     if (!unrestricted) {
       const sandbox = settings.restrictedEngine === "microsandbox"
@@ -554,8 +554,7 @@ export function registerRunIpc(options: {
     const threadId = id(rawThreadId, "Thread");
     if (typeof value !== "boolean") throw new Error("Unsafe state must be a boolean");
     if (active.has(threadId)) throw new Error("Execution mode cannot change during a run");
-    if (value) unsafe.add(threadId);
-    else unsafe.delete(threadId);
+    unrestrictedThreads.set(threadId, value);
     return options.state(false);
   });
 
@@ -627,7 +626,9 @@ export function registerRunIpc(options: {
     const pending = approvals.get(approvalId);
     if (!pending) throw new Error("This approval request is no longer active");
     approvals.delete(approvalId);
-    if (decision === "thread") unsafe.add(pending.threadId);
+    if (decision === "thread") {
+      unrestrictedThreads.set(pending.threadId, true);
+    }
     await emitPermission(pending.threadId, { type: "permission.resolved", id: approvalId, decision });
     pending.resolve(decision);
     return options.state(false);
@@ -660,10 +661,10 @@ export function registerRunIpc(options: {
 
   return {
     runningThreadIds: () => [...active.keys()],
-    unsafeThreadIds: () => [...unsafe],
+    unsafeThreadIds: (threadIds) => threadIds.filter(isThreadUnrestricted),
     isThreadRunning: (threadId) => active.has(threadId),
     isWorkspaceRunning: (workspaceId) => [...active.values()].some((run) => run.workspaceId === workspaceId),
-    forgetThreads: (threadIds) => threadIds.forEach((threadId) => unsafe.delete(threadId)),
+    forgetThreads: (threadIds) => threadIds.forEach((threadId) => unrestrictedThreads.delete(threadId)),
     stopAll: () => {
       for (const run of active.values()) {
         run.controller.abort();
@@ -671,6 +672,10 @@ export function registerRunIpc(options: {
       }
     },
   };
+
+  function isThreadUnrestricted(threadId: string): boolean {
+    return unrestrictedThreads.get(threadId) ?? process.platform === "win32";
+  }
 }
 
 type ProviderRoute = SubagentProviderRoute;
