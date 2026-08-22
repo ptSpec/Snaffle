@@ -831,6 +831,10 @@ export function App(): JSX.Element {
     Boolean(desktopState.imageUnderstanding.providerConnectionId) &&
     Boolean(desktopState.imageUnderstanding.model);
   const attachmentsTooLarge = attachmentTokens > selectedContextLength * 0.7;
+  const microsandboxBlocker = window.desktop.platform === "win32" &&
+    desktopState.microsandboxDetail.startsWith("Enable Windows Hypervisor Platform")
+    ? "You are in restricted mode. To continue without a sandbox, click Restricted and select ‘Allow unrestricted shell commands.’ To use the sandbox on Windows, enable Windows Hypervisor Platform in ‘Turn Windows features on or off,’ restart Windows, and ensure hardware virtualization is enabled in UEFI/BIOS."
+    : desktopState.microsandboxDetail;
   const runBlocker = !desktopState.workspace
     ? "Open a workspace before sending."
     : !task.trim() && pendingAttachments.length === 0
@@ -850,7 +854,7 @@ export function App(): JSX.Element {
             : !unsafeHostExecution && desktopState.restrictedEngine === "native" && !desktopState.restrictedHostAvailable
               ? desktopState.restrictedHostDetail
             : !unsafeHostExecution && desktopState.restrictedEngine === "microsandbox" && !desktopState.microsandboxAvailable
-              ? desktopState.microsandboxDetail
+              ? microsandboxBlocker
               : null;
 
   useEffect(() => {
