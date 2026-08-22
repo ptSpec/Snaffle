@@ -171,6 +171,29 @@ test("agent loop carries conversation history into a follow-up", async (t) => {
   ]);
 });
 
+test("agent loop rejects a response stopped by its output limit", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "agent-output-limit-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const trace = new MemoryTrace();
+
+  await assert.rejects(runAgent({
+    task: "Write a large file.",
+    provider: {
+      model: "limited-test-model",
+      providerId: "test",
+      connectionId: "test",
+      async complete() {
+        return { text: "Partial output", toolCalls: [], finishReason: "length" };
+      },
+    },
+    capabilities: builtInCapabilities(defaultTools()),
+    workspace: new LocalWorkspace(root, "disabled"),
+    trace,
+    signal: new AbortController().signal,
+  }), /stopped before completion \(length\)/);
+  assert.equal(trace.events.at(-1)?.type, "run.failed");
+});
+
 test("agent loop applies steering after the current model output", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "agent-steering-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));

@@ -63,9 +63,9 @@ export const PROVIDER_PROFILES: ProviderProfile[] = [
     id: "llama-cpp",
     name: "llama.cpp",
     defaultBaseUrl: "http://localhost:8080/v1",
-    apiKey: "none",
+    apiKey: "optional",
     description: "Connect to a llama.cpp server and discover its loaded model.",
-    baseUrlHint: "The default llama.cpp server uses port 8080 and the /v1 API.",
+    baseUrlHint: "Use the address printed by llama-server. Current releases default to port 8080 and plan to move to 9931.",
   },
   {
     id: "ollama",

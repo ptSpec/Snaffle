@@ -13,6 +13,7 @@ import {
 
 const MAX_STREAM_BUFFER_CHARS = 8 * 1024 * 1024;
 const MAX_STREAM_FIELD_CHARS = 4 * 1024 * 1024;
+const MAX_OUTPUT_TOKENS = 16_384;
 export const DEFAULT_PROVIDER_TIMEOUT_MS = 3 * 60 * 1000;
 export const DEFAULT_PROVIDER_RETRIES = 4;
 
@@ -102,6 +103,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
               },
             })),
             ...(this.sendParallelToolCalls ? { parallel_tool_calls: false } : {}),
+            max_tokens: MAX_OUTPUT_TOKENS,
             stream: true,
             stream_options: { include_usage: true },
             ...(this.temperature === undefined ? {} : { temperature: this.temperature }),
