@@ -47,11 +47,13 @@ export interface Workspace {
   readonly environment: string;
   read(path: string): Promise<string>;
   write(path: string, content: string): Promise<void>;
+  stageTemporary?(path: string, content: string): Promise<string | undefined>;
   search(query: string, options: SearchOptions, signal?: AbortSignal): Promise<string[]>;
   run(command: string, cwd: string | undefined, timeoutMs: number, signal?: AbortSignal): Promise<CommandResult>;
 }
 
 export type CommandExecution = "disabled" | "restricted" | "unsafe";
+export type RestrictedEngine = "native" | "microsandbox";
 
 export class LocalWorkspace implements Workspace {
   readonly root: string;
@@ -117,6 +119,11 @@ export class LocalWorkspace implements Workspace {
     }
 
     await rename(temporary, target);
+  }
+
+  async stageTemporary(filePath: string, content: string): Promise<string | undefined> {
+    if (this.commandExecution !== "restricted") return undefined;
+    return writeTemporaryFile(await this.temporaryDirectory(), filePath, content);
   }
 
   async search(query: string, options: SearchOptions, signal?: AbortSignal): Promise<string[]> {
@@ -350,6 +357,17 @@ export class LocalWorkspace implements Workspace {
   private relative(input: string): string {
     return path.relative(this.root, input);
   }
+}
+
+export async function writeTemporaryFile(directory: string, filePath: string, content: string): Promise<string> {
+  const parts = filePath.replaceAll("\\", "/").split("/");
+  if (!filePath || path.posix.isAbsolute(filePath) || parts.includes("..")) {
+    throw new Error("Invalid temporary file path");
+  }
+  const target = path.join(directory, ...parts);
+  await mkdir(path.dirname(target), { recursive: true });
+  await writeFile(target, content, "utf8");
+  return `$TMPDIR/${parts.join("/")}`;
 }
 
 function literalAbsolutePaths(command: string): string[] {

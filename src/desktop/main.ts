@@ -54,6 +54,8 @@ import {
   setGlobalSandboxNetworkAllowed,
 } from "../execution/access.js";
 import { probeNativeSandbox } from "../execution/native/sandbox.js";
+import { probeMicrosandbox } from "../execution/microsandbox/workspace.js";
+import type { RestrictedEngine } from "../execution/workspace.js";
 import {
   cleanInactiveThreadScratch,
   removeThreadScratch,
@@ -136,6 +138,7 @@ let editorCommand = "";
 let editorArguments = "";
 let maxSteps = DEFAULT_MAX_STEPS;
 let autoTitleGeneration = true;
+let restrictedEngine: RestrictedEngine = process.platform === "win32" ? "microsandbox" : "native";
 let sandboxNetworkEnabled = true;
 let providerTimeoutMinutes = DEFAULT_PROVIDER_TIMEOUT_MS / 60_000;
 let providerRetries = DEFAULT_PROVIDER_RETRIES;
@@ -184,6 +187,9 @@ async function start(): Promise<void> {
   editorArguments = typeof settings.editorArguments === "string" ? settings.editorArguments : "";
   maxSteps = validMaxSteps(settings.maxSteps) ?? DEFAULT_MAX_STEPS;
   autoTitleGeneration = settings.autoTitleGeneration !== false;
+  restrictedEngine = settings.restrictedEngine === "microsandbox"
+    ? "microsandbox"
+    : process.platform === "win32" ? "microsandbox" : "native";
   sandboxNetworkEnabled = await globalSandboxNetworkAllowed();
   providerTimeoutMinutes = validProviderTimeout(settings.providerTimeoutMinutes) ?? providerTimeoutMinutes;
   providerRetries = validProviderRetries(settings.providerRetries) ?? DEFAULT_PROVIDER_RETRIES;
@@ -312,6 +318,7 @@ function registerIpc(): void {
     settings: () => ({
       maxSteps,
       autoTitleGeneration,
+      restrictedEngine,
       sandboxNetworkEnabled,
       providerTimeoutMinutes,
       providerRetries,
@@ -535,9 +542,6 @@ function registerIpc(): void {
   });
 
   ipcMain.handle("desktop:choose-sandbox-folder", async (): Promise<string | null> => {
-    if (process.platform === "win32") {
-      throw new Error("Additional sandbox folders are available on macOS and Linux");
-    }
     const result = await dialog.showOpenDialog(mainWindow!, {
       title: "Choose a folder to allow",
       properties: ["openDirectory"],
@@ -556,6 +560,17 @@ function registerIpc(): void {
     if (typeof value !== "boolean") throw new Error("Automatic titles must be enabled or disabled");
     autoTitleGeneration = value;
     saveSettings({ autoTitleGeneration });
+  });
+
+  ipcMain.handle("desktop:set-restricted-engine", async (_event, value: unknown): Promise<DesktopState> => {
+    if (value !== "native" && value !== "microsandbox") throw new Error("Unknown restricted engine");
+    if (value === "native" && process.platform === "win32") {
+      throw new Error("Native restricted execution is unavailable on Windows");
+    }
+    if (runs.runningThreadIds().length) throw new Error("Restricted engine cannot change during a run");
+    restrictedEngine = value;
+    saveSettings({ restrictedEngine });
+    return desktopState(false);
   });
 
   ipcMain.handle("desktop:set-sandbox-network-enabled", async (_event, value: unknown): Promise<void> => {
@@ -708,7 +723,10 @@ function scratchRoot(): string {
 
 async function desktopState(includeConversation = true): Promise<DesktopState> {
   const state = await store.state();
-  const sandbox = await probeNativeSandbox();
+  const [sandbox, microsandbox] = await Promise.all([
+    probeNativeSandbox(),
+    probeMicrosandbox(),
+  ]);
   const conversation = includeConversation ? await store.entries(state.activeThreadId) : [];
   const workspace =
     state.workspaces.find((item) => item.id === state.activeWorkspaceId) ?? null;
@@ -762,6 +780,9 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     defaultProviderConnectionId: selectedProviderConnectionId,
     restrictedHostAvailable: sandbox.available,
     restrictedHostDetail: sandbox.detail,
+    restrictedEngine,
+    microsandboxAvailable: microsandbox.available,
+    microsandboxDetail: microsandbox.detail,
     themeId: activeTheme.id,
     animationsEnabled,
     interfaceFont,

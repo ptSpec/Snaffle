@@ -20,8 +20,13 @@ import { initialMessages } from "../../context/prompt.js";
 import { projectContext } from "../../context/projection.js";
 import { estimateContextCharacters, estimateContextTokens } from "../../context/budget.js";
 import { probeNativeSandbox } from "../../execution/native/sandbox.js";
+import { MicrosandboxWorkspace, probeMicrosandbox } from "../../execution/microsandbox/workspace.js";
 import { threadScratchDirectory } from "../../execution/scratch.js";
-import { LocalWorkspace, type CommandApprovalRequest } from "../../execution/workspace.js";
+import {
+  LocalWorkspace,
+  type CommandApprovalRequest,
+  type RestrictedEngine,
+} from "../../execution/workspace.js";
 import {
   isReasoningEffort,
   type ModelProvider,
@@ -74,6 +79,7 @@ export function registerRunIpc(options: {
   settings: () => {
     maxSteps: number;
     autoTitleGeneration: boolean;
+    restrictedEngine: RestrictedEngine;
     sandboxNetworkEnabled: boolean;
     providerTimeoutMinutes: number;
     providerRetries: number;
@@ -147,13 +153,15 @@ export function registerRunIpc(options: {
     const selectedThread = selectedWorkspace.threads.find((thread) => thread.id === input.threadId);
     if (!selectedThread) throw new Error("The selected thread no longer exists");
     if (active.has(input.threadId)) throw new Error("This thread is already running");
-    const unrestricted = process.platform === "win32" || unsafe.has(input.threadId);
+    const unrestricted = unsafe.has(input.threadId);
+    const settings = options.settings();
     if (!unrestricted) {
-      const sandbox = await probeNativeSandbox();
+      const sandbox = settings.restrictedEngine === "microsandbox"
+        ? await probeMicrosandbox()
+        : await probeNativeSandbox();
       if (!sandbox.available) throw new Error(sandbox.detail);
     }
 
-    const settings = options.settings();
     await options.store.setThreadModel(
       input.threadId,
       input.providerConnectionId,
@@ -168,15 +176,34 @@ export function registerRunIpc(options: {
           await globalSandboxAccess(),
           await options.store.sandboxAccess(selectedWorkspace.id, threadId),
         );
-    let workspace: LocalWorkspace;
-    workspace = new LocalWorkspace(
-      selectedWorkspace.path,
-      unrestricted ? "unsafe" : "restricted",
-      (request) => requestApproval(threadId, workspace, request),
-      sandboxAccess,
-      threadScratchDirectory(options.scratchRoot, threadId),
-      settings.sandboxNetworkEnabled,
-    );
+    const temporaryDirectory = threadScratchDirectory(options.scratchRoot, threadId);
+    let workspace: LocalWorkspace | MicrosandboxWorkspace;
+    if (!unrestricted && settings.restrictedEngine === "microsandbox") {
+      try {
+        workspace = await MicrosandboxWorkspace.create(
+          selectedWorkspace.path,
+          temporaryDirectory,
+          settings.sandboxNetworkEnabled,
+          sandboxAccess,
+        );
+      } catch (error) {
+        const recovery = process.platform === "win32"
+          ? "Close other applications and try again."
+          : "Close other applications and try again, or select Native execution.";
+        throw new Error(`Microsandbox could not start. ${recovery} ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+      }
+    } else {
+      let localWorkspace: LocalWorkspace;
+      localWorkspace = new LocalWorkspace(
+        selectedWorkspace.path,
+        unrestricted ? "unsafe" : "restricted",
+        (request) => requestApproval(threadId, localWorkspace, request),
+        sandboxAccess,
+        temporaryDirectory,
+        settings.sandboxNetworkEnabled,
+      );
+      workspace = localWorkspace;
+    }
     const run = {
       controller,
       threadId,
@@ -316,6 +343,7 @@ export function registerRunIpc(options: {
       const profile = settings.imageUnderstanding;
       if (!profile.enabled || !profile.providerConnectionId || !profile.model) {
         active.delete(threadId);
+        await workspace.close();
         throw new Error("The selected model cannot read images. Configure Image understanding in Agent settings.");
       }
       try {
@@ -391,6 +419,7 @@ export function registerRunIpc(options: {
         compactionInput.tools = toolSpecs;
       } catch (error) {
         active.delete(threadId);
+        await workspace.close();
         throw error;
       }
     }
@@ -535,9 +564,6 @@ export function registerRunIpc(options: {
     rawThreadId: unknown,
     rawInput: unknown,
   ): Promise<DesktopState> => {
-    if (process.platform !== "darwin" && process.platform !== "linux") {
-      throw new Error("Additional sandbox folders are available on macOS and Linux");
-    }
     const threadId = id(rawThreadId, "Thread");
     if (active.has(threadId)) throw new Error("Sandbox access cannot change during a run");
     await saveSandboxAccess(threadId, rawInput);

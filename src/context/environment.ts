@@ -26,14 +26,17 @@ export function currentEnvironmentContent(
   const shellPath = process.env.SHELL ?? process.env.COMSPEC;
   const shell = shellPath ? path.basename(shellPath.replaceAll("\\", "/")) : "unknown";
 
+  const runtime = executionEnvironment
+    ? `- Command environment: ${executionEnvironment}`
+    : `- Platform: ${platform} ${process.arch}
+- Workspace: current project root; use workspace-relative paths
+- Shell: ${shell}`;
+
   return `Current environment:
 - Current date: ${localDate(now)}
 - Time zone: ${zone} (${utcOffset(now)})
 - Preferred language: ${language} (${locale}); use it unless the user asks for another language
-- Platform: ${platform} ${process.arch}
-- Workspace: current project root; use workspace-relative paths
-- Shell: ${shell}${executionEnvironment ? `
-- Execution: ${executionEnvironment}` : ""}`;
+${runtime}`;
 }
 
 export function withCurrentEnvironment(messages: Message[], environment: Message): Message[] {

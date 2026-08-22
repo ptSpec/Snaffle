@@ -1069,10 +1069,16 @@ html[data-appearance="light"] .model-provider-mark.logo.allowance-critical::afte
   border-bottom: 1px solid color-mix(in srgb, var(--border-default) 65%, transparent);
 }
 
+.sandbox-engine-access,
 .sandbox-network-access {
   display: grid;
   gap: 7px;
   padding-top: 8px;
+}
+
+.sandbox-engine-access {
+  margin-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--border-default) 65%, transparent);
 }
 
 .sandbox-access-heading,

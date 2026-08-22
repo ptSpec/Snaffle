@@ -339,7 +339,7 @@ function safePath(workspace: string): string {
   return [...workspaceBins, ...systemPath, "/usr/bin", "/bin"].filter(unique).join(path.delimiter);
 }
 
-async function findGitMetadata(workspace: string): Promise<string[]> {
+export async function findGitMetadata(workspace: string): Promise<string[]> {
   const found: string[] = [];
   const pending = [workspace];
   const ignored = new Set(["node_modules", ".venv", "venv", "dist", "build"]);
