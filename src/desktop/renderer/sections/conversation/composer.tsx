@@ -198,7 +198,7 @@ export function Composer({
                 variants: providerProfile(connection.providerId).modelVariants ?? [],
                 models: models.map((model) => ({
                   value: model.id,
-                  label: model.name,
+                  label: model.toolUseUnavailableReason ? `${model.name} (No tool use)` : model.name,
                   ...(model.reasoning ? { reasoning: model.reasoning } : {}),
                 })),
               };

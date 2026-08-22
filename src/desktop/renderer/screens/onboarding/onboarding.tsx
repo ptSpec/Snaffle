@@ -95,15 +95,22 @@ export function Onboarding({
     : connections.find((item) => item.id === connectionId);
   const profile = providerProfile(connection?.providerId ?? providerId);
   const selectedCatalog = catalogs.find((item) => item.connection.id === connectionId);
+  const selectedModelError = selectedCatalog?.models.find((model) =>
+    model.toolUseUnavailableReason
+  )?.toolUseUnavailableReason;
   const defaultModelBase = splitModelVariant(defaultModel ?? "", profile.modelVariants).baseModelId;
-  const allModels = catalogs.flatMap((catalog) => catalog.models.map((model) => ({
-    value: modelValue(catalog.connection.id, model.id),
-    label: model.name,
-    detail: `${catalog.connection.name} · ${model.id}`,
-  })));
+  const allModels = catalogs.flatMap((catalog) => catalog.models.flatMap((model) =>
+    model.toolUseUnavailableReason ? [] : [{
+      value: modelValue(catalog.connection.id, model.id),
+      label: model.name,
+      detail: `${catalog.connection.name} · ${model.id}`,
+    }]
+  ));
   const modelReady = Boolean(
     connectionId && defaultModel && defaultConnectionId === connectionId &&
-    selectedCatalog?.models.some((model) => model.id === defaultModel || model.id === defaultModelBase),
+    selectedCatalog?.models.some((model) =>
+      !model.toolUseUnavailableReason && (model.id === defaultModel || model.id === defaultModelBase)
+    ),
   );
   const pendingCount = Object.values(sectionStates).filter((state) => state === "pending").length;
 
@@ -399,6 +406,7 @@ export function Onboarding({
                       </div>
                     ) : null}
                     {selectedCatalog?.error ? <p className="onboarding-note danger">{selectedCatalog.error}</p> : null}
+                    {selectedModelError ? <p className="onboarding-note danger">{selectedModelError}</p> : null}
                     {modelReady ? (
                       <div className="onboarding-decision">
                         <button

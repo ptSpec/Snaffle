@@ -833,6 +833,8 @@ export function App(): JSX.Element {
           ? "The selected provider connection is unavailable."
         : !selectedProviderModel
           ? "Select an available model before sending."
+        : selectedProviderModel.toolUseUnavailableReason
+          ? selectedProviderModel.toolUseUnavailableReason
         : attachmentsTooLarge
           ? "Attachments are too large for the selected model context."
           : imageUnsupported && !imageUnderstandingReady
@@ -1715,7 +1717,9 @@ export function App(): JSX.Element {
     ).baseModelId;
     const currentModelIsAvailable = state.defaultProviderConnectionId === connection.id &&
       catalog?.models.some((model) => model.id === state.defaultModel || model.id === currentBaseModel);
-    const defaultModel = currentModelIsAvailable ? state.defaultModel : catalog?.models[0]?.id ?? null;
+    const defaultModel = currentModelIsAvailable
+      ? state.defaultModel
+      : catalog?.models.find((model) => !model.toolUseUnavailableReason)?.id ?? null;
     if (defaultModel && !currentModelIsAvailable) {
       await window.desktop.setSelectedModel(null, connection.id, defaultModel);
     }

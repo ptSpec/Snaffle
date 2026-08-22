@@ -28,6 +28,7 @@ export type ProviderModel = {
   promptPrice?: string | null;
   completionPrice?: string | null;
   reasoning?: ProviderModelReasoning;
+  toolUseUnavailableReason?: string;
 };
 
 export type ProviderConnection = {

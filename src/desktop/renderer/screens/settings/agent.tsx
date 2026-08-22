@@ -48,19 +48,21 @@ export function AgentSettings({
           modelId: model.id,
           modelName: model.name,
           inputModalities: model.inputModalities,
+          toolUseUnavailableReason: model.toolUseUnavailableReason,
         }))
       : [],
   );
+  const toolModelChoices = modelChoices.filter((choice) => !choice.toolUseUnavailableReason);
   const selectedConnection = connections.find((connection) => connection.id === subagent.providerConnectionId);
-  const selectedChoice = modelChoices.find((choice) =>
+  const selectedChoice = toolModelChoices.find((choice) =>
     choice.connectionId === subagent.providerConnectionId && choice.modelId === subagent.model
   );
-  const subagentModelOptions = modelChoices.map((choice) => ({
+  const subagentModelOptions = toolModelChoices.map((choice) => ({
     value: modelValue(choice.connectionId, choice.modelId),
     label: choice.modelName,
     detail: `${choice.connectionName} · ${choice.modelId}`,
   }));
-  const overflowChoices = modelChoices.filter((choice) => choice.connectionId !== subagent.providerConnectionId);
+  const overflowChoices = toolModelChoices.filter((choice) => choice.connectionId !== subagent.providerConnectionId);
   const overflowOptions = overflowChoices.map((choice) => ({
     value: modelValue(choice.connectionId, choice.modelId),
     label: choice.modelName,
@@ -72,7 +74,9 @@ export function AgentSettings({
     label: choice.modelName,
     detail: `${choice.connectionName} · ${choice.modelId}`,
   }));
-  if (subagent.model && !selectedChoice) {
+  if (subagent.model && !modelChoices.some((choice) =>
+    choice.connectionId === subagent.providerConnectionId && choice.modelId === subagent.model
+  )) {
     subagentModelOptions.push({
       value: modelValue(subagent.providerConnectionId, subagent.model),
       label: subagent.model,
@@ -223,11 +227,11 @@ export function AgentSettings({
             </span>
             <SearchPicker
               value={modelValue(subagent.providerConnectionId, subagent.model)}
-              disabled={subagent.modelMode !== "fixed" || !modelChoices.length}
+              disabled={subagent.modelMode !== "fixed" || !toolModelChoices.length}
               className="subagent-model-picker"
               placeholder={subagent.modelMode === "main"
                 ? "Uses main conversation model"
-                : modelChoices.length ? "Select model" : "No models available"}
+                : toolModelChoices.length ? "Select model" : "No models available"}
               searchPlaceholder="Search providers and models…"
               options={subagentModelOptions}
               onChange={selectModel}

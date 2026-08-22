@@ -41,7 +41,7 @@ test("provider-declared model variants preserve the base model identity", () => 
 
 test("local provider presets reuse the OpenAI-compatible runtime", () => {
   const expected = [
-    ["llama-cpp", "http://localhost:8080/v1", "none"],
+    ["llama-cpp", "http://localhost:8080/v1", "optional"],
     ["ollama", "http://localhost:11434/v1", "none"],
     ["lm-studio", "http://localhost:1234/v1", "none"],
     ["omlx", "http://localhost:8000/v1", "optional"],
@@ -513,6 +513,7 @@ test("OpenAI-compatible provider repairs a common double-encoded tool call", asy
         model: string;
         messages: Array<{ role: string; content: string }>;
         parallel_tool_calls: boolean;
+        max_tokens: number;
         stream: boolean;
         temperature?: number;
         seed?: number;
@@ -524,6 +525,7 @@ test("OpenAI-compatible provider repairs a common double-encoded tool call", asy
       assert.equal(request.headers.authorization, "Bearer secret");
       assert.equal(parsed.model, "test-model");
       assert.equal(parsed.parallel_tool_calls, false);
+      assert.equal(parsed.max_tokens, 16_384);
       assert.equal(parsed.stream, true);
       assert.equal(parsed.temperature, 0);
       assert.equal(parsed.seed, 42);

@@ -141,6 +141,10 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
       await options.onMessage?.(assistantMessage, nextSequence);
       nextSequence += 1;
 
+      if (["length", "max_tokens", "incomplete"].includes(response.finishReason ?? "")) {
+        throw new Error(`Model response stopped before completion (${response.finishReason})`);
+      }
+
       if (response.toolCalls.length === 0) {
         const steeringCount = await appendSteering(messages, options.takeSteering?.(), options, nextSequence);
         if (steeringCount) {
