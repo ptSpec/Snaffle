@@ -248,13 +248,17 @@ export function Composer({
             <strong>
               {unsafe
                 ? "Unrestricted host execution"
-                : restrictedEngine === "microsandbox" ? microsandboxDetail : restrictedDetail}
+                : restrictedEngine === "microsandbox" && !microsandboxAvailable
+                  ? "Microsandbox unavailable"
+                  : restrictedEngine === "microsandbox" ? microsandboxDetail : restrictedDetail}
             </strong>
             <p>
               {unsafe
                 ? "Shell commands run as your user and can access host files, network, and inherited environment. File tools remain workspace-only."
                 : restrictedEngine === "microsandbox"
-                  ? <>Shell commands run in an isolated Linux environment using up to 2 GiB of memory and {sandboxNetworkEnabled ? "can use the network" : "cannot use the network"}. Only this workspace, private temporary storage, and locations below are host-backed.</>
+                  ? !microsandboxAvailable
+                    ? microsandboxDetail
+                    : <>Shell commands run in an isolated Linux environment using up to 2 GiB of memory and {sandboxNetworkEnabled ? "can use the network" : "cannot use the network"}. Only this workspace, private temporary storage, and locations below are host-backed.</>
                   : <>Shell commands can write in this workspace, use private temporary files, and {sandboxNetworkEnabled ? "use the network" : "cannot use the network"}.<br />Other host files and workspace Git metadata remain protected.</>}
             </p>
             {!unsafe ? (

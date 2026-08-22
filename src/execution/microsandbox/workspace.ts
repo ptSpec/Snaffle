@@ -213,9 +213,17 @@ async function probe(): Promise<MicrosandboxStatus> {
   } catch (error) {
     return {
       available: false,
-      detail: `Microsandbox is unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      detail: microsandboxUnavailableDetail(error),
     };
   }
+}
+
+function microsandboxUnavailableDetail(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (process.platform === "win32" && /Windows Hypervisor Platform|Hypervisor unavailable|hypervisor is not active/i.test(message)) {
+    return "Enable Windows Hypervisor Platform in ‘Turn Windows features on or off,’ then restart Windows. Hardware virtualization must also be enabled in UEFI/BIOS. To continue without isolation, turn on ‘Allow unrestricted shell commands.’";
+  }
+  return `Microsandbox is unavailable: ${message}`;
 }
 
 function microsandboxExecutable(): string {
