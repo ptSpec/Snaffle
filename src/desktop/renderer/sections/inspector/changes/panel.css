@@ -14,8 +14,8 @@
 
 .agent-change-turns {
   display: grid;
-  max-height: min(30%, 220px);
-  flex: 0 1 auto;
+  flex: 1;
+  align-content: start;
   min-width: 0;
   overflow-y: auto;
   border-top: 1px solid var(--border-default);
@@ -38,24 +38,13 @@
   border-bottom: 1px solid var(--border-default);
 }
 
-.agent-change-turn:hover,
-.agent-change-file-tabs button:hover {
+.agent-change-turn:hover {
   background: var(--hover-background);
 }
 
-.agent-change-turn.selected {
-  background: color-mix(in srgb, var(--hover-background) 78%, var(--card-background));
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-
-.agent-change-turn:focus-visible,
-.agent-change-file-tabs button:focus-visible {
+.agent-change-turn:focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 1px var(--border-focus);
-}
-
-.agent-change-turn.selected:focus-visible {
-  box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px var(--border-focus);
 }
 
 .agent-change-turn-copy {
@@ -64,9 +53,7 @@
   gap: 2px;
 }
 
-.agent-change-turn-copy strong,
-.agent-change-file-tabs strong,
-.agent-change-detail > header strong {
+.agent-change-turn-copy strong {
   overflow: hidden;
   color: var(--text-primary);
   font-weight: 550;
@@ -100,58 +87,6 @@
   font-style: normal;
 }
 
-.agent-change-files {
-  display: flex;
-  min-width: 0;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  color: var(--text-faint);
-  background: var(--panel);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.agent-change-files > span {
-  flex: 0 0 auto;
-}
-
-.agent-change-file-tabs {
-  display: flex;
-  min-width: 0;
-  gap: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.agent-change-file-tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.agent-change-file-tabs button {
-  display: flex;
-  max-width: min(360px, 55vw);
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 8px;
-  color: var(--text-muted);
-  font: inherit;
-  background: var(--code-background);
-  border: 1px solid var(--border-default);
-  border-radius: 6px;
-}
-
-.agent-change-file-tabs button.selected {
-  color: var(--text-primary);
-  background: var(--hover-background);
-  border-color: var(--text-faint);
-}
-
-.agent-change-file-tabs strong {
-  min-width: 0;
-}
-
 .agent-change-detail {
   display: flex;
   flex: 1;
@@ -161,21 +96,77 @@
   background: var(--code-background);
 }
 
-.agent-change-detail > header {
-  display: flex;
-  min-width: 0;
-  min-height: 42px;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px;
-  background: color-mix(in srgb, var(--panel) 78%, var(--code-background));
-  border-bottom: 1px solid var(--border-default);
+.agent-change-detail-heading {
+  position: relative;
+  flex-wrap: nowrap;
+  padding: 5px 12px 5px 20px;
+  background: var(--app-background);
+  border-bottom: 0;
 }
 
-.agent-change-detail > header strong {
+.agent-change-navigation {
+  position: relative;
   min-width: 0;
-  font-size: calc(13px * var(--interface-font-scale));
+  max-width: calc(100% - 90px);
+  margin-left: 0;
+}
+
+.agent-change-back,
+.agent-change-turn-picker {
+  flex: 0 0 auto;
+}
+
+.search-picker.agent-change-file-picker {
+  position: static;
+}
+
+.agent-change-picker .search-picker-trigger {
+  height: 32px;
+  padding: 4px 10px 4px 9px;
+  color: var(--text-strong);
+  font: inherit;
+  font-weight: 600;
+  background: transparent;
+  border: 0;
+  border-radius: 0 999px 999px 0;
+}
+
+.agent-change-picker .search-picker-trigger:hover,
+.agent-change-picker .search-picker-trigger[aria-expanded="true"] {
+  background: var(--hover-background);
+}
+
+.agent-change-picker .search-picker-menu {
+  box-sizing: border-box;
+  top: calc(100% + 5px);
+  width: 280px;
+  min-width: 0;
+}
+
+.agent-change-picker .search-picker-options span {
+  font-weight: 600;
+}
+
+.agent-change-turn-picker .search-picker-trigger {
+  border-right: 1px solid var(--border-default);
+  border-radius: 0;
+}
+
+.agent-change-file-picker {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.agent-change-file-picker .search-picker-menu {
+  right: 0;
+  left: auto;
+  width: 420px;
+  max-width: 100%;
+}
+
+.agent-change-turn-picker .search-picker-menu {
+  right: auto;
+  left: 0;
 }
 
 .agent-change-diff {
@@ -200,7 +191,7 @@
   padding: 6px 0;
   border: 0;
   border-radius: 0;
-  font: calc(11px * var(--interface-font-scale))/1.5 var(--font-code);
+  font: calc(var(--editor-font-size, 13px) - 1px)/1.65 var(--font-code);
 }
 
 .agent-change-diff code {

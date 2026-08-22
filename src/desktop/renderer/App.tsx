@@ -404,6 +404,15 @@ export function App(): JSX.Element {
     setLeftCollapsed(previous.leftCollapsed);
   }, []);
 
+  const hideRightPanel = useCallback((): void => {
+    setRightPanelFocus(false);
+    if (leftAutoCollapsed.current) {
+      leftAutoCollapsed.current = false;
+      setLeftCollapsed(false);
+    }
+    setRightCollapsed(true);
+  }, [setRightPanelFocus]);
+
   const selectInspectorTab = useCallback((tab: InspectorTab): void => {
     inspectorTabValue.current = tab;
     setInspectorTab(tab);
@@ -2129,7 +2138,7 @@ export function App(): JSX.Element {
       label: rightCollapsed ? "Show inspector" : "Hide inspector",
       keywords: "right panel inspect",
       disabled: view !== "conversation",
-      run: () => setRightCollapsed((value) => !value),
+      run: () => rightCollapsed ? setRightCollapsed(false) : hideRightPanel(),
     },
     {
       id: "terminal-toggle",
@@ -2513,16 +2522,13 @@ export function App(): JSX.Element {
               focused={rightPanelFocused.current}
               onTab={selectInspectorTab}
               onEnterFocus={() => setRightPanelFocus(true)}
-              onExitFocus={() => selectInspectorTab("inspect")}
+              onExitFocus={() => setRightPanelFocus(false)}
               onSelect={setSelectedItemId}
               onNavigateTurn={scrollToTimelineItem}
               onEditorOpen={handleGitEditorOpen}
               onGitRepositoryState={setGitRepositoryReady}
               onAskSelection={attachCodeSelection}
-              onCollapse={() => {
-                setRightPanelFocus(false);
-                setRightCollapsed(true);
-              }}
+              onCollapse={hideRightPanel}
             />
           ) : null}
         </aside>

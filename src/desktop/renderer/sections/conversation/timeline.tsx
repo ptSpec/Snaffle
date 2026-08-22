@@ -219,7 +219,6 @@ export function TimelineEntry({
           {!item.streaming && !item.intermediate && fileChangeSummary ? (
             <FileChangeSummaryCard
               summary={fileChangeSummary}
-              {...(onOpenFile ? { onOpenFile } : {})}
               {...(onReviewChanges ? { onReview: onReviewChanges } : {})}
             />
           ) : null}

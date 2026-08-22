@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type WheelEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { SearchPicker } from "../../../components/search-picker.js";
 import {
   fileChangeTurns,
   type FileChangeLine,
@@ -10,29 +11,54 @@ import "./panel.css";
 export default function ChangesPanel({
   timeline,
   request,
+  onBack,
+  onDetailOpen,
 }: {
   timeline: TimelineItem[];
   request: { turnId: string; requestId: number } | null;
+  onBack(): void;
+  onDetailOpen(open: boolean): void;
 }): JSX.Element {
   const turns = useMemo(() => fileChangeTurns(timeline), [timeline]);
   const latestTurn = turns.at(-1);
-  const [selectedTurnId, setSelectedTurnId] = useState(() => latestTurn?.id ?? "");
+  const [selectedTurnId, setSelectedTurnId] = useState<string | null>(() => latestTurn?.id ?? null);
   const [selectedFilePath, setSelectedFilePath] = useState(() => latestTurn?.files[0]?.path ?? "");
-  const turnElements = useRef(new Map<string, HTMLElement>());
-  const selectedTurn = turns.find((turn) => turn.id === selectedTurnId) ?? latestTurn;
+  const selectedTurn = turns.find((turn) => turn.id === selectedTurnId);
   const selectedFile = selectedTurn?.files.find((file) => file.path === selectedFilePath)
     ?? selectedTurn?.files[0];
+
+  function selectTurn(id: string): void {
+    const turn = turns.find((entry) => entry.id === id);
+    if (!turn) return;
+    setSelectedTurnId(turn.id);
+    setSelectedFilePath(turn.files[0]?.path ?? "");
+  }
+
+  function backToTurns(): void {
+    setSelectedTurnId(null);
+    onBack();
+  }
 
   useEffect(() => {
     const requestedTurn = request ? turns.find((turn) => turn.id === request.turnId) : undefined;
     if (!requestedTurn) return;
-    setSelectedTurnId(requestedTurn.id);
-    setSelectedFilePath(requestedTurn.files[0]?.path ?? "");
-    const frame = window.requestAnimationFrame(() => {
-      turnElements.current.get(requestedTurn.id)?.scrollIntoView({ block: "nearest" });
-    });
-    return () => window.cancelAnimationFrame(frame);
+    selectTurn(requestedTurn.id);
   }, [request, turns]);
+
+  useEffect(() => {
+    onDetailOpen(Boolean(selectedTurnId));
+  }, [onDetailOpen, selectedTurnId]);
+
+  useEffect(() => {
+    if (!selectedTurnId) return;
+    const handleEscape = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      backToTurns();
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [onBack, selectedTurnId]);
 
   if (!turns.length) {
     return <p className="inspector-empty">No file changes recorded from built-in tools.</p>;
@@ -40,67 +66,56 @@ export default function ChangesPanel({
 
   return (
     <div className="agent-changes-view">
-      <div className="agent-change-turns">
-        {turns.map((turn, index) => {
-          const selected = turn.id === selectedTurn?.id;
-          return (
-            <button
-              className={`agent-change-turn${selected ? " selected" : ""}`}
-              key={turn.id}
-              type="button"
-              ref={(element) => {
-                if (element) turnElements.current.set(turn.id, element);
-                else turnElements.current.delete(turn.id);
-              }}
-              onClick={() => {
-                setSelectedTurnId(turn.id);
-                setSelectedFilePath(turn.files[0]?.path ?? "");
-              }}
-            >
+      {selectedTurn && selectedFile ? (
+        <section className="agent-change-detail">
+          <div className="change-detail-heading agent-change-detail-heading">
+            <div className="change-navigation agent-change-navigation">
+              <button className="change-back agent-change-back" type="button" onClick={backToTurns} title="Back to turns (Esc)">
+                <svg className="change-back-icon" aria-hidden="true" viewBox="0 0 10 16"><path d="M8 1 1 8l7 7" /></svg>
+                <span>Back (Esc)</span>
+              </button>
+              <SearchPicker
+                className="agent-change-picker agent-change-turn-picker"
+                value={selectedTurn.id}
+                options={turns.map((turn, index) => ({
+                  value: turn.id,
+                  label: `Turn ${index + 1}`,
+                  detail: `${turn.title} · ${turn.label}`,
+                }))}
+                placeholder="Select turn"
+                searchPlaceholder="Search turns…"
+                onChange={selectTurn}
+              />
+              <SearchPicker
+                className="agent-change-picker agent-change-file-picker"
+                value={selectedFile.path}
+                options={selectedTurn.files.map((file) => ({
+                  value: file.path,
+                  label: compactFileName(file.path),
+                  detail: parentPath(file.path),
+                }))}
+                placeholder="Select changed file"
+                searchPlaceholder="Search changed files…"
+                onChange={setSelectedFilePath}
+              />
+            </div>
+            <ChangeCounts added={selectedFile.added} removed={selectedFile.removed} />
+          </div>
+          <FileDiff turn={selectedTurn} file={selectedFile} />
+        </section>
+      ) : (
+        <div className="agent-change-turns">
+          {turns.map((turn, index) => (
+            <button className="agent-change-turn" key={turn.id} type="button" onClick={() => selectTurn(turn.id)}>
               <span className="agent-change-turn-copy">
                 <strong>{turn.title}</strong>
                 <small>Turn {index + 1} · {turn.label}</small>
               </span>
               <ChangeCounts added={turn.added} removed={turn.removed} />
             </button>
-          );
-        })}
-      </div>
-      {selectedTurn ? (
-        <div className="agent-change-files">
-          <span>Files · {selectedTurn.files.length}</span>
-          <div
-            className="agent-change-file-tabs"
-            role="tablist"
-            aria-label="Changed files"
-            onWheel={scrollFilesHorizontally}
-          >
-            {selectedTurn.files.map((file) => (
-              <button
-                className={file.path === selectedFile?.path ? "selected" : ""}
-                type="button"
-                role="tab"
-                aria-selected={file.path === selectedFile?.path}
-                key={file.path}
-                title={file.path}
-                onClick={() => setSelectedFilePath(file.path)}
-              >
-                <strong>{file.path}</strong>
-                <ChangeCounts added={file.added} removed={file.removed} />
-              </button>
-            ))}
-          </div>
+          ))}
         </div>
-      ) : null}
-      {selectedTurn && selectedFile ? (
-        <section className="agent-change-detail">
-          <header>
-            <strong title={selectedFile.path}>{selectedFile.path}</strong>
-            <ChangeCounts added={selectedFile.added} removed={selectedFile.removed} />
-          </header>
-          <FileDiff turn={selectedTurn} file={selectedFile} />
-        </section>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -133,14 +148,16 @@ function ChangeCounts({ added, removed }: { added: number; removed: number }): J
   return <span className="agent-change-counts"><b>+{added}</b><i>−{removed}</i></span>;
 }
 
-function scrollFilesHorizontally(event: WheelEvent<HTMLDivElement>): void {
-  if (Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
-  const strip = event.currentTarget;
-  const next = Math.max(0, Math.min(
-    strip.scrollWidth - strip.clientWidth,
-    strip.scrollLeft + event.deltaY,
-  ));
-  if (next === strip.scrollLeft) return;
-  event.preventDefault();
-  strip.scrollLeft = next;
+function fileName(path: string): string {
+  return path.slice(path.lastIndexOf("/") + 1);
+}
+
+function compactFileName(path: string): string {
+  const name = fileName(path);
+  return name.length > 40 ? `${name.slice(0, 24)}…${name.slice(-15)}` : name;
+}
+
+function parentPath(path: string): string | null {
+  const slash = path.lastIndexOf("/");
+  return slash < 0 ? null : path.slice(0, slash);
 }

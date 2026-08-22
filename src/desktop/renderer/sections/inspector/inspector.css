@@ -3,6 +3,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  container-type: inline-size;
   padding: 48px 0 14px 8px;
   overflow: hidden;
   background: var(--app-background);
@@ -28,10 +29,6 @@
 
 .platform-darwin .panel-reopen.left {
   left: 80px;
-}
-
-.platform-darwin .inspector .panel-toggle {
-  transform: translateY(2px);
 }
 
 .inspector-card {

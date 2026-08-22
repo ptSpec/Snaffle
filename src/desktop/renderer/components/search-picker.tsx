@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 export type SearchPickerOption = {
   value: string;
   label?: string;
-  detail?: string;
+  detail?: string | null;
 };
 
 export function SearchPicker({
@@ -102,21 +102,25 @@ export function SearchPicker({
             aria-label={searchPlaceholder}
           />
           <div className="search-picker-options">
-            {matches.map((option, index) => (
-              <button
-                className={index === activeIndex ? "active" : ""}
-                ref={index === activeIndex ? activeOption : undefined}
-                type="button"
-                key={option.value}
-                onMouseEnter={() => setActiveIndex(index)}
-                onClick={() => choose(option.value)}
-              >
-                <span>{option.label ?? option.value}</span>
-                {option.detail || (option.label && option.label !== option.value)
-                  ? <small>{option.detail ?? option.value}</small>
-                  : null}
-              </button>
-            ))}
+            {matches.map((option, index) => {
+              const detail = option.detail === null
+                ? null
+                : option.detail ?? (option.label && option.label !== option.value ? option.value : null);
+              return (
+                <button
+                  className={index === activeIndex ? "active" : ""}
+                  ref={index === activeIndex ? activeOption : undefined}
+                  type="button"
+                  key={option.value}
+                  title={option.value}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onClick={() => choose(option.value)}
+                >
+                  <span>{option.label ?? option.value}</span>
+                  {detail ? <small>{detail}</small> : null}
+                </button>
+              );
+            })}
             {!matches.length ? <small className="search-picker-empty">No matches</small> : null}
           </div>
         </div>
