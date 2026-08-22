@@ -428,6 +428,11 @@
   padding: 0 6px 8px;
 }
 
+.change-select-all,
+.change-file {
+  user-select: none;
+}
+
 .change-select-all {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr) auto;
