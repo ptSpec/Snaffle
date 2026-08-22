@@ -194,6 +194,59 @@ test("OpenAI-compatible provider sends attachment content without storing payloa
   assert.equal(resolutions, 1);
 });
 
+test("llama.cpp receives one leading system message and active reasoning_content", async (t) => {
+  let messages: Array<Record<string, unknown>> = [];
+  const server = createServer((request, response) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk: string) => (body += chunk));
+    request.on("end", () => {
+      messages = (JSON.parse(body) as { messages: Array<Record<string, unknown>> }).messages;
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ choices: [{ message: { content: "Done" } }] }));
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Test server did not start");
+
+  const provider = new OpenAICompatibleProvider({
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    model: "qwen",
+    providerId: "llama-cpp",
+  });
+  await provider.complete([
+    { role: "system", content: "Base instructions" },
+    { role: "user", content: "Inspect the project" },
+    { role: "system", content: "Current environment" },
+    {
+      role: "assistant",
+      content: "",
+      reasoning: "I should inspect package.json.",
+      toolCalls: [{ id: "tool-1", name: "read_file", input: { path: "package.json" } }],
+    },
+    { role: "tool", toolCallId: "tool-1", content: "{}" },
+  ], [], new AbortController().signal);
+
+  assert.deepEqual(messages, [
+    { role: "system", content: "Base instructions\n\nCurrent environment" },
+    { role: "user", content: "Inspect the project" },
+    {
+      role: "assistant",
+      content: null,
+      reasoning_content: "I should inspect package.json.",
+      tool_calls: [{
+        id: "tool-1",
+        type: "function",
+        function: { name: "read_file", arguments: "{\"path\":\"package.json\"}" },
+      }],
+    },
+    { role: "tool", tool_call_id: "tool-1", content: "{}" },
+  ]);
+});
+
 test("Anthropic Messages preserves signed thinking through an active tool loop", async (t) => {
   const requests: Array<Record<string, unknown>> = [];
   const server = createServer((request, response) => {
@@ -313,6 +366,32 @@ test("OpenAI-compatible model discovery works for local or hosted connections", 
       inputModalities: ["text"],
     }],
   );
+});
+
+test("llama.cpp model discovery uses the active server context", async (t) => {
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({
+      data: [{ id: "qwen", meta: { n_ctx: 131_072, n_ctx_train: 262_144 } }],
+    }));
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Test server did not start");
+
+  const catalog = await providerCatalog({
+    id: "llama-test",
+    providerId: "llama-cpp",
+    name: "llama.cpp",
+    baseUrl: `http://127.0.0.1:${address.port}/v1`,
+    enabled: true,
+    requestLimit: 1,
+    hasApiKey: false,
+    manualModels: [],
+  });
+  assert.equal(catalog.models[0]?.contextLength, 131_072);
 });
 
 test("a manual model can test successfully when discovery is unavailable", async (t) => {
