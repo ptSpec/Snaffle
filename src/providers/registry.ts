@@ -175,6 +175,7 @@ function openAICompatibleDefinition(id: string): ProviderDefinition {
         connection.apiKey,
         signal,
         profile.defaultContextLength,
+        id === "llama-cpp",
       );
       return id === "llama-cpp"
         ? models.map((model) => ({ ...model, reasoning: { efforts: ["none" as const] } }))

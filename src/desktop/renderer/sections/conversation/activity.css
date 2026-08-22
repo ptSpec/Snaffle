@@ -270,7 +270,6 @@
   align-items: center;
   gap: 11px;
   padding: 11px 13px;
-  border-bottom: 1px solid var(--border-default);
 }
 
 .file-change-summary-icon {
@@ -324,14 +323,12 @@
   background: var(--diff-removed-text);
 }
 
-.file-change-summary b,
-.file-change-counts b {
+.file-change-summary b {
   color: var(--diff-added-text);
   font-weight: 500;
 }
 
-.file-change-summary i,
-.file-change-counts i {
+.file-change-summary i {
   color: var(--diff-removed-text);
   font-style: normal;
 }
@@ -353,72 +350,6 @@
 .file-change-summary button:focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 1px var(--border-focus);
-}
-
-.file-change-summary ul {
-  display: grid;
-  gap: 0;
-  margin: 0;
-  padding: 5px 0;
-  list-style: none;
-}
-
-.file-change-summary li {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 12px;
-  padding: 0 7px 0 13px;
-}
-
-.file-change-summary li.interactive {
-  transition: background-color 120ms ease;
-}
-
-.file-change-summary li.interactive:hover {
-  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
-}
-
-.file-change-summary li.interactive:hover > button {
-  color: var(--text-primary);
-}
-
-.file-change-summary li > button,
-.file-change-summary li > span:first-child {
-  min-width: 0;
-  padding: 6px 5px;
-  overflow: hidden;
-  color: var(--text-muted);
-  background: transparent;
-  border: 0;
-  border-radius: 5px;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.file-change-summary li > button::after {
-  display: inline-block;
-  margin-left: 7px;
-  content: "›";
-  opacity: 0;
-  transform: translateX(-3px);
-  transition: opacity 120ms ease, transform 120ms ease;
-}
-
-.file-change-summary li.interactive:hover > button::after,
-.file-change-summary li > button:focus-visible::after {
-  opacity: 1;
-  transform: translateX(0);
-}
-
-.file-change-counts {
-  display: inline-flex;
-  flex: 0 0 auto;
-  gap: 5px;
-  margin-left: auto;
-  padding-right: 6px;
-  font-variant-numeric: tabular-nums;
 }
 
 @keyframes file-change-balance-in {

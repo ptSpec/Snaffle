@@ -37,11 +37,9 @@ export function isFileMutationTool(name: string): boolean {
 
 export function FileChangeSummaryCard({
   summary,
-  onOpenFile,
   onReview,
 }: {
   summary: FileChangeSummary;
-  onOpenFile?: (path: string) => void;
   onReview?: () => void;
 }): JSX.Element {
   const changedLines = summary.added + summary.removed;
@@ -65,18 +63,6 @@ export function FileChangeSummaryCard({
         </span>
         {onReview ? <button type="button" onClick={onReview}>Review</button> : null}
       </header>
-      <ul>
-        {summary.files.map((file) => (
-          <li className={onOpenFile ? "interactive" : undefined} key={file.path}>
-            {onOpenFile ? (
-              <button type="button" onClick={() => onOpenFile(file.path)} title={`Open ${file.path}`}>
-                {file.path}
-              </button>
-            ) : <span title={file.path}>{file.path}</span>}
-            <span className="file-change-counts"><b>+{file.added}</b> <i>−{file.removed}</i></span>
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }

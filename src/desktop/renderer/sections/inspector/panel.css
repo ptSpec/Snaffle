@@ -21,39 +21,6 @@
   -webkit-app-region: no-drag;
 }
 
-.inspector-focus-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 7px 4px 5px;
-  color: var(--text-muted);
-  background: transparent;
-  border: 0;
-  border-radius: 6px;
-  font-size: calc(12px * var(--interface-font-scale));
-  -webkit-app-region: no-drag;
-}
-
-.inspector-focus-back:hover {
-  color: var(--text-primary);
-  background: var(--hover-background);
-}
-
-.inspector-focus-back:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 1px var(--border-focus);
-}
-
-.inspector-focus-back svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentcolor;
-  stroke-width: 1.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
 .inspector-focus-expand {
   display: inline-flex;
   align-items: center;
@@ -461,6 +428,11 @@
   padding: 0 6px 8px;
 }
 
+.change-select-all,
+.change-file {
+  user-select: none;
+}
+
 .change-select-all {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr) auto;
@@ -775,6 +747,17 @@ html[data-appearance="light"] .change-detail-heading .change-back:hover {
   color: var(--status-danger-text);
   font-size: calc(14px * var(--interface-font-scale));
   line-height: 1.4;
+}
+
+@container (max-width: 620px) {
+  .inspector-focus-expand span,
+  .change-detail-heading .change-back span {
+    display: none;
+  }
+
+  .change-navigation {
+    max-width: calc(100% - 100px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
