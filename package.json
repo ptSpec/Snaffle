@@ -21,6 +21,7 @@
     "demo:inspector": "node scripts/seed-inspector-demo.mjs",
     "start": "node dist/src/cli.js",
     "benchmark:edit": "npm run build && node --env-file-if-exists=.env benchmark/edit-protocol.mjs",
+    "benchmark:harness": "npm run build && node --env-file-if-exists=.env benchmark/harness-comparison.mjs",
     "test": "npm run build && node --test dist/test/*.test.js"
   },
   "dependencies": {
