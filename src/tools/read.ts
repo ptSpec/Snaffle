@@ -2,7 +2,7 @@ import { integerField, objectInput, stringField, ToolInputError, type Tool } fro
 import { DEFAULT_TOOL_OUTPUT_CHARS } from "./output.js";
 
 export const readTool: Tool = {
-  name: "read_file",
+  name: "read",
   description:
     "Read a UTF-8 file as raw text. Use offset as the first line and limit as the number of lines to read. Returns at most 2000 complete lines or about 12000 characters; if more remains, the result gives the exact offset for the next read.",
   exampleInput: { path: "src/app.ts", offset: 1, limit: 200 },

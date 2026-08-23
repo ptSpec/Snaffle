@@ -234,7 +234,7 @@ test("web fetch stages recognized documents at a reusable temporary path", async
   const temporaryPath = /Complete extracted document: (\$TMPDIR\/\S+)/.exec(result.content)?.[1];
   assert.ok(temporaryPath);
   assert.doesNotMatch(result.content, /Continue with start/);
-  assert.doesNotMatch(result.content, /run_command|not read_file/);
+  assert.doesNotMatch(result.content, /run_command|not read/);
 
   const complete = await readTool.execute(workspace, { path: temporaryPath });
   assert.match(complete.content, /End of report\./);
@@ -387,7 +387,7 @@ test("tool input healer repairs a quoted object with a malformed integer", () =>
   const healed = healToolCall(
     {
       id: "call-1",
-      name: "read_file",
+      name: "read",
       input: providerInput.input,
       ...(providerInput.repair ? { inputRepair: providerInput.repair } : {}),
     },
@@ -409,7 +409,7 @@ test("tool input healer accepts one edit without an array", () => {
   const healed = healToolCall(
     {
       id: "call-1",
-      name: "edit_file",
+      name: "edit",
       input: {
         path: "src/app.ts",
         edits: { oldText: "const port = 3000;", newText: "const port = 4000;" },
@@ -425,11 +425,61 @@ test("tool input healer accepts one edit without an array", () => {
   assert.equal(healed.inputRepair, '"edits" was one object; wrapped it in an array');
 });
 
+test("tool input healer accepts the legacy top-level edit shape", () => {
+  const healed = healToolCall(
+    {
+      id: "call-1",
+      name: "edit",
+      input: {
+        path: "src/app.ts",
+        oldText: "const port = 3000;",
+        newText: "const port = 4000;",
+      },
+    },
+    editTool.inputSchema,
+  );
+
+  assert.deepEqual(healed.input, {
+    path: "src/app.ts",
+    edits: [{ oldText: "const port = 3000;", newText: "const port = 4000;" }],
+  });
+  assert.equal(
+    healed.inputRepair,
+    'Top-level "oldText" and "newText" were converted to one item in "edits"',
+  );
+});
+
+test("edit schema advertises single and multiple replacement shapes", () => {
+  const schema = editTool.inputSchema;
+  assert.deepEqual(schema.required, ["path"]);
+  assert.deepEqual(schema.anyOf, [
+    { required: ["oldText", "newText"] },
+    { required: ["edits"] },
+  ]);
+  assert.ok((schema.properties as Record<string, unknown>).oldText);
+  assert.ok((schema.properties as Record<string, unknown>).newText);
+  assert.ok((schema.properties as Record<string, unknown>).edits);
+});
+
+test("tool input healer accepts contents as the write content field", () => {
+  const healed = healToolCall(
+    {
+      id: "call-1",
+      name: "write",
+      input: { path: "src/app.ts", contents: "export {};\n" },
+    },
+    writeTool.inputSchema,
+  );
+
+  assert.deepEqual(healed.input, { path: "src/app.ts", content: "export {};\n" });
+  assert.equal(healed.inputRepair, '"contents" was renamed to "content"');
+});
+
 test("tool input healer parses stringified array properties", () => {
   const healed = healToolCall(
     {
       id: "call-1",
-      name: "edit_file",
+      name: "edit",
       input: {
         path: "src/app.ts",
         edits: JSON.stringify([
@@ -451,7 +501,7 @@ test("tool input healer repairs raw newlines in stringified arrays", () => {
   const healed = healToolCall(
     {
       id: "call-1",
-      name: "edit_file",
+      name: "edit",
       input: {
         path: "src/app.ts",
         edits: '[{"oldText":"first\nsecond","newText":"changed\ntext"}]',

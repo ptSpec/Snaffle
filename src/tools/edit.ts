@@ -1,11 +1,11 @@
 import { objectInput, stringField, ToolInputError, type Tool } from "./tool.js";
 
 export const editTool: Tool = {
-  name: "edit_file",
+  name: "edit",
   description:
-    "Apply one or more exact-text replacements to one file. Each oldText must match exactly once in the original file, including whitespace. Multiple edits must identify distinct, non-overlapping regions of that original file. Reuse current text already known from a successful read, write, or edit; reread only when the text is unknown or a match fails.",
+    "Apply exact-text replacements to one file. For one replacement, pass top-level oldText and newText. For multiple replacements, pass an edits JSON array directly, never as a quoted string. Each oldText must match exactly once in the original file, including whitespace, and multiple edits must identify distinct, non-overlapping regions. Reuse current text already known from a successful read, write, or edit; reread only when the text is unknown or a match fails.",
   inputErrorHint:
-    "This failure concerns the edit_file input shape, not the editing strategy. The edits field must be a JSON array, not quoted text containing an array. Prefer correcting and retrying edit_file with the working shape below; rewriting an existing file with write_file usually uses more tokens and may overwrite unrelated changes.",
+    "This failure concerns the edit input shape, not the editing strategy. Use top-level oldText and newText for one replacement, or an edits JSON array for multiple replacements; never quote or encode the array as a string. Prefer correcting and retrying edit with the working shape below; rewriting an existing file with write usually uses more tokens and may overwrite unrelated changes.",
   exampleInput: {
     path: "src/app.ts",
     edits: [
@@ -17,11 +17,19 @@ export const editTool: Tool = {
     type: "object",
     properties: {
       path: { type: "string", description: "Required. Workspace-relative file path or $TMPDIR temporary path." },
+      oldText: {
+        type: "string",
+        description: "For one replacement. Small exact current text that occurs once, including whitespace.",
+      },
+      newText: {
+        type: "string",
+        description: "For one replacement. Replacement text; an empty string deletes oldText.",
+      },
       edits: {
         type: "array",
         minItems: 1,
         description:
-          "Required JSON array, passed directly rather than quoted or encoded as a string. Use one array item for one exact replacement and multiple items for separate regions of the original file.",
+          "For multiple replacements. Pass the JSON array directly rather than quoting or encoding it as a string. Each item targets a separate region of the original file.",
         items: {
           type: "object",
           properties: {
@@ -39,7 +47,11 @@ export const editTool: Tool = {
         },
       },
     },
-    required: ["path", "edits"],
+    required: ["path"],
+    anyOf: [
+      { required: ["oldText", "newText"] },
+      { required: ["edits"] },
+    ],
     additionalProperties: false,
   },
   async execute(workspace, rawInput) {

@@ -225,7 +225,7 @@ test("llama.cpp receives one leading system message and active reasoning_content
       role: "assistant",
       content: "",
       reasoning: "I should inspect package.json.",
-      toolCalls: [{ id: "tool-1", name: "read_file", input: { path: "package.json" } }],
+      toolCalls: [{ id: "tool-1", name: "read", input: { path: "package.json" } }],
     },
     { role: "tool", toolCallId: "tool-1", content: "{}" },
   ], [], new AbortController().signal);
@@ -240,7 +240,7 @@ test("llama.cpp receives one leading system message and active reasoning_content
       tool_calls: [{
         id: "tool-1",
         type: "function",
-        function: { name: "read_file", arguments: "{\"path\":\"package.json\"}" },
+        function: { name: "read", arguments: "{\"path\":\"package.json\"}" },
       }],
     },
     { role: "tool", tool_call_id: "tool-1", content: "{}" },
@@ -261,7 +261,7 @@ test("Anthropic Messages preserves signed thinking through an active tool loop",
         response.write('data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}}\n\n');
         response.write('data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Inspect first. "}}\n\n');
         response.write('data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig-123"}}\n\n');
-        response.write('data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"tool-1","name":"read_file","input":{}}}\n\n');
+        response.write('data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"tool-1","name":"read","input":{}}}\n\n');
         response.write('data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"path\\":\\"package.json\\"}"}}\n\n');
         response.write('data: {"type":"content_block_stop","index":1}\n\n');
         response.write('data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":4}}\n\n');
@@ -290,7 +290,7 @@ test("Anthropic Messages preserves signed thinking through an active tool loop",
   const first = await provider.complete(
     [{ role: "system", content: "Be concise." }, { role: "user", content: "Inspect the project" }],
     [{
-      name: "read_file",
+      name: "read",
       description: "Read a workspace file",
       inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
     }],
@@ -299,7 +299,7 @@ test("Anthropic Messages preserves signed thinking through an active tool loop",
 
   assert.equal(first.reasoning, "Inspect first. ");
   assert.deepEqual(first.toolCalls, [
-    { id: "tool-1", name: "read_file", input: { path: "package.json" } },
+    { id: "tool-1", name: "read", input: { path: "package.json" } },
   ]);
   assert.deepEqual(first.usage, {
     inputTokens: 10,
@@ -335,7 +335,7 @@ test("Anthropic Messages preserves signed thinking through an active tool loop",
       role: "assistant",
       content: [
         { type: "thinking", thinking: "Inspect first. ", signature: "sig-123" },
-        { type: "tool_use", id: "tool-1", name: "read_file", input: { path: "package.json" } },
+        { type: "tool_use", id: "tool-1", name: "read", input: { path: "package.json" } },
       ],
     },
     { role: "user", content: [{ type: "tool_result", tool_use_id: "tool-1", content: "{}" }] },
@@ -555,7 +555,7 @@ test("OpenAI-compatible provider repairs a common double-encoded tool call", asy
                     id: "call-1",
                     type: "function",
                     function: {
-                      name: "read_file",
+                      name: "read",
                       arguments: JSON.stringify('{"path":"package.json"]}'),
                     },
                   },
@@ -585,7 +585,7 @@ test("OpenAI-compatible provider repairs a common double-encoded tool call", asy
     [{ role: "user", content: "Inspect the project" }],
     [
       {
-        name: "read_file",
+        name: "read",
         description: "Read a file",
         inputSchema: { type: "object" },
       },
@@ -596,7 +596,7 @@ test("OpenAI-compatible provider repairs a common double-encoded tool call", asy
   assert.deepEqual(result.toolCalls, [
     {
       id: "call-1",
-      name: "read_file",
+      name: "read",
       input: { path: "package.json" },
       inputRepair:
         "Arguments were sent as a quoted JSON string; converted them to a JSON object; The JSON ended with an extra ]; removed it",
@@ -627,7 +627,7 @@ test("OpenAI-compatible provider streams text and assembles tool calls", async (
     );
     response.write('data: {"choices":[{"delta":{"content":"now."}}]}\n\n');
     response.write(
-      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","function":{"name":"read_file","arguments":"{\\"path\\":"}}]}}]}\n\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","function":{"name":"read","arguments":"{\\"path\\":"}}]}}]}\n\n',
     );
     response.write(
       'data: {"choices":[{"finish_reason":"tool_calls","delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"package.json\\"}"}}]}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"cost":0.001,"prompt_tokens_details":{"cached_tokens":4},"completion_tokens_details":{"reasoning_tokens":2}}}\n\n',
@@ -669,13 +669,13 @@ test("OpenAI-compatible provider streams text and assembles tool calls", async (
     { type: "text.delta", text: "Checking " },
     { type: "reasoning.delta", text: "I should inspect the manifest. " },
     { type: "text.delta", text: "now." },
-    { type: "tool.delta", index: 0, name: "read_file", argumentChars: 8 },
+    { type: "tool.delta", index: 0, name: "read", argumentChars: 8 },
   ]);
   assert.equal(result.text, "Checking now.");
   assert.equal(result.reasoning, "I should inspect the manifest. ");
   assert.equal(requestCount, 2);
   assert.deepEqual(result.toolCalls, [
-    { id: "call-1", name: "read_file", input: { path: "package.json" } },
+    { id: "call-1", name: "read", input: { path: "package.json" } },
   ]);
   assert.deepEqual(result.usage, {
     inputTokens: 10,

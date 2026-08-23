@@ -589,10 +589,10 @@ function ToolSurfaceControl({
 
 function toolLabel(name: string): string {
   if (name === "run_command") return "Run command";
-  if (name === "read_file") return "Read file";
-  if (name === "search_files") return "Search files";
-  if (name === "edit_file") return "Edit file";
-  if (name === "write_file") return "Write file";
+  if (name === "read") return "Read file";
+  if (name === "search") return "Search files";
+  if (name === "edit") return "Edit file";
+  if (name === "write") return "Write file";
   if (name === "update_plan") return "Plan";
   if (name === "web_search") return "Web search";
   if (name === "web_fetch") return "Web fetch";
