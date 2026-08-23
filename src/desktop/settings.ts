@@ -8,6 +8,7 @@ import type { McpServerConfig } from "../mcp/types.js";
 import type { FontId } from "./typography.js";
 import type { ImageUnderstandingProfile } from "../attachments/vision.js";
 import type { ModelToolSurfaces } from "../capabilities/surface.js";
+import type { RestrictedEngine } from "../execution/workspace.js";
 
 export type SavedSettings = {
   onboardingComplete?: unknown;
@@ -25,6 +26,7 @@ export type SavedSettings = {
   editorArguments?: unknown;
   maxSteps?: unknown;
   autoTitleGeneration?: unknown;
+  restrictedEngine?: unknown;
   providerTimeoutMinutes?: unknown;
   providerRetries?: unknown;
   subagent?: unknown;
@@ -61,6 +63,7 @@ export type SettingsUpdate = {
   editorArguments?: string;
   maxSteps?: number;
   autoTitleGeneration?: boolean;
+  restrictedEngine?: RestrictedEngine;
   providerTimeoutMinutes?: number;
   providerRetries?: number;
   subagent?: SubagentProfile;

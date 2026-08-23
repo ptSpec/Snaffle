@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { createServer } from "node:net";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { healToolCall, healToolInput } from "../src/tools/input.js";
@@ -21,7 +22,8 @@ import { nativeSandboxStatus } from "../src/execution/native/sandbox.js";
 
 async function fixture(): Promise<{ root: string; workspace: LocalWorkspace }> {
   const root = await mkdtemp(path.join(tmpdir(), "tool-test-"));
-  return { root, workspace: new LocalWorkspace(root, "unsafe") };
+  const temporary = path.join(root, ".thread-temporary");
+  return { root, workspace: new LocalWorkspace(root, "unsafe", undefined, [], temporary) };
 }
 
 test("the five explicit file and command tools work together", async (t) => {
@@ -118,6 +120,68 @@ test("file search stops at its requested result bound", async (t) => {
   assert.doesNotMatch(result.content, /many\.txt:5:/);
 });
 
+test("file search includes two lines around each match", async (t) => {
+  const { root, workspace } = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(path.join(root, "context.txt"), [
+    "first before",
+    "second before",
+    "target line",
+    "first after",
+    "second after",
+  ].join("\n"));
+
+  const result = await searchTool.execute(workspace, { query: "target", path: "context.txt" });
+
+  assert.equal(result.content, [
+    "context.txt-1-first before",
+    "context.txt-2-second before",
+    "context.txt:3:target line",
+    "context.txt-4-first after",
+    "context.txt-5-second after",
+  ].join("\n"));
+});
+
+test("temporary paths work across file tools, search, and unsafe commands", async (t) => {
+  const { root, workspace } = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(path.join(root, "workspace.txt"), "shared search phrase in workspace\n");
+
+  await writeTool.execute(workspace, {
+    path: "$TMPDIR/notes/example.txt",
+    content: "shared search phrase in temporary storage\n",
+  });
+  await editTool.execute(workspace, {
+    path: "$TMPDIR/notes/example.txt",
+    edits: [{ oldText: "temporary storage", newText: "thread storage" }],
+  });
+
+  const read = await readTool.execute(workspace, { path: "$TMPDIR/notes/example.txt" });
+  assert.equal(read.content, "shared search phrase in thread storage\n");
+
+  const search = await searchTool.execute(workspace, {
+    query: "shared search phrase",
+    maxResults: 10,
+  });
+  assert.match(search.content, /workspace\.txt:1:shared search phrase in workspace/);
+  assert.match(search.content, /\$TMPDIR\/notes\/example\.txt:1:shared search phrase in thread storage/);
+
+  const commandRead = await workspace.run(
+    `node -e "process.stdout.write(require('node:fs').readFileSync(require('node:path').join(process.env.TMPDIR, 'notes/example.txt'), 'utf8'))"`,
+    undefined,
+    5_000,
+  );
+  assert.equal(commandRead.stdout, "shared search phrase in thread storage\n");
+
+  const commandWrite = await workspace.run(
+    `node -e "require('node:fs').writeFileSync(require('node:path').join(process.env.TMPDIR, 'from-command.txt'), 'written by command')"`,
+    "$TMPDIR",
+    5_000,
+  );
+  assert.equal(commandWrite.exitCode, 0);
+  assert.equal(await workspace.read("$TMPDIR/from-command.txt"), "written by command");
+});
+
 test("web fetch exposes continuation instead of silently cutting a page", async (t) => {
   const { root, workspace } = await fixture();
   const originalFetch = globalThis.fetch;
@@ -148,6 +212,37 @@ test("web fetch exposes continuation instead of silently cutting a page", async 
     maxChars: 1_000,
   });
   assert.match(continued.content, /Showing characters 1000-1999 of 2500/);
+});
+
+test("web fetch stages recognized documents at a reusable temporary path", async (t) => {
+  const { root, workspace } = await fixture();
+  const originalFetch = globalThis.fetch;
+  const documentText = `Start of report. ${"Operating margin increased. ".repeat(100)}End of report.`;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    return rm(root, { recursive: true, force: true });
+  });
+  globalThis.fetch = async () => new Response(`{\\rtf1\\ansi ${documentText}}`, {
+    status: 200,
+    headers: { "Content-Type": "application/rtf" },
+  });
+
+  const result = await webFetchTool(false).execute(workspace, {
+    url: "https://example.com/report.rtf",
+    maxChars: 1_000,
+  });
+  const temporaryPath = /Complete extracted document: (\$TMPDIR\/\S+)/.exec(result.content)?.[1];
+  assert.ok(temporaryPath);
+  assert.doesNotMatch(result.content, /Continue with start/);
+  assert.doesNotMatch(result.content, /run_command|not read_file/);
+
+  const complete = await readTool.execute(workspace, { path: temporaryPath });
+  assert.match(complete.content, /End of report\./);
+  const search = await searchTool.execute(workspace, {
+    query: "End of report",
+    path: temporaryPath,
+  });
+  assert.ok(search.content.startsWith(`${temporaryPath}:1:`));
 });
 
 test("web fetch recognizes supported YouTube video URLs", () => {
@@ -442,6 +537,27 @@ test("workspace rejects symlinks that leave its root", async (t) => {
   await assert.rejects(workspace.write("escape/new.txt", "no"), /leaves the workspace/);
 });
 
+test("temporary paths reject unsupported prefixes, traversal, and symlink escapes", async (t) => {
+  const { root, workspace } = await fixture();
+  const outside = await mkdtemp(path.join(tmpdir(), "temporary-outside-test-"));
+  t.after(() => Promise.all([
+    rm(root, { recursive: true, force: true }),
+    rm(outside, { recursive: true, force: true }),
+  ]));
+  await workspace.write("$TMPDIR/inside.txt", "inside");
+  await writeFile(path.join(outside, "secret.txt"), "secret");
+  await symlink(outside, path.join(root, ".thread-temporary/escape"));
+
+  await assert.rejects(workspace.read("$TMPDIR/../secret.txt"), /leaves the temporary storage/);
+  await assert.rejects(workspace.read("$TMPDIR/escape/secret.txt"), /leaves the temporary storage/);
+  await assert.rejects(workspace.write("$TMPDIR/escape/new.txt", "no"), /leaves the temporary storage/);
+  await assert.rejects(workspace.read("$HOME/secret.txt"), /Only \$TMPDIR is supported/);
+  await assert.rejects(workspace.read("~/secret.txt"), /Only \$TMPDIR is supported/);
+
+  await workspace.write("$TMPDIR/repo/.git/config", "allowed");
+  assert.equal(await workspace.read("$TMPDIR/repo/.git/config"), "allowed");
+});
+
 test("restricted commands stay inside the workspace", async (t) => {
   if (!nativeSandboxStatus().available) return t.skip(nativeSandboxStatus().detail);
 
@@ -462,11 +578,14 @@ test("restricted commands stay inside the workspace", async (t) => {
   await writeFile(secret, "secret");
   const workspace = new LocalWorkspace(root, "restricted");
   t.after(() => workspace.close());
+  await workspace.write("$TMPDIR/file-tool.txt", "written by file tool");
 
   const inside = await workspace.run("printf ok > generated.txt", undefined, 5000);
   const temporaryWrite = await workspace.run("printf persistent > \"$TMPDIR/persistent\"", undefined, 5000);
   const temporaryRead = await workspace.run("cat \"$TMPDIR/persistent\"", undefined, 5000);
+  const temporaryFileToolRead = await workspace.run("cat \"$TMPDIR/file-tool.txt\"", undefined, 5000);
   const temporaryGitWrite = await workspace.run("mkdir -p \"$TMPDIR/repo/.git\" && touch \"$TMPDIR/repo/.git/config\"", undefined, 5000);
+  const temporaryCwd = await workspace.run("test -f .git/config", "$TMPDIR/repo", 5000);
   const listing = await workspace.run("ls -la", undefined, 5000);
   const nestedDirectory = await workspace.run("cd nested && pwd", undefined, 5000);
   const outsideRead = await workspace.run(`cat ${JSON.stringify(secret)}`, undefined, 5000);
@@ -477,7 +596,10 @@ test("restricted commands stay inside the workspace", async (t) => {
   assert.equal(inside.exitCode, 0);
   assert.equal(temporaryWrite.exitCode, 0);
   assert.equal(temporaryRead.stdout, "persistent");
+  assert.equal(temporaryFileToolRead.stdout, "written by file tool");
   assert.equal(temporaryGitWrite.exitCode, 0);
+  assert.equal(temporaryCwd.exitCode, 0);
+  assert.equal(await workspace.read("$TMPDIR/persistent"), "persistent");
   assert.equal(listing.exitCode, 0);
   assert.equal(nestedDirectory.exitCode, 0);
   assert.equal(await readFile(path.join(root, "generated.txt"), "utf8"), "ok");
@@ -532,6 +654,77 @@ test("restricted commands can be approved once or for the thread", async (t) => 
   assert.equal(after.exitCode, 0);
   assert.equal(approvals, 2);
   assert.equal(await readFile(path.join(root, ".git/after"), "utf8"), "after");
+});
+
+test("explicit host home references require approval before restricted execution", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "sandbox-home-approval-"));
+  const decisions = ["deny", "once"] as const;
+  const requests: string[] = [];
+  let approvals = 0;
+  const workspace = new LocalWorkspace(root, "restricted", async (request) => {
+    requests.push(request.reason);
+    return decisions[approvals++] ?? "deny";
+  });
+  t.after(() => Promise.all([workspace.close(), rm(root, { recursive: true, force: true })]));
+
+  const denied = await workspace.run("cat ~/.zshrc 2>/dev/null || echo misleading-missing", undefined, 5000);
+  const allowed = await workspace.run('printf %s "$HOME"/.zshrc', undefined, 5000);
+
+  assert.equal(denied.stdout, "");
+  assert.match(denied.stderr, /Host access was not approved/);
+  assert.equal(allowed.stdout, path.join(homedir(), ".zshrc"));
+  assert.equal(allowed.approval, "once");
+  assert.equal(approvals, 2);
+  assert.ok(requests.every((reason) => reason.includes("host home directory")));
+});
+
+test("macOS native sandbox allows private sockets and IP networking but blocks host Unix sockets", async (t) => {
+  if (process.platform !== "darwin") return t.skip("Seatbelt-specific behavior");
+  if (!nativeSandboxStatus().available) return t.skip(nativeSandboxStatus().detail);
+
+  const root = await mkdtemp(path.join(tmpdir(), "sandbox-network-workspace-"));
+  const outside = await mkdtemp(path.join(tmpdir(), "sandbox-network-socket-"));
+  const socketPath = path.join(outside, "daemon.sock");
+  const unixServer = createServer((socket) => socket.end("unix-reachable"));
+  const tcpServer = createServer((socket) => socket.end("tcp-reachable"));
+  await new Promise<void>((resolve, reject) => {
+    unixServer.once("error", reject);
+    unixServer.listen(socketPath, resolve);
+  });
+  await new Promise<void>((resolve, reject) => {
+    tcpServer.once("error", reject);
+    tcpServer.listen(0, "127.0.0.1", resolve);
+  });
+  const address = tcpServer.address();
+  assert.ok(address && typeof address !== "string");
+  const decisions = ["deny", "once"] as const;
+  let approvals = 0;
+  const workspace = new LocalWorkspace(root, "restricted", async () => decisions[approvals++] ?? "deny");
+  t.after(async () => {
+    await workspace.close();
+    await Promise.all([
+      new Promise<void>((resolve) => unixServer.close(() => resolve())),
+      new Promise<void>((resolve) => tcpServer.close(() => resolve())),
+    ]);
+    await Promise.all([root, outside].map((directory) => rm(directory, { recursive: true, force: true })));
+  });
+
+  const client = "const net=require('node:net');const target=process.argv[1];const socket=/^\\d+$/.test(target)?net.connect(Number(target),'127.0.0.1'):net.connect(target);socket.on('data',data=>process.stdout.write(data));socket.on('error',error=>{console.error(error.message);process.exit(2)});";
+  const roundTrip = "const net=require('node:net');const target=process.argv[1];const server=net.createServer(socket=>socket.end('private'));server.listen(target,()=>{const client=net.connect(target);client.on('data',data=>process.stdout.write(data));client.on('end',()=>server.close())});server.on('error',error=>{console.error(error.message);process.exit(2)});";
+  const unix = await workspace.run(`node -e ${JSON.stringify(client)} ${JSON.stringify(socketPath)}`, undefined, 5000);
+  const approvedUnix = await workspace.run(`node -e ${JSON.stringify(client)} ${JSON.stringify(socketPath)}`, undefined, 5000);
+  const tcp = await workspace.run(`node -e ${JSON.stringify(client)} ${address.port}`, undefined, 5000);
+  const projectSocket = await workspace.run(`node -e ${JSON.stringify(roundTrip)} workspace.sock`, undefined, 5000);
+  const temporarySocket = await workspace.run(`node -e ${JSON.stringify(roundTrip)} "$TMPDIR/private.sock"`, undefined, 5000);
+
+  assert.notEqual(unix.exitCode, 0);
+  assert.match(unix.stderr, /EPERM|Operation not permitted/i);
+  assert.equal(approvedUnix.stdout, "unix-reachable");
+  assert.equal(approvedUnix.approval, "once");
+  assert.equal(approvals, 2);
+  assert.equal(tcp.stdout, "tcp-reachable");
+  assert.equal(projectSocket.stdout, "private");
+  assert.equal(temporarySocket.stdout, "private");
 });
 
 test("restricted commands can retry with a newly granted folder", async (t) => {

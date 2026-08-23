@@ -19,36 +19,54 @@ export function ModelCallInspector({
   const availableTools = item.toolNames?.length
     ? tools.filter((tool) => item.toolNames!.includes(tool.name))
     : tools;
+  const duration = item.durationMs ? formatDuration(item.durationMs) : null;
 
   return (
     <div className="model-call-inspector">
-      <div className="inspector-card">
+      <header className="inspector-detail-header">
         <p className="eyebrow">Model call</p>
-        <h3>{item.model ?? "Model"}</h3>
-        <p className="muted">
-          {[item.providerConnectionId, item.durationMs ? formatDuration(item.durationMs) : null]
+        <div className="inspector-detail-title">
+          <span className={`inspector-detail-dot ${item.streaming ? "running" : "success"}`} aria-hidden="true" />
+          <h3>{item.model ?? "Model"}</h3>
+          {duration ? <time>{duration}</time> : null}
+        </div>
+        <p className="inspector-detail-meta">
+          {[item.providerConnectionId, item.usage?.totalTokens ? `${compactNumber(item.usage.totalTokens)} tokens` : null]
             .filter(Boolean).join(" · ")}
         </p>
-      </div>
+      </header>
 
-      <details className="inspector-section" open>
+      {item.text ? (
+        <details className="inspector-section" open>
+          <summary>Response</summary>
+          <CopyableOutput>{item.text}</CopyableOutput>
+        </details>
+      ) : null}
+
+      {item.reasoning ? (
+        <details className="inspector-section" open={!item.text && !item.toolCalls?.length}>
+          <summary>Reasoning</summary>
+          <CopyableOutput>{item.reasoning}</CopyableOutput>
+        </details>
+      ) : null}
+
+      {item.toolCalls?.length ? (
+        <details className="inspector-section" open={!item.text}>
+          <summary>Tool calls · {item.toolCalls.length}</summary>
+          <JsonInspector value={item.toolCalls} />
+        </details>
+      ) : null}
+
+      <details className="inspector-section">
         <summary>Input</summary>
         <h4>Instructions</h4>
-        {instructions.length ? instructions.map((instruction, index) => (
-          <pre key={index}>{instruction}</pre>
-        )) : <p className="muted">No stored system instruction is available for this call.</p>}
+        {instructions.length
+          ? <CopyableOutput>{instructions.join("\n\n")}</CopyableOutput>
+          : <p className="muted">No stored system instruction is available for this call.</p>}
         <h4>Request messages</h4>
         <JsonInspector value={messages} />
         <h4>Available tools · {availableTools.length}</h4>
         <JsonInspector value={availableTools} />
-      </details>
-
-      <details className="inspector-section" open>
-        <summary>Output</summary>
-        {item.reasoning ? <><h4>Reasoning</h4><CopyableOutput>{item.reasoning}</CopyableOutput></> : null}
-        <h4>Response</h4>
-        <CopyableOutput>{item.text || "No text response"}</CopyableOutput>
-        {item.toolCalls?.length ? <><h4>Tool calls</h4><JsonInspector value={item.toolCalls} /></> : null}
       </details>
 
       <details className="inspector-section">
@@ -117,4 +135,8 @@ function lastIndex(items: TimelineItem[], matches: (item: TimelineItem) => boole
 
 function formatDuration(milliseconds: number): string {
   return milliseconds < 1000 ? `${milliseconds}ms` : `${(milliseconds / 1000).toFixed(1)}s`;
+}
+
+function compactNumber(value: number): string {
+  return value < 1_000 ? String(value) : `${(value / 1_000).toFixed(value < 10_000 ? 1 : 0)}k`;
 }

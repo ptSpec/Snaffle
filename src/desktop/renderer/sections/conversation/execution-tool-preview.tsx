@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { TimelineItem } from "./timeline-state.js";
 import "./execution-tool-preview.css";
 
@@ -7,9 +7,10 @@ type ToolItem = Extract<TimelineItem, { kind: "tool" }>;
 const COMMAND_LINES = 16;
 const SEARCH_RESULTS = 12;
 const READ_LINES = 18;
+const WEB_SOURCES = 6;
 
 export function isExecutionPreviewTool(name: string): boolean {
-  return name === "run_command" || name === "search_files" || name === "read_file";
+  return name === "run_command" || name === "search_files" || name === "read_file" || name === "web_search" || name === "web_fetch";
 }
 
 export function ExecutionToolPreview({
@@ -19,6 +20,7 @@ export function ExecutionToolPreview({
   autoExpanded,
   statusClass,
   duration,
+  disclosureCommand,
   onSelect,
 }: {
   item: ToolItem;
@@ -27,13 +29,24 @@ export function ExecutionToolPreview({
   autoExpanded: boolean;
   statusClass: string;
   duration?: string | undefined;
+  disclosureCommand?: { id: number; open: boolean } | null;
   onSelect(): void;
 }): JSX.Element | null {
   const preview = previewFor(item);
-  const [open, setOpen] = useState(autoExpanded);
+  const autoReveal = autoExpanded && document.documentElement.dataset.animations !== "off";
+  const [open, setOpen] = useState(autoReveal);
+  const manuallyToggled = useRef(false);
 
   useEffect(() => {
-    if (autoExpanded) {
+    if (disclosureCommand) setOpen(disclosureCommand.open);
+  }, [disclosureCommand]);
+
+  useEffect(() => {
+    if (!autoReveal && document.documentElement.dataset.animations === "off") {
+      if (!manuallyToggled.current) setOpen(false);
+      return;
+    }
+    if (autoReveal) {
       setOpen(true);
       return;
     }
@@ -45,7 +58,7 @@ export function ExecutionToolPreview({
     const remaining = Math.max(0, visibleAt + 1_500 - Date.now());
     const timeout = window.setTimeout(() => setOpen(false), remaining);
     return () => window.clearTimeout(timeout);
-  }, [autoExpanded, item.completedAt, item.startedAt, turnRunning]);
+  }, [autoReveal, item.completedAt, item.startedAt, turnRunning]);
 
   if (!preview) return null;
 
@@ -58,8 +71,16 @@ export function ExecutionToolPreview({
         aria-expanded={open}
         title="Inspect tool call and toggle result"
         onClick={() => {
-          onSelect();
-          if (!autoExpanded) setOpen(!selected);
+          if (!selected) {
+            onSelect();
+            if (!autoReveal) {
+              manuallyToggled.current = true;
+              setOpen(true);
+            }
+          } else if (!autoReveal) {
+            manuallyToggled.current = true;
+            setOpen((current) => !current);
+          }
         }}
       >
         <PreviewIcon kind={preview.kind} />
@@ -79,6 +100,8 @@ export function ExecutionToolPreview({
             {preview.kind === "command" ? <CommandPreview preview={preview} running={item.phase === "running"} /> : null}
             {preview.kind === "search" ? <SearchPreview preview={preview} running={item.phase === "running"} /> : null}
             {preview.kind === "read" ? <ReadPreview preview={preview} running={item.phase === "running"} /> : null}
+            {preview.kind === "web" ? <WebSearchPreview preview={preview} running={item.phase === "running"} /> : null}
+            {preview.kind === "fetch" ? <WebFetchPreview preview={preview} running={item.phase === "running"} /> : null}
           </div>
         </div>
       </div>
@@ -113,12 +136,53 @@ type ReadData = {
   lines: string[];
   hiddenLines: number;
 };
-type PreviewData = CommandData | SearchData | ReadData;
+type WebSearchData = {
+  kind: "web";
+  title: string;
+  subtitle: string;
+  query: string;
+  domains: string[];
+};
+type WebFetchData = {
+  kind: "fetch";
+  title: string;
+  subtitle: string;
+  domain: string;
+};
+type PreviewData = CommandData | SearchData | ReadData | WebSearchData | WebFetchData;
 
 function CommandPreview({ preview, running }: { preview: CommandData; running: boolean }): JSX.Element {
+  const [copied, setCopied] = useState(false);
+
+  async function copyCommand(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(preview.command);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1_200);
+    } catch {
+      setCopied(false);
+    }
+  }
+
   return (
     <>
-      <div className="execution-command-line"><span aria-hidden="true">$</span><code>{preview.command}</code>{running ? <i aria-hidden="true" /> : null}</div>
+      <div className="execution-command-line">
+        <span aria-hidden="true">$</span>
+        <code>{preview.command}</code>
+        {running ? <i aria-hidden="true" /> : null}
+        <button
+          type="button"
+          onClick={() => void copyCommand()}
+          aria-label={copied ? "Command copied" : "Copy command"}
+          title={copied ? "Copied" : "Copy command"}
+        >
+          {copied ? (
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8 3 3 6-7" /></svg>
+          ) : (
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8" height="8" rx="1.5" /><path d="M3 10H2.5A1.5 1.5 0 0 1 1 8.5v-6A1.5 1.5 0 0 1 2.5 1h6A1.5 1.5 0 0 1 10 2.5V3" /></svg>
+          )}
+        </button>
+      </div>
       {running ? <RunningIndicator label="Running command" /> : (
         <>
           {preview.lines.length ? <ResultLines lines={preview.lines} /> : <p className="execution-tool-empty">No command output.</p>}
@@ -168,6 +232,41 @@ function ReadPreview({ preview, running }: { preview: ReadData; running: boolean
   );
 }
 
+function WebSearchPreview({ preview, running }: { preview: WebSearchData; running: boolean }): JSX.Element {
+  const domains = preview.domains.slice(0, WEB_SOURCES);
+  return (
+    <>
+      <div className={running ? "execution-search-query execution-web-query running" : "execution-search-query execution-web-query"}>
+        <SearchIcon />
+        <code>{preview.query}</code>
+        <small>public web</small>
+      </div>
+      {running ? <RunningIndicator label="Finding sources" /> : domains.length ? (
+        <div className="execution-web-sources">
+          {domains.map((domain, index) => (
+            <span className="execution-web-source" key={domain} style={{ "--tool-result-delay": `${index * 70}ms` } as CSSProperties}>
+              <i aria-hidden="true">{domain[0]}</i>
+              <small>{domain}</small>
+            </span>
+          ))}
+          {preview.domains.length > domains.length ? <small>+{preview.domains.length - domains.length}</small> : null}
+        </div>
+      ) : <p className="execution-tool-empty">No sources returned.</p>}
+    </>
+  );
+}
+
+function WebFetchPreview({ preview, running }: { preview: WebFetchData; running: boolean }): JSX.Element {
+  return (
+    <div className={running ? "execution-web-sources fetching" : "execution-web-sources"}>
+      <span className="execution-web-source">
+        <i aria-hidden="true">{preview.domain[0]}</i>
+        <small>{preview.domain}</small>
+      </span>
+    </div>
+  );
+}
+
 function ResultLines({ lines }: { lines: string[] }): JSX.Element {
   return (
     <pre className="execution-command-output"><code>{lines.map((line, index) => (
@@ -195,6 +294,8 @@ function previewFor(item: ToolItem): PreviewData | null {
   if (item.call.name === "run_command") return commandData(item, input);
   if (item.call.name === "search_files") return searchData(item, input);
   if (item.call.name === "read_file") return readData(item, input);
+  if (item.call.name === "web_search") return webSearchData(item, input);
+  if (item.call.name === "web_fetch") return webFetchData(item, input);
   return null;
 }
 
@@ -262,11 +363,57 @@ function readData(item: ToolItem, input: Record<string, unknown>): ReadData | nu
   };
 }
 
+function webSearchData(item: ToolItem, input: Record<string, unknown>): WebSearchData | null {
+  const query = stringValue(input.query);
+  if (!query) return null;
+  const domains = sourceDomains(item.content ?? "");
+  return {
+    kind: "web",
+    title: item.isError
+      ? "Web search failed"
+      : item.phase === "running"
+        ? "Searching the web"
+        : domains.length ? `Found ${domains.length} site${domains.length === 1 ? "" : "s"}` : "Web search completed",
+    subtitle: `“${query}”`,
+    query,
+    domains,
+  };
+}
+
+function webFetchData(item: ToolItem, input: Record<string, unknown>): WebFetchData | null {
+  const url = stringValue(input.url);
+  if (!url) return null;
+  return {
+    kind: "fetch",
+    title: item.isError ? "Fetch failed" : item.phase === "running" ? "Fetching page" : "Fetched page",
+    subtitle: url,
+    domain: domainName(url) ?? url,
+  };
+}
+
+function sourceDomains(content: string): string[] {
+  const domains = new Set<string>();
+  for (const match of content.matchAll(/https?:\/\/[^\s)\]]+/g)) {
+    const domain = domainName(match[0].replace(/[.,;:]+$/, ""));
+    if (domain) domains.add(domain);
+  }
+  return [...domains];
+}
+
+function domainName(rawUrl: string): string | undefined {
+  try {
+    return new URL(rawUrl).hostname.replace(/^www\./, "");
+  } catch {
+    return undefined;
+  }
+}
+
 function PreviewIcon({ kind }: { kind: PreviewData["kind"] }): JSX.Element {
   if (kind === "command") {
     return <svg className="tool-row-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="1.5" y="3" width="13" height="10" rx="2" /><path d="m4 6 2 2-2 2M8 10h3" /></svg>;
   }
   if (kind === "search") return <SearchIcon className="tool-row-icon" />;
+  if (kind === "web" || kind === "fetch") return <GlobeIcon className="tool-row-icon" />;
   return <FileIcon className="tool-row-icon" />;
 }
 
@@ -276,6 +423,10 @@ function SearchIcon({ className }: { className?: string }): JSX.Element {
 
 function FileIcon({ className }: { className?: string }): JSX.Element {
   return <svg className={className} viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 1.5h6l4 4v9H3zM9 1.5v4h4" /></svg>;
+}
+
+function GlobeIcon({ className }: { className?: string }): JSX.Element {
+  return <svg className={className} viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.5" /><path d="M1.5 8h13M8 1.5c2 2 3 4.2 3 6.5s-1 4.5-3 6.5c-2-2-3-4.2-3-6.5s1-4.5 3-6.5" /></svg>;
 }
 
 function textLines(text: string): string[] {

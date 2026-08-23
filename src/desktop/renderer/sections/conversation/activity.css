@@ -270,7 +270,6 @@
   align-items: center;
   gap: 11px;
   padding: 11px 13px;
-  border-bottom: 1px solid var(--border-default);
 }
 
 .file-change-summary-icon {
@@ -324,14 +323,12 @@
   background: var(--diff-removed-text);
 }
 
-.file-change-summary b,
-.file-change-counts b {
+.file-change-summary b {
   color: var(--diff-added-text);
   font-weight: 500;
 }
 
-.file-change-summary i,
-.file-change-counts i {
+.file-change-summary i {
   color: var(--diff-removed-text);
   font-style: normal;
 }
@@ -353,72 +350,6 @@
 .file-change-summary button:focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 1px var(--border-focus);
-}
-
-.file-change-summary ul {
-  display: grid;
-  gap: 0;
-  margin: 0;
-  padding: 5px 0;
-  list-style: none;
-}
-
-.file-change-summary li {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 12px;
-  padding: 0 7px 0 13px;
-}
-
-.file-change-summary li.interactive {
-  transition: background-color 120ms ease;
-}
-
-.file-change-summary li.interactive:hover {
-  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
-}
-
-.file-change-summary li.interactive:hover > button {
-  color: var(--text-primary);
-}
-
-.file-change-summary li > button,
-.file-change-summary li > span:first-child {
-  min-width: 0;
-  padding: 6px 5px;
-  overflow: hidden;
-  color: var(--text-muted);
-  background: transparent;
-  border: 0;
-  border-radius: 5px;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.file-change-summary li > button::after {
-  display: inline-block;
-  margin-left: 7px;
-  content: "›";
-  opacity: 0;
-  transform: translateX(-3px);
-  transition: opacity 120ms ease, transform 120ms ease;
-}
-
-.file-change-summary li.interactive:hover > button::after,
-.file-change-summary li > button:focus-visible::after {
-  opacity: 1;
-  transform: translateX(0);
-}
-
-.file-change-counts {
-  display: inline-flex;
-  flex: 0 0 auto;
-  gap: 5px;
-  margin-left: auto;
-  padding-right: 6px;
-  font-variant-numeric: tabular-nums;
 }
 
 @keyframes file-change-balance-in {
@@ -833,14 +764,45 @@
   font-size: calc(11px * var(--interface-font-scale));
 }
 
+.activity-group-actions {
+  display: flex;
+  justify-content: flex-start;
+  max-width: calc(760px - 14px);
+  gap: 2px;
+  margin: 5px 0 -6px 14px;
+}
+
+.activity-group-actions button {
+  padding: 4px 6px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font: inherit;
+  font-size: calc(11px * var(--interface-font-scale));
+}
+
+.activity-group-actions button:hover {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
 .activity-group-body {
   max-width: calc(760px - 14px);
   gap: 3.3px;
   margin: 10px 0 5px 14px;
+  animation: activity-group-drop 180ms cubic-bezier(0.2, 0.75, 0.3, 1) both;
 }
 
 .activity-group-body::before {
   top: 14px;
+}
+
+@keyframes activity-group-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
 }
 
 .activity-group-item .reasoning-block,
@@ -877,6 +839,28 @@
   grid-template-columns: minmax(0, auto) auto;
   width: fit-content;
   padding: 5.5px 6px;
+}
+
+.activity-group-item time {
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-group-item .tool-row time,
+.activity-group-item .reasoning-duration {
+  box-sizing: border-box;
+  min-width: 50px;
+  margin-left: 2px;
+  padding-inline: 7px;
+  text-align: center;
+  border-left: 1px solid var(--border-default);
+}
+
+.activity-group-item .reasoning-duration {
+  order: 2;
+}
+
+.activity-group-item .reasoning-chevron {
+  order: 3;
 }
 
 .reasoning-block > .activity-disclosure-summary {
@@ -1027,24 +1011,4 @@
   50% {
     opacity: 0.25;
   }
-}
-
-.inspector-status.running {
-  color: var(--status-info-text);
-  background: var(--status-info-background);
-}
-
-.inspector-status.success {
-  color: var(--status-success-text);
-  background: var(--status-success-background);
-}
-
-.inspector-status.tool-error {
-  color: var(--status-danger-text);
-  background: var(--status-danger-background);
-}
-
-.inspector-status.command-error {
-  color: var(--status-warning-text);
-  background: var(--status-warning-background);
 }

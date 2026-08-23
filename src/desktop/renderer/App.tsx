@@ -72,6 +72,7 @@ import {
 import type { OrbMotion } from "./components/thinking-orb.js";
 import { Composer } from "./sections/conversation/composer.js";
 import type { SandboxAccessInput } from "../../execution/access.js";
+import type { RestrictedEngine } from "../../execution/workspace.js";
 import { AsideShelf } from "./sections/conversation/aside-shelf.js";
 import { CommandPalette, type AppCommand } from "./commands/palette.js";
 import { TerminalPanel } from "./sections/terminal/terminal.js";
@@ -132,6 +133,9 @@ const initialState: DesktopState = {
   defaultProviderConnectionId: "openrouter",
   restrictedHostAvailable: false,
   restrictedHostDetail: "Checking restricted execution…",
+  restrictedEngine: window.desktop.platform === "win32" ? "microsandbox" : "native",
+  microsandboxAvailable: false,
+  microsandboxDetail: "Checking Microsandbox…",
   themeId: document.documentElement.dataset.theme ?? DEFAULT_THEME.id,
   animationsEnabled: document.documentElement.dataset.animations !== "off",
   interfaceFont: fontById(document.documentElement.dataset.interfaceFont)?.id ?? DEFAULT_FONTS.interface,
@@ -213,6 +217,7 @@ export function App(): JSX.Element {
   const [bookmarksPage, setBookmarksPage] = useState<BookmarksPage>("threads");
   const [sendOrbMotion, setSendOrbMotion] = useState<OrbMotion>("stopped");
   const [providerWaits, setProviderWaits] = useState<Record<string, string>>({});
+  const [preparingThreadIds, setPreparingThreadIds] = useState<string[]>([]);
   const [contextReport, setContextReport] = useState<ContextReport | null>(null);
   const [contextRefresh, setContextRefresh] = useState(0);
   const [compactingContext, setCompactingContext] = useState(false);
@@ -220,6 +225,7 @@ export function App(): JSX.Element {
   const [, refreshQueuedFollowUps] = useState(0);
   const taskInput = useRef<HTMLTextAreaElement>(null);
   const timelineView = useRef<HTMLDivElement>(null);
+  const timelineContent = useRef<HTMLDivElement>(null);
   const timelineScrollTop = useRef(0);
   const executionMode = useRef<HTMLDetailsElement>(null);
   const composerAdd = useRef<HTMLDetailsElement>(null);
@@ -369,14 +375,15 @@ export function App(): JSX.Element {
   const running = desktopState.activeThreadId
     ? desktopState.runningThreadIds.includes(desktopState.activeThreadId)
     : false;
+  const preparing = desktopState.activeThreadId
+    ? preparingThreadIds.includes(desktopState.activeThreadId)
+    : false;
   const queuedFollowUp = desktopState.activeThreadId
     ? queuedFollowUps.current.get(desktopState.activeThreadId) ?? null
     : null;
-  const unsafeHostExecution = window.desktop.platform === "win32" || (
-    desktopState.activeThreadId
-      ? desktopState.unsafeThreadIds.includes(desktopState.activeThreadId)
-      : false
-  );
+  const unsafeHostExecution = desktopState.activeThreadId
+    ? desktopState.unsafeThreadIds.includes(desktopState.activeThreadId)
+    : false;
 
   const setRightPanelFocus = useCallback((focused: boolean): void => {
     if (rightPanelFocused.current === focused) return;
@@ -402,6 +409,15 @@ export function App(): JSX.Element {
     setRightWidth(previous.rightWidth);
     setLeftCollapsed(previous.leftCollapsed);
   }, []);
+
+  const hideRightPanel = useCallback((): void => {
+    setRightPanelFocus(false);
+    if (leftAutoCollapsed.current) {
+      leftAutoCollapsed.current = false;
+      setLeftCollapsed(false);
+    }
+    setRightCollapsed(true);
+  }, [setRightPanelFocus]);
 
   const selectInspectorTab = useCallback((tab: InspectorTab): void => {
     inspectorTabValue.current = tab;
@@ -458,6 +474,19 @@ export function App(): JSX.Element {
       setShowJumpToLatest(false);
     }
   }, [timeline]);
+
+  useLayoutEffect(() => {
+    const timeline = timelineView.current;
+    const content = timelineContent.current;
+    if (view !== "conversation" || !timeline || !content) return;
+    const observer = new ResizeObserver(() => {
+      if (!followTimeline.current) return;
+      timeline.scrollTop = timeline.scrollHeight;
+      setShowJumpToLatest(false);
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [view]);
 
   useLayoutEffect(() => {
     if (view !== "conversation") return;
@@ -628,6 +657,7 @@ export function App(): JSX.Element {
       }
 
       if (event.type === "run.started") {
+        setPreparingThreadIds((current) => current.filter((id) => id !== threadId));
         runProviderConnections.current[threadId] = event.providerConnectionId;
         setProviderWaits((current) => withoutKey(current, threadId));
         setDesktopState((state) => ({
@@ -639,6 +669,7 @@ export function App(): JSX.Element {
         }));
       }
       if (event.type === "run.completed" || event.type === "run.failed") {
+        setPreparingThreadIds((current) => current.filter((id) => id !== threadId));
         const connectionId = runProviderConnections.current[threadId];
         delete runProviderConnections.current[threadId];
         if (connectionId) void refreshProviderAllowance(connectionId);
@@ -800,6 +831,10 @@ export function App(): JSX.Element {
     Boolean(desktopState.imageUnderstanding.providerConnectionId) &&
     Boolean(desktopState.imageUnderstanding.model);
   const attachmentsTooLarge = attachmentTokens > selectedContextLength * 0.7;
+  const microsandboxBlocker = window.desktop.platform === "win32" &&
+    desktopState.microsandboxDetail.startsWith("Enable Windows Hypervisor Platform")
+    ? "You are in restricted mode. To continue without a sandbox, click Restricted and select ‘Allow unrestricted shell commands.’ To use the sandbox on Windows, enable Windows Hypervisor Platform in ‘Turn Windows features on or off,’ restart Windows, and ensure hardware virtualization is enabled in UEFI/BIOS."
+    : desktopState.microsandboxDetail;
   const runBlocker = !desktopState.workspace
     ? "Open a workspace before sending."
     : !task.trim() && pendingAttachments.length === 0
@@ -810,12 +845,16 @@ export function App(): JSX.Element {
           ? "The selected provider connection is unavailable."
         : !selectedProviderModel
           ? "Select an available model before sending."
+        : selectedProviderModel.toolUseUnavailableReason
+          ? selectedProviderModel.toolUseUnavailableReason
         : attachmentsTooLarge
           ? "Attachments are too large for the selected model context."
           : imageUnsupported && !imageUnderstandingReady
             ? "The selected model does not accept images. Configure Image understanding in Agent settings."
-            : !unsafeHostExecution && !desktopState.restrictedHostAvailable
+            : !unsafeHostExecution && desktopState.restrictedEngine === "native" && !desktopState.restrictedHostAvailable
               ? desktopState.restrictedHostDetail
+            : !unsafeHostExecution && desktopState.restrictedEngine === "microsandbox" && !desktopState.microsandboxAvailable
+              ? microsandboxBlocker
               : null;
 
   useEffect(() => {
@@ -870,6 +909,7 @@ export function App(): JSX.Element {
     setError(null);
     const threadId = desktopState.activeThreadId;
 
+    if (preparing) return;
     if (running) {
       if (!threadId || !task.trim()) return;
       const message = task.trim();
@@ -946,11 +986,14 @@ export function App(): JSX.Element {
       ...state,
       runningThreadIds: [...new Set([...state.runningThreadIds, request.threadId])],
     }));
+    setPreparingThreadIds((current) => [...new Set([...current, request.threadId])]);
     setProviderWaits((current) => withoutKey(current, request.threadId));
 
     try {
       await window.desktop.startRun(request);
+      setPreparingThreadIds((current) => current.filter((id) => id !== request.threadId));
     } catch (cause) {
+      setPreparingThreadIds((current) => current.filter((id) => id !== request.threadId));
       setProviderWaits((current) => withoutKey(current, request.threadId));
       setDesktopState((state) => ({
         ...state,
@@ -1273,6 +1316,15 @@ export function App(): JSX.Element {
     setError(null);
     try {
       setDesktopState(withoutConversation(await window.desktop.setThreadUnsafe(threadId, unsafe)));
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function setRestrictedEngine(engine: RestrictedEngine): Promise<void> {
+    setError(null);
+    try {
+      setDesktopState(withoutConversation(await window.desktop.setRestrictedEngine(engine)));
     } catch (cause) {
       setError(errorMessage(cause));
     }
@@ -1692,7 +1744,9 @@ export function App(): JSX.Element {
     ).baseModelId;
     const currentModelIsAvailable = state.defaultProviderConnectionId === connection.id &&
       catalog?.models.some((model) => model.id === state.defaultModel || model.id === currentBaseModel);
-    const defaultModel = currentModelIsAvailable ? state.defaultModel : catalog?.models[0]?.id ?? null;
+    const defaultModel = currentModelIsAvailable
+      ? state.defaultModel
+      : catalog?.models.find((model) => !model.toolUseUnavailableReason)?.id ?? null;
     if (defaultModel && !currentModelIsAvailable) {
       await window.desktop.setSelectedModel(null, connection.id, defaultModel);
     }
@@ -2115,7 +2169,7 @@ export function App(): JSX.Element {
       label: rightCollapsed ? "Show inspector" : "Hide inspector",
       keywords: "right panel inspect",
       disabled: view !== "conversation",
-      run: () => setRightCollapsed((value) => !value),
+      run: () => rightCollapsed ? setRightCollapsed(false) : hideRightPanel(),
     },
     {
       id: "terminal-toggle",
@@ -2336,52 +2390,54 @@ export function App(): JSX.Element {
                 setShowJumpToLatest(distanceFromBottom > view.clientHeight * 0.4);
               }}
             >
-              {timeline.map((item) => (
-                <TimelineEntry
-                  key={item.id}
-                  item={item}
-                  previousModel={previousAssistantModels.get(item.id)}
-                  selectedId={selectedItemId}
-                  turnRunning={running && currentTurnItemIds.has(item.id)}
-                  activeToolPreviewId={activeToolPreviewId}
-                  fileChangeSummary={answerFileChanges.get(item.id)}
-                  reasoningModelCalls={reasoningModelCalls}
-                  onSelect={(id) => {
-                    setSelectedItemId((current) => current === id ? null : id);
-                    selectInspectorTab("inspect");
-                    setRightCollapsed(false);
-                  }}
-                  {...(gitRepositoryReady ? { onOpenFile: openBuiltInFileEditor } : {})}
-                  onReviewChanges={() => reviewAgentChanges(item.id)}
-                  onResolveApproval={(id, decision) => void resolveCommandApproval(id, decision)}
-                  onChooseSandboxFolder={() => window.desktop.chooseSandboxFolder()}
-                  onGrantSandboxAccess={grantCommandSandboxAccess}
-                  savedId={
-                    item.kind === "assistant"
-                      ? savedIdFor(item)
-                      : undefined
-                  }
-                  onToggleSaved={(message, savedId) => void toggleSavedMessage(message, savedId)}
-                  keptAside={isKeptAside(item)}
-                  canKeepAside={desktopState.keptAside.length < MAX_KEPT_ASIDE_MESSAGES}
-                  onToggleKeptAside={toggleKeptAside}
-                  {...(!running
-                    ? { onToggleAttachmentContext: (message, attachment) => void toggleAttachmentContext(message, attachment) }
-                    : {})}
-                  onEditUser={(text) => {
-                    setTask(text);
-                    window.requestAnimationFrame(() => {
-                      const input = taskInput.current;
-                      input?.focus();
-                      input?.setSelectionRange(text.length, text.length);
-                    });
-                  }}
-                  {...(!running ? { onRestore: (sequence) => void restoreThread(sequence) } : {})}
-                  {...(!running ? { onRegenerate: (sequence) => void regenerateResponse(sequence) } : {})}
-                  {...(!running ? { onFork: (sequence) => void forkThread(sequence) } : {})}
-                />
-              ))}
-              {running ? <ActivePlan items={timeline} /> : null}
+              <div ref={timelineContent}>
+                {timeline.map((item) => (
+                  <TimelineEntry
+                    key={item.id}
+                    item={item}
+                    previousModel={previousAssistantModels.get(item.id)}
+                    selectedId={selectedItemId}
+                    turnRunning={running && currentTurnItemIds.has(item.id)}
+                    activeToolPreviewId={activeToolPreviewId}
+                    fileChangeSummary={answerFileChanges.get(item.id)}
+                    reasoningModelCalls={reasoningModelCalls}
+                    onSelect={(id) => {
+                      setSelectedItemId((current) => current === id ? null : id);
+                      selectInspectorTab("inspect");
+                      setRightCollapsed(false);
+                    }}
+                    {...(gitRepositoryReady ? { onOpenFile: openBuiltInFileEditor } : {})}
+                    onReviewChanges={() => reviewAgentChanges(item.id)}
+                    onResolveApproval={(id, decision) => void resolveCommandApproval(id, decision)}
+                    onChooseSandboxFolder={() => window.desktop.chooseSandboxFolder()}
+                    onGrantSandboxAccess={grantCommandSandboxAccess}
+                    savedId={
+                      item.kind === "assistant"
+                        ? savedIdFor(item)
+                        : undefined
+                    }
+                    onToggleSaved={(message, savedId) => void toggleSavedMessage(message, savedId)}
+                    keptAside={isKeptAside(item)}
+                    canKeepAside={desktopState.keptAside.length < MAX_KEPT_ASIDE_MESSAGES}
+                    onToggleKeptAside={toggleKeptAside}
+                    {...(!running
+                      ? { onToggleAttachmentContext: (message, attachment) => void toggleAttachmentContext(message, attachment) }
+                      : {})}
+                    onEditUser={(text) => {
+                      setTask(text);
+                      window.requestAnimationFrame(() => {
+                        const input = taskInput.current;
+                        input?.focus();
+                        input?.setSelectionRange(text.length, text.length);
+                      });
+                    }}
+                    {...(!running ? { onRestore: (sequence) => void restoreThread(sequence) } : {})}
+                    {...(!running ? { onRegenerate: (sequence) => void regenerateResponse(sequence) } : {})}
+                    {...(!running ? { onFork: (sequence) => void forkThread(sequence) } : {})}
+                  />
+                ))}
+                {running ? <ActivePlan items={timeline} /> : null}
+              </div>
             </div>
             <AsideShelf
               messages={desktopState.keptAside}
@@ -2425,6 +2481,7 @@ export function App(): JSX.Element {
             composerAdd={composerAdd}
             dragging={draggingAttachments}
             running={running}
+            preparing={preparing}
             providerWait={desktopState.activeThreadId ? providerWaits[desktopState.activeThreadId] ?? null : null}
             pendingAttachmentCount={pendingAttachments.length}
             models={models}
@@ -2441,7 +2498,11 @@ export function App(): JSX.Element {
             pendingContextTokens={pendingContextTokens}
             compactingContext={compactingContext}
             unsafe={unsafeHostExecution}
+            restrictedEngine={desktopState.restrictedEngine}
+            restrictedAvailable={desktopState.restrictedHostAvailable}
             restrictedDetail={desktopState.restrictedHostDetail}
+            microsandboxAvailable={desktopState.microsandboxAvailable}
+            microsandboxDetail={desktopState.microsandboxDetail}
             sandboxAccess={desktopState.sandboxAccess}
             sandboxNetworkEnabled={desktopState.sandboxNetworkEnabled}
             orbMotion={sendOrbMotion}
@@ -2463,6 +2524,7 @@ export function App(): JSX.Element {
             onToolSurface={(surface) => void setModelToolSurface(surface)}
             onCompact={() => void compactCurrentContext()}
             onUnsafe={(value) => void setThreadUnsafe(value)}
+            onRestrictedEngine={(engine) => void setRestrictedEngine(engine)}
             onChooseSandboxLocation={() => window.desktop.chooseSandboxFolder()}
             onAddSandboxAccess={(input) => void addSandboxAccess(input)}
             onRemoveSandboxAccess={(grantId) => void removeSandboxAccess(grantId)}
@@ -2497,16 +2559,13 @@ export function App(): JSX.Element {
               focused={rightPanelFocused.current}
               onTab={selectInspectorTab}
               onEnterFocus={() => setRightPanelFocus(true)}
-              onExitFocus={() => selectInspectorTab("inspect")}
+              onExitFocus={() => setRightPanelFocus(false)}
               onSelect={setSelectedItemId}
               onNavigateTurn={scrollToTimelineItem}
               onEditorOpen={handleGitEditorOpen}
               onGitRepositoryState={setGitRepositoryReady}
               onAskSelection={attachCodeSelection}
-              onCollapse={() => {
-                setRightPanelFocus(false);
-                setRightCollapsed(true);
-              }}
+              onCollapse={hideRightPanel}
             />
           ) : null}
         </aside>

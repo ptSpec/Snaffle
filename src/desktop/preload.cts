@@ -18,6 +18,7 @@ import type { McpServerConfig } from "../mcp/types.js";
 import type { ImageUnderstandingProfile } from "../attachments/vision.js";
 import type { ModelToolSurface } from "../capabilities/surface.js";
 import type { SandboxAccessInput } from "../execution/access.js";
+import type { RestrictedEngine } from "../execution/workspace.js";
 
 const api: DesktopApi = {
   platform: process.platform,
@@ -87,6 +88,8 @@ const api: DesktopApi = {
   stopRun: (threadId: string) => ipcRenderer.invoke("desktop:stop-run", threadId),
   setThreadUnsafe: (threadId: string, unsafe: boolean) =>
     ipcRenderer.invoke("desktop:set-thread-unsafe", threadId, unsafe),
+  setRestrictedEngine: (engine: RestrictedEngine) =>
+    ipcRenderer.invoke("desktop:set-restricted-engine", engine),
   chooseSandboxFolder: () => ipcRenderer.invoke("desktop:choose-sandbox-folder"),
   addSandboxAccess: (threadId: string, input: SandboxAccessInput) =>
     ipcRenderer.invoke("desktop:add-sandbox-access", threadId, input),

@@ -18,6 +18,7 @@ import { ModelPicker } from "./model-picker.js";
 import { providerVisual } from "./provider-mark.js";
 import { customToolChoices, type ModelToolSurface } from "../../../../capabilities/surface.js";
 import type { SandboxAccessGrant, SandboxAccessInput } from "../../../../execution/access.js";
+import type { RestrictedEngine } from "../../../../execution/workspace.js";
 
 export function Composer({
   task,
@@ -26,6 +27,7 @@ export function Composer({
   composerAdd,
   dragging,
   running,
+  preparing,
   providerWait,
   pendingAttachmentCount,
   models,
@@ -42,7 +44,11 @@ export function Composer({
   pendingContextTokens,
   compactingContext,
   unsafe,
+  restrictedEngine,
+  restrictedAvailable,
   restrictedDetail,
+  microsandboxAvailable,
+  microsandboxDetail,
   sandboxAccess,
   sandboxNetworkEnabled,
   orbMotion,
@@ -64,6 +70,7 @@ export function Composer({
   onToolSurface,
   onCompact,
   onUnsafe,
+  onRestrictedEngine,
   onChooseSandboxLocation,
   onAddSandboxAccess,
   onRemoveSandboxAccess,
@@ -76,7 +83,7 @@ export function Composer({
   const [addingSandboxLocation, setAddingSandboxLocation] = useState(false);
   const [editingSandboxLocation, setEditingSandboxLocation] = useState<SandboxAccessGrant | null>(null);
   const [sandboxPath, setSandboxPath] = useState("");
-  const [sandboxWritable, setSandboxWritable] = useState(true);
+  const [sandboxWritable, setSandboxWritable] = useState(false);
   const [sandboxScope, setSandboxScope] = useState<SandboxAccessInput["scope"]>("global");
 
   async function chooseSandboxLocation(): Promise<void> {
@@ -88,7 +95,7 @@ export function Composer({
     setAddingSandboxLocation(false);
     setEditingSandboxLocation(null);
     setSandboxPath("");
-    setSandboxWritable(true);
+    setSandboxWritable(false);
     setSandboxScope("global");
   }
 
@@ -128,6 +135,7 @@ export function Composer({
       <textarea
         ref={taskInput}
         value={task}
+        disabled={preparing}
         onChange={(event) => onTask(event.target.value)}
         onPaste={onPaste}
         onKeyDown={(event) => {
@@ -198,7 +206,7 @@ export function Composer({
                 variants: providerProfile(connection.providerId).modelVariants ?? [],
                 models: models.map((model) => ({
                   value: model.id,
-                  label: model.name,
+                  label: model.toolUseUnavailableReason ? `${model.name} (No tool use)` : model.name,
                   ...(model.reasoning ? { reasoning: model.reasoning } : {}),
                 })),
               };
@@ -229,7 +237,6 @@ export function Composer({
         <details
           ref={executionMode}
           className={unsafe ? "execution-mode unsafe" : "execution-mode"}
-          hidden={platform === "win32"}
         >
           <summary>
             {unsafe ? <span className="execution-dot" aria-hidden="true" /> : <Shield />}
@@ -238,18 +245,53 @@ export function Composer({
               : `Restricted${sandboxAccess.length ? ` · ${sandboxAccess.length}` : ""}`}
           </summary>
           <div className="execution-details">
-            <strong>{unsafe ? "Unrestricted host execution" : restrictedDetail}</strong>
+            <strong>
+              {unsafe
+                ? "Unrestricted host execution"
+                : restrictedEngine === "microsandbox" && !microsandboxAvailable
+                  ? "Microsandbox unavailable"
+                  : restrictedEngine === "microsandbox" ? microsandboxDetail : restrictedDetail}
+            </strong>
             <p>
               {unsafe
-                ? "Shell commands run as your user and can access host files, network, and inherited environment. File tools remain workspace-only."
-                : <>Shell commands can write in this workspace, use private temporary files, and {sandboxNetworkEnabled ? "use the network" : "cannot use the network"}.<br />Other host files and workspace Git metadata remain protected.</>}
+                ? "Shell commands run as your user and can access host files, network, and inherited environment. File tools remain limited to the workspace and private temporary storage."
+                : restrictedEngine === "microsandbox"
+                  ? !microsandboxAvailable
+                    ? microsandboxDetail
+                    : <>Shell commands run in an isolated Linux environment using up to 2 GiB of memory and {sandboxNetworkEnabled ? "can use the network" : "cannot use the network"}. Only this workspace, private temporary storage, and locations below are host-backed.</>
+                    : <>Shell commands can write in this workspace, use private temporary files, and {sandboxNetworkEnabled ? "use the network" : "cannot use the network"}. HOME and ~ use private temporary storage.<br />Other host files, service sockets, and workspace Git metadata remain protected.</>}
             </p>
-            {!unsafe && platform !== "win32" ? (
-              <>
+            {!unsafe ? (
+              <div className="sandbox-engine-access">
+                <div className="sandbox-access-heading">
+                  <span>{platform === "win32" ? "Restricted engine" : "Advanced engine"}</span>
+                  <small>{platform === "win32" ? "Microsandbox" : "Native recommended"}</small>
+                </div>
+                <div className="sandbox-location-options" aria-label="Restricted engine">
+                  {platform !== "win32" ? (
+                    <button
+                      type="button"
+                      className={restrictedEngine === "native" ? "selected" : ""}
+                      disabled={running || !restrictedAvailable}
+                      title={restrictedAvailable ? undefined : restrictedDetail}
+                      onClick={() => onRestrictedEngine("native")}
+                    >Native</button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className={restrictedEngine === "microsandbox" ? "selected" : ""}
+                    disabled={running || !microsandboxAvailable}
+                    title={microsandboxAvailable ? undefined : microsandboxDetail}
+                    onClick={() => onRestrictedEngine("microsandbox")}
+                  >Microsandbox</button>
+                </div>
+              </div>
+            ) : null}
+            {!unsafe ? (
               <div className="sandbox-network-access">
                 <div className="sandbox-access-heading">
                   <span>Network access</span>
-                  <small>Restricted commands</small>
+                  <small>IP + private sockets</small>
                 </div>
                 <div className="sandbox-location-options" aria-label="Network access">
                   <button
@@ -266,10 +308,13 @@ export function Composer({
                   >Deny</button>
                 </div>
               </div>
+            ) : null}
+            {!unsafe ? (
+              <>
               <div className="sandbox-access">
                 <div className="sandbox-access-heading">
                   <span>Additional locations</span>
-                  <small>Remain sandboxed</small>
+                  <small>{restrictedEngine === "microsandbox" ? "Mounted on next run" : "Remain sandboxed"}</small>
                 </div>
                 {sandboxAccess.length ? (
                   <div className="sandbox-location-list">
@@ -375,18 +420,19 @@ export function Composer({
                     disabled={running}
                     onClick={() => {
                       setEditingSandboxLocation(null);
-                      setSandboxWritable(true);
+                      setSandboxWritable(false);
                       setSandboxScope("global");
                       setAddingSandboxLocation(true);
                     }}
                   >+ Add location</button>
                 )}
+                {restrictedEngine === "microsandbox" ? (
+                  <small className="sandbox-access-unavailable">
+                    Paths not listed here belong to the isolated environment or are unavailable.
+                  </small>
+                ) : null}
               </div>
               </>
-            ) : !unsafe && platform === "win32" ? (
-              <small className="sandbox-access-unavailable">
-                Additional sandbox folders are unavailable on Windows.
-              </small>
             ) : null}
             <label className={unsafe ? "host-toggle enabled" : "host-toggle"}>
               <input
@@ -399,7 +445,7 @@ export function Composer({
             </label>
           </div>
         </details>
-        {running && task.trim() ? (
+        {running && !preparing && task.trim() ? (
           <span className="run-message-actions">
             <small>↵ Steer</small>
             {!queuedMessage ? (
@@ -417,12 +463,13 @@ export function Composer({
           </span>
         ) : null}
         <button
-          className={running ? "send-button stop" : "send-button"}
-          type={running ? "button" : "submit"}
-          onClick={running ? onStop : undefined}
-          aria-label={running ? "Stop run" : "Send task"}
+          className={preparing ? "send-button preparing" : running ? "send-button stop" : "send-button"}
+          type={running || preparing ? "button" : "submit"}
+          onClick={preparing ? undefined : running ? onStop : undefined}
+          disabled={preparing}
+          aria-label={preparing ? "Preparing execution environment" : running ? "Stop run" : "Send task"}
           aria-disabled={!running && Boolean(blocker)}
-          title={running ? "Stop run" : blocker ?? "Send task"}
+          title={preparing ? "Preparing execution environment…" : running ? "Stop run" : blocker ?? "Send task"}
         >
           <span className="send-button-orb" aria-hidden="true">
             <ThinkingOrb motion={orbMotion} speed={1.7} />
@@ -435,7 +482,11 @@ export function Composer({
           <span className="send-button-symbol send-button-stop-symbol" aria-hidden="true" />
         </button>
       </div>
-      {providerWait ? <div className="provider-wait" role="status">{providerWait} · waiting for the next slot</div> : null}
+      {preparing
+        ? <div className="provider-wait" role="status">Preparing execution environment…</div>
+        : providerWait
+          ? <div className="provider-wait" role="status">{providerWait} · waiting for the next slot</div>
+          : null}
       {error ? <div className="composer-error" role="alert">{error}</div> : null}
     </form>
   );
@@ -583,6 +634,7 @@ type ComposerProps = {
   composerAdd: RefObject<HTMLDetailsElement>;
   dragging: boolean;
   running: boolean;
+  preparing: boolean;
   providerWait: string | null;
   pendingAttachmentCount: number;
   models: ProviderCatalog[];
@@ -599,7 +651,11 @@ type ComposerProps = {
   pendingContextTokens: number;
   compactingContext: boolean;
   unsafe: boolean;
+  restrictedEngine: RestrictedEngine;
+  restrictedAvailable: boolean;
   restrictedDetail: string;
+  microsandboxAvailable: boolean;
+  microsandboxDetail: string;
   sandboxAccess: SandboxAccessGrant[];
   sandboxNetworkEnabled: boolean;
   orbMotion: OrbMotion;
@@ -621,6 +677,7 @@ type ComposerProps = {
   onToolSurface(surface: ModelToolSurface): void;
   onCompact(): void;
   onUnsafe(value: boolean): void;
+  onRestrictedEngine(engine: RestrictedEngine): void;
   onChooseSandboxLocation(): Promise<string | null>;
   onAddSandboxAccess(input: SandboxAccessInput): void;
   onRemoveSandboxAccess(grantId: string): void;

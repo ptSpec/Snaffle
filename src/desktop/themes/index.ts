@@ -1,5 +1,6 @@
 import { LEGACY_PROJECTS } from "../../identity.js";
 import type { Theme } from "./contract.js";
+import { amoledTheme } from "./amoled.js";
 import { darkTheme } from "./dark.js";
 import { lightTheme } from "./light.js";
 import { morningBrewTheme } from "./morning-brew.js";
@@ -14,6 +15,7 @@ export type { Theme, ThemeColorName, ThemeColors } from "./contract.js";
 
 export const THEMES: readonly Theme[] = [
   darkTheme,
+  amoledTheme,
   lightTheme,
   snaffleTheme,
   morningBrewTheme,

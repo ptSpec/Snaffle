@@ -4,12 +4,12 @@ import { DEFAULT_TOOL_OUTPUT_CHARS } from "./output.js";
 export const readTool: Tool = {
   name: "read_file",
   description:
-    "Read a UTF-8 file as raw text. Returns at most 2000 complete lines or about 12000 characters. If more remains, the result gives the exact offset for the next read.",
+    "Read a UTF-8 file as raw text. Use offset as the first line and limit as the number of lines to read. Returns at most 2000 complete lines or about 12000 characters; if more remains, the result gives the exact offset for the next read.",
   exampleInput: { path: "src/app.ts", offset: 1, limit: 200 },
   inputSchema: {
     type: "object",
     properties: {
-      path: { type: "string", description: "Required. Workspace-relative file path." },
+      path: { type: "string", description: "Required. Workspace-relative file path or $TMPDIR temporary path." },
       offset: { type: "integer", description: "Optional. First line to return; defaults to 1.", minimum: 1 },
       limit: { type: "integer", description: "Optional. Maximum lines to return; defaults to 2000.", minimum: 1, maximum: 2000 },
     },

@@ -19,6 +19,7 @@ import {
   getOpenRouterStatus,
   listOpenRouterModels,
 } from "./openrouter.js";
+import { getLlamaCppStatus, listLlamaCppModels } from "./llama-cpp.js";
 import { providerProfile } from "./profiles.js";
 import type {
   ModelProvider,
@@ -65,7 +66,18 @@ const definitions: ProviderDefinition[] = [
     getStatus: getOpenCodeGoStatus,
     testModel: testOpenCodeGoModel,
   },
-  openAICompatibleDefinition("llama-cpp"),
+  {
+    ...providerProfile("llama-cpp"),
+    create: createOpenAICompatible,
+    listModels: listLlamaCppModels,
+    getStatus: getLlamaCppStatus,
+    testModel: (connection, modelId, signal) => testOpenAICompatibleModel(
+      connection.baseUrl,
+      modelId,
+      connection.apiKey,
+      signal,
+    ),
+  },
   openAICompatibleDefinition("ollama"),
   openAICompatibleDefinition("lm-studio"),
   openAICompatibleDefinition("omlx"),
@@ -169,17 +181,12 @@ function openAICompatibleDefinition(id: string): ProviderDefinition {
   return {
     ...profile,
     create: createOpenAICompatible,
-    listModels: async (connection, signal) => {
-      const models = await listOpenAICompatibleModels(
-        connection.baseUrl,
-        connection.apiKey,
-        signal,
-        profile.defaultContextLength,
-      );
-      return id === "llama-cpp"
-        ? models.map((model) => ({ ...model, reasoning: { efforts: ["none" as const] } }))
-        : models;
-    },
+    listModels: (connection, signal) => listOpenAICompatibleModels(
+      connection.baseUrl,
+      connection.apiKey,
+      signal,
+      profile.defaultContextLength,
+    ),
     testModel: (connection, modelId, signal) => testOpenAICompatibleModel(
       connection.baseUrl,
       modelId,
@@ -218,7 +225,13 @@ function anthropicCompatibleDefinition(): ProviderDefinition {
 
 function mergeModels(discovered: ProviderConnection["manualModels"], manual: ProviderConnection["manualModels"]) {
   const models = new Map(discovered.map((model) => [model.id, model]));
-  for (const model of manual) models.set(model.id, model);
+  for (const model of manual) {
+    const toolUseUnavailableReason = models.get(model.id)?.toolUseUnavailableReason;
+    models.set(model.id, {
+      ...model,
+      ...(toolUseUnavailableReason ? { toolUseUnavailableReason } : {}),
+    });
+  }
   return [...models.values()];
 }
 

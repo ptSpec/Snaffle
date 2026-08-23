@@ -102,7 +102,7 @@ export function hostEnvironmentDescription(): string {
         ? "Windows"
         : "Linux";
   const shell = process.platform === "win32" ? "PowerShell" : "POSIX shell";
-  return `${platform} ${process.arch}, ${shell}. Commands start in the workspace root; use workspace-relative paths.`;
+  return `${platform} ${process.arch}, ${shell}. Commands start in the workspace root; relative paths use the workspace.`;
 }
 
 export async function runRestrictedCommand(
@@ -187,7 +187,19 @@ function macosProfile(
     .replace("__GIT_METADATA__", gitMetadata
       .map((entry) => `(deny file-write* (subpath ${JSON.stringify(entry)}))`)
       .join("\n"))
-    .replace("__NETWORK__", networkEnabled ? "(allow network*)" : "(deny network*)")
+    .replace("__NETWORK__", networkEnabled
+      ? `(allow network* (local ip))
+(allow network-outbound
+  (remote tcp)
+  (remote udp)
+  (literal "/private/var/run/mDNSResponder"))
+(allow network-bind
+  (local unix-socket (subpath (param "WORKSPACE")))
+  (local unix-socket (subpath (param "TEMP"))))
+(allow network-outbound
+  (remote unix-socket (subpath (param "WORKSPACE")))
+  (remote unix-socket (subpath (param "TEMP"))))`
+      : "(deny network*)")
     .replace("__PERSONAL_STATE__", JSON.stringify(personalSnaffleDirectory()));
 }
 
@@ -204,6 +216,9 @@ async function runLinux(
 ): Promise<SandboxResult> {
   const gitMetadata = await findGitMetadata(workspace);
   const personalState = personalSnaffleDirectory();
+  const sandboxCwd = inside(temporary, cwd)
+    ? path.posix.join("/tmp", ...path.relative(temporary, cwd).split(path.sep))
+    : cwd;
   await mkdir(personalState, { recursive: true });
   const args = [
     "--die-with-parent",
@@ -218,7 +233,7 @@ async function runLinux(
     "--bind", workspace, workspace,
     ...gitMetadata.flatMap((entry) => ["--ro-bind", entry, entry]),
     "--ro-bind", personalState, personalState,
-    "--chdir", cwd,
+    "--chdir", sandboxCwd,
     ...restrictedShell(command, timeoutMs),
   ];
 
@@ -339,7 +354,7 @@ function safePath(workspace: string): string {
   return [...workspaceBins, ...systemPath, "/usr/bin", "/bin"].filter(unique).join(path.delimiter);
 }
 
-async function findGitMetadata(workspace: string): Promise<string[]> {
+export async function findGitMetadata(workspace: string): Promise<string[]> {
   const found: string[] = [];
   const pending = [workspace];
   const ignored = new Set(["node_modules", ".venv", "venv", "dist", "build"]);
@@ -409,7 +424,7 @@ function errorMessage(error: unknown): string {
 }
 
 function sandboxDenied(stderr: string): boolean {
-  return /operation not permitted|permission denied|read-only file system|could not resolve host|network is unreachable|temporary failure in name resolution|nodename nor servname provided/i.test(stderr);
+  return /\bEPERM\b|\bEACCES\b|operation not permitted|permission denied|read-only file system|could not resolve host|network is unreachable|temporary failure in name resolution|nodename nor servname provided/i.test(stderr);
 }
 
 function findExecutable(name: string): string | undefined {

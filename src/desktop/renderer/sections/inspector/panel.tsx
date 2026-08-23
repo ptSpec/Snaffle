@@ -64,6 +64,7 @@ export function InspectorPanel({
   const overviewScrollTop = useRef(0);
   const followLiveRun = useRef(true);
   const wasRunning = useRef(false);
+  const [changesDetailOpen, setChangesDetailOpen] = useState(false);
   const [tabTransition, setTabTransition] = useState<{
     tab: InspectorTab;
     direction: "none" | "forward" | "back";
@@ -80,9 +81,22 @@ export function InspectorPanel({
     });
   }, [tab]);
 
+  const selectedItemId = selectedItem?.id;
   useLayoutEffect(() => {
-    if (!selectedItem && contentRef.current) contentRef.current.scrollTop = overviewScrollTop.current;
-  }, [selectedItem]);
+    if (!contentRef.current) return;
+    contentRef.current.scrollTop = selectedItemId ? 0 : overviewScrollTop.current;
+  }, [selectedItemId]);
+
+  useEffect(() => {
+    if (!focused || tab !== "changes" || changesDetailOpen) return;
+    const exitFocus = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      onExitFocus();
+    };
+    window.addEventListener("keydown", exitFocus);
+    return () => window.removeEventListener("keydown", exitFocus);
+  }, [changesDetailOpen, focused, onExitFocus, tab]);
 
   useLayoutEffect(() => {
     if (running && !wasRunning.current) followLiveRun.current = true;
@@ -91,17 +105,6 @@ export function InspectorPanel({
       contentRef.current.scrollTop = contentRef.current.scrollHeight;
     }
   }, [running, selectedItem, tab, timeline]);
-
-  useEffect(() => {
-    if (!focused || tab !== "changes") return;
-    const goBack = (event: KeyboardEvent): void => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-      event.preventDefault();
-      onExitFocus();
-    };
-    window.addEventListener("keydown", goBack);
-    return () => window.removeEventListener("keydown", goBack);
-  }, [focused, onExitFocus, tab]);
 
   function trackOverviewScroll(): void {
     const content = contentRef.current;
@@ -114,12 +117,21 @@ export function InspectorPanel({
     onSelect(id);
   };
 
+  const hasDetailSections = selectedItem?.kind === "assistant" || (
+    selectedItem?.kind === "tool" && !(selectedItem.call.name === "delegate_task" && selectedItem.details)
+  );
+
+  function setDetailSections(open: boolean): void {
+    contentRef.current?.querySelectorAll<HTMLDetailsElement>(".inspector-section")
+      .forEach((section) => { section.open = open; });
+  }
+
   return (
     <>
       <div className="section-heading inspector-heading">
         <div className="inspector-heading-navigation">
-          {focused && tab === "changes" ? (
-            <button className="inspector-focus-back" type="button" onClick={onExitFocus} title="Back to conversation (Esc)">
+          {focused && tab === "changes" && !changesDetailOpen ? (
+            <button className="inspector-focus-expand" type="button" onClick={onExitFocus} title="Return to the normal panel (Esc)">
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m9.75 3.5-4.5 4.5 4.5 4.5" /></svg>
               <span>Back (Esc)</span>
             </button>
@@ -151,12 +163,20 @@ export function InspectorPanel({
           <div className="inspector-content" ref={contentRef} onScroll={trackOverviewScroll}>
             {selectedItem ? (
               <div className="inspector-view inspector-view-detail">
-                <button className="execution-back" type="button" onClick={() => onSelect(null)}>
-                  <svg viewBox="0 0 16 16" aria-hidden="true">
-                    <path d="m9.75 3.5-4.5 4.5 4.5 4.5" />
-                  </svg>
-                  <span>Back</span>
-                </button>
+                <div className="inspector-detail-toolbar">
+                  <button className="execution-back" type="button" onClick={() => onSelect(null)}>
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="m9.75 3.5-4.5 4.5 4.5 4.5" />
+                    </svg>
+                    <span>Back</span>
+                  </button>
+                  {hasDetailSections ? (
+                    <div className="inspector-detail-actions">
+                      <button type="button" onClick={() => setDetailSections(true)}>Expand all</button>
+                      <button type="button" onClick={() => setDetailSections(false)}>Collapse all</button>
+                    </div>
+                  ) : null}
+                </div>
                 <Inspector
                   item={selectedItem}
                   timeline={timeline}
@@ -180,7 +200,12 @@ export function InspectorPanel({
           </div>
         ) : tab === "changes" ? (
           <Suspense fallback={<p className="inspector-empty">Loading changes…</p>}>
-            <ChangesPanel timeline={timeline} request={changesTurnRequest} />
+            <ChangesPanel
+              timeline={timeline}
+              request={changesTurnRequest}
+              onBack={onExitFocus}
+              onDetailOpen={setChangesDetailOpen}
+            />
           </Suspense>
         ) : (
           <GitPanel

@@ -21,6 +21,7 @@ import type { ImageUnderstandingProfile } from "../attachments/vision.js";
 import type { ModelToolSurface, ModelToolSurfaces } from "../capabilities/surface.js";
 import type { DesktopUpdateState } from "./updates.js";
 import type { SandboxAccessGrant, SandboxAccessInput } from "../execution/access.js";
+import type { RestrictedEngine } from "../execution/workspace.js";
 
 export type { SandboxAccessGrant, SandboxAccessInput } from "../execution/access.js";
 
@@ -139,6 +140,9 @@ export type DesktopState = {
   defaultProviderConnectionId: string;
   restrictedHostAvailable: boolean;
   restrictedHostDetail: string;
+  restrictedEngine: RestrictedEngine;
+  microsandboxAvailable: boolean;
+  microsandboxDetail: string;
   themeId: string;
   animationsEnabled: boolean;
   interfaceFont: FontId;
@@ -250,6 +254,7 @@ export interface DesktopApi {
   steerRun(threadId: string, message: string): Promise<boolean>;
   stopRun(threadId: string): Promise<boolean>;
   setThreadUnsafe(threadId: string, unsafe: boolean): Promise<DesktopState>;
+  setRestrictedEngine(engine: RestrictedEngine): Promise<DesktopState>;
   chooseSandboxFolder(): Promise<string | null>;
   addSandboxAccess(threadId: string, input: SandboxAccessInput): Promise<DesktopState>;
   grantCommandSandboxAccess(id: string, inputs: SandboxAccessInput[]): Promise<DesktopState>;

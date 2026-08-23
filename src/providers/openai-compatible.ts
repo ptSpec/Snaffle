@@ -13,6 +13,7 @@ import {
 
 const MAX_STREAM_BUFFER_CHARS = 8 * 1024 * 1024;
 const MAX_STREAM_FIELD_CHARS = 4 * 1024 * 1024;
+const MAX_OUTPUT_TOKENS = 16_384;
 export const DEFAULT_PROVIDER_TIMEOUT_MS = 3 * 60 * 1000;
 export const DEFAULT_PROVIDER_RETRIES = 4;
 
@@ -89,7 +90,9 @@ export class OpenAICompatibleProvider implements ModelProvider {
           body: JSON.stringify({
             model: this.model,
             messages: await Promise.all(
-              requestMessages.map((message) => toOpenAIMessage(message, this.resolveAttachment)),
+              llamaCppMessages(requestMessages, this.providerId).map((message) =>
+                toOpenAIMessage(message, this.resolveAttachment, this.providerId === "llama-cpp")
+              ),
             ),
             tools: tools.map((tool) => ({
               type: "function",
@@ -100,6 +103,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
               },
             })),
             ...(this.sendParallelToolCalls ? { parallel_tool_calls: false } : {}),
+            max_tokens: MAX_OUTPUT_TOKENS,
             stream: true,
             stream_options: { include_usage: true },
             ...(this.temperature === undefined ? {} : { temperature: this.temperature }),
@@ -165,20 +169,30 @@ export async function listOpenAICompatibleModels(
   apiKey?: string,
   signal?: AbortSignal,
   defaultContextLength = DEFAULT_MODEL_CONTEXT_LENGTH,
+  readLlamaCppContext = false,
 ): Promise<ProviderModel[]> {
   const response = await fetch(`${baseUrl.replace(/\/$/, "")}/models`, {
     headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {},
     ...(signal ? { signal } : {}),
   });
   if (!response.ok) throw await responseError("Model request", response);
-  const body = await response.json() as { data?: Array<{ id?: unknown; name?: unknown; context_length?: unknown }> };
+  const body = await response.json() as {
+    data?: Array<{
+      id?: unknown;
+      name?: unknown;
+      context_length?: unknown;
+      meta?: { n_ctx?: unknown };
+    }>;
+  };
   if (!Array.isArray(body.data)) throw new Error("The endpoint returned an invalid model list");
   return body.data.flatMap((model) => typeof model.id === "string" ? [{
     id: model.id,
     name: typeof model.name === "string" ? model.name : model.id,
     contextLength: typeof model.context_length === "number"
       ? model.context_length
-      : defaultContextLength,
+      : readLlamaCppContext && typeof model.meta?.n_ctx === "number"
+        ? model.meta.n_ctx
+        : defaultContextLength,
     inputModalities: ["text"],
   }] : []);
 }
@@ -385,6 +399,7 @@ function appendStreamText(current: string, delta: string, label: string): string
 async function toOpenAIMessage(
   message: Message,
   resolveAttachment?: (attachment: AttachmentRef) => Promise<ResolvedAttachment>,
+  llamaCpp = false,
 ): Promise<Record<string, unknown>> {
   if (message.role === "tool") {
     return {
@@ -400,7 +415,9 @@ async function toOpenAIMessage(
     return {
       role: "assistant",
       content: message.content || null,
-      ...(message.reasoning ? { reasoning: message.reasoning } : {}),
+      ...(message.reasoning
+        ? { [llamaCpp ? "reasoning_content" : "reasoning"]: message.reasoning }
+        : {}),
       tool_calls: message.toolCalls.map((call) => ({
         id: call.id,
         type: "function",
@@ -445,6 +462,16 @@ async function toOpenAIMessage(
     }
   }
   return { role: "user", content };
+}
+
+function llamaCppMessages(messages: Message[], providerId: string): Message[] {
+  if (providerId !== "llama-cpp") return messages;
+  const system = messages.filter((message) => message.role === "system");
+  if (!system.length) return messages;
+  return [
+    { role: "system", content: system.map((message) => message.content).join("\n\n") },
+    ...messages.filter((message) => message.role !== "system"),
+  ];
 }
 
 function parseResponse(input: unknown): ModelResponse {

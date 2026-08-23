@@ -19,6 +19,7 @@ import {
 } from "./timeline-state.js";
 
 type ModelCallTimelineItem = Extract<TimelineItem, { kind: "assistant" }>;
+type ActivityDisclosureCommand = { id: number; open: boolean };
 
 export function TimelineEntry({
   item,
@@ -26,6 +27,7 @@ export function TimelineEntry({
   selectedId,
   turnRunning = false,
   activeToolPreviewId = null,
+  activityDisclosureCommand,
   fileChangeSummary,
   reasoningModelCalls,
   onSelect,
@@ -50,6 +52,7 @@ export function TimelineEntry({
   selectedId: string | null;
   turnRunning?: boolean;
   activeToolPreviewId?: string | null;
+  activityDisclosureCommand?: ActivityDisclosureCommand | null;
   fileChangeSummary?: FileChangeSummary | undefined;
   reasoningModelCalls?: ReadonlyMap<string, ModelCallTimelineItem>;
   onSelect: (id: string) => void;
@@ -95,6 +98,7 @@ export function TimelineEntry({
       <ReasoningEntry
         item={item}
         selected={Boolean(modelCall && modelCall.id === selectedId)}
+        {...(activityDisclosureCommand !== undefined ? { disclosureCommand: activityDisclosureCommand } : {})}
         {...(modelCall ? {
           durationMs: modelCall.durationMs,
           onInspect: () => onSelect(modelCall.id),
@@ -152,6 +156,7 @@ export function TimelineEntry({
           autoExpanded={item.id === activeToolPreviewId}
           statusClass={status.className}
           duration={item.durationMs ? formatDuration(item.durationMs) : undefined}
+          {...(activityDisclosureCommand !== undefined ? { disclosureCommand: activityDisclosureCommand } : {})}
           onSelect={() => onSelect(item.id)}
           {...(onOpenFile ? { onOpenFile } : {})}
         />
@@ -166,6 +171,7 @@ export function TimelineEntry({
           autoExpanded={item.id === activeToolPreviewId}
           statusClass={status.className}
           duration={item.durationMs ? formatDuration(item.durationMs) : undefined}
+          {...(activityDisclosureCommand !== undefined ? { disclosureCommand: activityDisclosureCommand } : {})}
           onSelect={() => onSelect(item.id)}
         />
       );
@@ -205,7 +211,7 @@ export function TimelineEntry({
         >
           <div className={item.streaming ? "markdown-content streaming" : "markdown-content"}>
             {item.streaming ? (
-              <>{item.text}<span className="streaming-cursor" aria-hidden="true" /></>
+              <>{streamingText(item.text)}<span className="streaming-cursor" aria-hidden="true" /></>
             ) : (
               <MarkdownContent text={item.text} {...(item.sources ? { sources: item.sources } : {})} />
             )}
@@ -213,7 +219,6 @@ export function TimelineEntry({
           {!item.streaming && !item.intermediate && fileChangeSummary ? (
             <FileChangeSummaryCard
               summary={fileChangeSummary}
-              {...(onOpenFile ? { onOpenFile } : {})}
               {...(onReviewChanges ? { onReview: onReviewChanges } : {})}
             />
           ) : null}
@@ -366,6 +371,7 @@ function ActivityGroup({
   onGrantSandboxAccess?: (id: string, inputs: SandboxAccessInput[]) => Promise<void>;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
+  const [disclosureCommand, setDisclosureCommand] = useState<ActivityDisclosureCommand | null>(null);
   const items = item.items.filter(isVisibleActivityItem);
 
   if (!items.length) return <></>;
@@ -383,30 +389,49 @@ function ActivityGroup({
         </span>
       </summary>
       {open ? (
-        <div className="execution-tree activity-group-body">
-          {items.map((child) => {
-            const childStatus = activityItemStatus(child);
-            return (
-              <div className={`execution-tree-item ${childStatus} activity-group-item`} key={child.id}>
-                <span className="execution-tree-marker" aria-hidden="true" />
-                <div className="execution-tree-content">
-                  <TimelineEntry
-                    item={child}
-                    selectedId={selectedId}
-                    turnRunning={turnRunning}
-                    activeToolPreviewId={activeToolPreviewId}
-                    {...(reasoningModelCalls ? { reasoningModelCalls } : {})}
-                    onSelect={onSelect}
-                    {...(onOpenFile ? { onOpenFile } : {})}
-                    {...(onResolveApproval ? { onResolveApproval } : {})}
-                    {...(onChooseSandboxFolder ? { onChooseSandboxFolder } : {})}
-                    {...(onGrantSandboxAccess ? { onGrantSandboxAccess } : {})}
-                  />
+        <>
+          {!turnRunning ? (
+            <div className="activity-group-actions">
+              <button
+                type="button"
+                onClick={() => setDisclosureCommand((current) => ({ id: (current?.id ?? 0) + 1, open: true }))}
+              >
+                Expand all
+              </button>
+              <button
+                type="button"
+                onClick={() => setDisclosureCommand((current) => ({ id: (current?.id ?? 0) + 1, open: false }))}
+              >
+                Collapse all
+              </button>
+            </div>
+          ) : null}
+          <div className="execution-tree activity-group-body">
+            {items.map((child) => {
+              const childStatus = activityItemStatus(child);
+              return (
+                <div className={`execution-tree-item ${childStatus} activity-group-item`} key={child.id}>
+                  <span className="execution-tree-marker" aria-hidden="true" />
+                  <div className="execution-tree-content">
+                    <TimelineEntry
+                      item={child}
+                      selectedId={selectedId}
+                      turnRunning={turnRunning}
+                      activeToolPreviewId={activeToolPreviewId}
+                      activityDisclosureCommand={disclosureCommand}
+                      {...(reasoningModelCalls ? { reasoningModelCalls } : {})}
+                      onSelect={onSelect}
+                      {...(onOpenFile ? { onOpenFile } : {})}
+                      {...(onResolveApproval ? { onResolveApproval } : {})}
+                      {...(onChooseSandboxFolder ? { onChooseSandboxFolder } : {})}
+                      {...(onGrantSandboxAccess ? { onGrantSandboxAccess } : {})}
+                    />
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </>
       ) : null}
     </details>
   );
@@ -466,6 +491,7 @@ function ApprovalEntry({
   }
 
   const networkRequest = item.reason.includes("requests network access");
+  const hostHomeRequest = item.reason.includes("references the host home directory");
   const scopeLabel = scope === "thread"
     ? "for this thread"
     : scope === "workspace"
@@ -473,6 +499,8 @@ function ApprovalEntry({
       : "in all workspaces";
   const explanation = networkRequest
     ? "Restricted mode blocks network access. You can allow this command to run with your normal user access."
+    : hostHomeRequest
+      ? "Restricted HOME and ~ use private temporary storage. Allow this command to run once with your normal host home, or deny it."
     : folders.length
       ? `Allow ${writable ? "read and write" : "read"} access ${scopeLabel} and retry inside the sandbox.`
       : "Snaffle could not identify the required folder. Choose one to retry inside the sandbox, or use Allow once to run this command outside it.";
@@ -493,11 +521,11 @@ function ApprovalEntry({
     }
   }
 
-  const canGrantFolders = !networkRequest && Boolean(onChooseSandboxFolder && onGrantSandboxAccess);
+  const canGrantFolders = !networkRequest && !hostHomeRequest && Boolean(onChooseSandboxFolder && onGrantSandboxAccess);
 
   return (
     <section className="approval-card">
-      <strong>Command needs extra access</strong>
+      <strong>{hostHomeRequest ? "Command requests host home access" : "Command needs extra access"}</strong>
       <code>{item.command}</code>
       <p>{explanation}</p>
       {folders.length ? (
@@ -792,11 +820,13 @@ function ReasoningEntry({
   item,
   selected,
   durationMs,
+  disclosureCommand,
   onInspect,
 }: {
   item: Extract<TimelineItem, { kind: "reasoning" }>;
   selected: boolean;
   durationMs?: number | undefined;
+  disclosureCommand?: ActivityDisclosureCommand | null;
   onInspect?: () => void;
 }): JSX.Element {
   const [open, setOpen] = useState(item.streaming);
@@ -805,6 +835,9 @@ function ReasoningEntry({
   const followText = useRef(true);
 
   useEffect(() => setOpen(item.streaming), [item.streaming]);
+  useEffect(() => {
+    if (disclosureCommand) setOpen(disclosureCommand.open);
+  }, [disclosureCommand]);
   useEffect(() => {
     if (!item.retryAt) return;
     setNow(Date.now());
@@ -825,8 +858,12 @@ function ReasoningEntry({
         aria-expanded={open}
         onClick={() => {
           if (onInspect) {
-            onInspect();
-            setOpen(selected ? item.streaming : true);
+            if (!selected) {
+              onInspect();
+              setOpen(true);
+            } else if (!item.streaming) {
+              setOpen((current) => !current);
+            }
           } else {
             setOpen((current) => !current);
           }
@@ -854,7 +891,7 @@ function ReasoningEntry({
                 followText.current = text.scrollHeight - text.scrollTop - text.clientHeight < 24;
               }}
             >
-              {item.text}
+              {reasoningText(item.text)}
             </div>
           ) : null}
         </div>
@@ -877,6 +914,14 @@ function reasoningStatus(
 
 function formatDuration(durationMs: number): string {
   return durationMs < 1_000 ? `${durationMs}ms` : `${(durationMs / 1_000).toFixed(1)}s`;
+}
+
+function streamingText(text: string): string {
+  return text.replace(/^(?:[ \t]*\r?\n)+/, "");
+}
+
+function reasoningText(text: string): string {
+  return streamingText(text).replace(/(?:\r?\n[ \t]*)+$/, "");
 }
 
 function ContextEntry({ item }: { item: Extract<TimelineItem, { kind: "context" }> }): JSX.Element {

@@ -16,7 +16,7 @@ export const editTool: Tool = {
   inputSchema: {
     type: "object",
     properties: {
-      path: { type: "string", description: "Required. Workspace-relative file path." },
+      path: { type: "string", description: "Required. Workspace-relative file path or $TMPDIR temporary path." },
       edits: {
         type: "array",
         minItems: 1,

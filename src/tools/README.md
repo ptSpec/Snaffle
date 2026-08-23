@@ -18,6 +18,7 @@ The stable core is the five file and command tools. Custom model surfaces also i
 ## Invariants
 
 - Schemas stay shallow and defaults live in the harness.
+- File paths are workspace-relative or use the exact `$TMPDIR` logical root. Search covers both roots when no path is supplied, includes two surrounding lines per match, and returns paths that other file tools can reuse directly.
 - Tool output is bounded in model context while complete inspectable records remain available to the user.
 - Failed edits require a reread; `write_file` is not a hidden fallback for malformed targeted edits.
 - New high-level capabilities should enter through a lazy broker or explicit surface rather than casually expanding the five-tool core.

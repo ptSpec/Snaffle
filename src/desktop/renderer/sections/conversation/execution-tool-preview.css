@@ -84,6 +84,37 @@
   animation: execution-cursor 850ms steps(1) infinite;
 }
 
+.execution-command-line > button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  align-self: center;
+  place-items: center;
+  margin: -4px -4px -4px auto;
+  padding: 0;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+}
+
+.execution-command-line > button:hover,
+.execution-command-line > button:focus-visible {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
+.execution-command-line > button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
 .execution-tool-running {
   display: flex;
   min-height: 48px;
@@ -123,6 +154,7 @@
 
 .execution-tool-preview.animate-result .execution-command-output code > span,
 .execution-tool-preview.animate-result .execution-search-result,
+.execution-tool-preview.web.animate-result .execution-web-source,
 .execution-tool-preview.animate-result .execution-read-line {
   opacity: 0;
   transform: translateY(3px);
@@ -298,6 +330,85 @@
   border-top: 1px solid var(--border-default);
 }
 
+.execution-web-sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px 8px;
+}
+
+.execution-tool-preview.fetch .execution-web-sources {
+  padding-block: 5px;
+}
+
+.execution-web-query {
+  min-height: 32px;
+  padding-bottom: 3px;
+  border-bottom: 0;
+}
+
+.execution-web-source {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 3px;
+  color: var(--text-muted);
+  background: var(--panel);
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+}
+
+.execution-web-source i {
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  color: var(--text-secondary);
+  background: var(--hover-background);
+  border-radius: 50%;
+  font: 500 calc(10px * var(--interface-font-scale))/1 var(--font-interface);
+  font-style: normal;
+  text-transform: uppercase;
+}
+
+.execution-web-sources.fetching,
+.execution-tool-preview.fetch.animate-result .execution-web-sources {
+  position: relative;
+  overflow: hidden;
+}
+
+.execution-web-sources.fetching::after,
+.execution-tool-preview.fetch.animate-result .execution-web-sources::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent 0%, var(--accent) 48%, transparent 100%);
+  transform: translateX(-100%);
+}
+
+.execution-web-sources.fetching::after {
+  animation: execution-search-sweep 1.4s ease-in-out infinite;
+}
+
+.execution-tool-preview.fetch.animate-result .execution-web-sources::after {
+  animation: execution-fetch-complete 900ms ease-out both;
+}
+
+.execution-web-source small,
+.execution-web-sources > small {
+  font-size: calc(10px * var(--interface-font-scale));
+}
+
+.execution-web-sources > small {
+  color: var(--text-faint);
+}
+
 .execution-tool-empty {
   min-height: 46px;
   margin: 0;
@@ -320,6 +431,10 @@
   55%, 100% { transform: translateX(100%); }
 }
 
+@keyframes execution-fetch-complete {
+  to { transform: translateX(100%); }
+}
+
 @keyframes execution-read-scan {
   60%, 100% { transform: translateX(100%); }
 }
@@ -339,9 +454,12 @@
   .execution-command-line > i,
   .execution-tool-running > span,
   .execution-search-query.running::after,
+  .execution-web-sources.fetching::after,
+  .execution-tool-preview.fetch.animate-result .execution-web-sources::after,
   .execution-read-loading::after,
   .execution-tool-preview.animate-result .execution-command-output code > span,
   .execution-tool-preview.animate-result .execution-search-result,
+  .execution-tool-preview.web.animate-result .execution-web-source,
   .execution-tool-preview.animate-result .execution-read-line {
     opacity: 1;
     transform: none;

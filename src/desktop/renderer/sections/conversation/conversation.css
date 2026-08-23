@@ -397,13 +397,13 @@ html[data-appearance="dark"] .jump-to-latest {
 }
 
 .markdown-content .source-reference svg {
-  width: 0.78em;
-  height: 0.78em;
+  width: 1.087em;
+  height: 1.087em;
   flex: 0 0 auto;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.5;
+  stroke-width: 1.7;
 }
 
 .markdown-content .source-reference:hover {
@@ -657,6 +657,10 @@ html[data-appearance="dark"] .jump-to-latest {
   background: var(--code-block-background);
   border: 1px solid var(--border-default);
   border-radius: 7px;
+}
+
+.markdown-content li > .code-block:last-child {
+  margin-bottom: 0;
 }
 
 html[data-appearance="dark"] .markdown-content .code-block {

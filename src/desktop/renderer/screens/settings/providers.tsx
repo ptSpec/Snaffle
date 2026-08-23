@@ -427,11 +427,18 @@ function DiscoveryStatus({
     tone = "error";
   } else if (catalog) {
     const count = catalog.discoveredModelCount;
-    title = count ? `${count} model${count === 1 ? "" : "s"} discovered automatically` : "No models discovered";
-    detail = count
-      ? "Manual model entries are optional."
-      : "Load a model in the server or add one manually below.";
-    tone = count ? "success" : "pending";
+    const unavailable = catalog.models.find((model) => model.toolUseUnavailableReason);
+    if (unavailable?.toolUseUnavailableReason && catalog.models.every((model) => model.toolUseUnavailableReason)) {
+      title = "Loaded model cannot use tools";
+      detail = unavailable.toolUseUnavailableReason;
+      tone = "error";
+    } else {
+      title = count ? `${count} model${count === 1 ? "" : "s"} discovered automatically` : "No models discovered";
+      detail = count
+        ? "Manual model entries are optional."
+        : "Load a model in the server or add one manually below.";
+      tone = count ? "success" : "pending";
+    }
   }
 
   return (

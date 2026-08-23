@@ -238,7 +238,7 @@ const editorTheme = EditorView.theme({
   ".cm-scroller": {
     overflow: "auto",
     fontFamily: "var(--font-code)",
-    fontSize: "var(--editor-font-size, 13px)",
+    fontSize: "calc(var(--editor-font-size, 13px) - 1px)",
     lineHeight: "1.65",
   },
   ".cm-content": { padding: "7px 0", caretColor: "var(--text-strong)" },

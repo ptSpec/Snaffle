@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { TimelineItem } from "./timeline-state.js";
 
 type ToolItem = Extract<TimelineItem, { kind: "tool" }>;
@@ -37,11 +37,9 @@ export function isFileMutationTool(name: string): boolean {
 
 export function FileChangeSummaryCard({
   summary,
-  onOpenFile,
   onReview,
 }: {
   summary: FileChangeSummary;
-  onOpenFile?: (path: string) => void;
   onReview?: () => void;
 }): JSX.Element {
   const changedLines = summary.added + summary.removed;
@@ -65,18 +63,6 @@ export function FileChangeSummaryCard({
         </span>
         {onReview ? <button type="button" onClick={onReview}>Review</button> : null}
       </header>
-      <ul>
-        {summary.files.map((file) => (
-          <li className={onOpenFile ? "interactive" : undefined} key={file.path}>
-            {onOpenFile ? (
-              <button type="button" onClick={() => onOpenFile(file.path)} title={`Open ${file.path}`}>
-                {file.path}
-              </button>
-            ) : <span title={file.path}>{file.path}</span>}
-            <span className="file-change-counts"><b>+{file.added}</b> <i>−{file.removed}</i></span>
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }
@@ -88,6 +74,7 @@ export function FileToolPreview({
   autoExpanded,
   statusClass,
   duration,
+  disclosureCommand,
   onSelect,
   onOpenFile,
 }: {
@@ -97,6 +84,7 @@ export function FileToolPreview({
   autoExpanded: boolean;
   statusClass: string;
   duration?: string | undefined;
+  disclosureCommand?: { id: number; open: boolean } | null;
   onSelect(): void;
   onOpenFile?: (path: string) => void;
 }): JSX.Element | null {
@@ -108,10 +96,20 @@ export function FileToolPreview({
         Math.max(1_200, Math.max(0, ...animationDelays(preview.lines.slice(0, MAX_PREVIEW_LINES))) + 320),
       )
     : 1_200;
-  const [open, setOpen] = useState(autoExpanded);
+  const autoReveal = autoExpanded && document.documentElement.dataset.animations !== "off";
+  const [open, setOpen] = useState(autoReveal);
+  const manuallyToggled = useRef(false);
 
   useEffect(() => {
-    if (autoExpanded) {
+    if (disclosureCommand) setOpen(disclosureCommand.open);
+  }, [disclosureCommand]);
+
+  useEffect(() => {
+    if (!autoReveal && document.documentElement.dataset.animations === "off") {
+      if (!manuallyToggled.current) setOpen(false);
+      return;
+    }
+    if (autoReveal) {
       setOpen(true);
       return;
     }
@@ -123,7 +121,7 @@ export function FileToolPreview({
     const remaining = Math.max(0, (item.startedAt ?? Date.now()) + minimumVisibleMs - Date.now());
     const timeout = window.setTimeout(() => setOpen(false), remaining);
     return () => window.clearTimeout(timeout);
-  }, [autoExpanded, item.startedAt, minimumVisibleMs, turnRunning]);
+  }, [autoReveal, item.startedAt, minimumVisibleMs, turnRunning]);
 
   if (!preview) return null;
 
@@ -145,8 +143,16 @@ export function FileToolPreview({
         aria-expanded={open}
         title="Inspect tool call and toggle changes"
         onClick={() => {
-          onSelect();
-          if (!autoExpanded) setOpen(!selected);
+          if (!selected) {
+            onSelect();
+            if (!autoReveal) {
+              manuallyToggled.current = true;
+              setOpen(true);
+            }
+          } else if (!autoReveal) {
+            manuallyToggled.current = true;
+            setOpen((current) => !current);
+          }
         }}
       >
         <svg className="tool-row-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -383,7 +389,7 @@ export function latestToolPreviewId(items: TimelineItem[]): string | null {
 }
 
 function isToolPreviewName(name: string): boolean {
-  return isFileMutationTool(name) || name === "run_command" || name === "search_files" || name === "read_file";
+  return isFileMutationTool(name) || name === "run_command" || name === "search_files" || name === "read_file" || name === "web_search" || name === "web_fetch";
 }
 
 function textLines(text: string): string[] {
