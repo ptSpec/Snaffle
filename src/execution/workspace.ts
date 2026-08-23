@@ -47,13 +47,26 @@ export interface Workspace {
   readonly environment: string;
   read(path: string): Promise<string>;
   write(path: string, content: string): Promise<void>;
-  stageTemporary?(path: string, content: string): Promise<string | undefined>;
   search(query: string, options: SearchOptions, signal?: AbortSignal): Promise<string[]>;
   run(command: string, cwd: string | undefined, timeoutMs: number, signal?: AbortSignal): Promise<CommandResult>;
 }
 
 export type CommandExecution = "disabled" | "restricted" | "unsafe";
 export type RestrictedEngine = "native" | "microsandbox";
+
+type ResolvedWorkspacePath = {
+  kind: "workspace" | "temporary";
+  base: string;
+  path: string;
+  relative: string;
+};
+
+type SearchLine = {
+  path: string;
+  line: number;
+  text: string;
+  match: boolean;
+};
 
 export class LocalWorkspace implements Workspace {
   readonly root: string;
@@ -78,11 +91,9 @@ export class LocalWorkspace implements Workspace {
       ? ` Additional shell access: ${sandboxAccess.map((entry) =>
           `${entry.writable ? "read and write" : "read only"} ${entry.path}`).join("; ")}.`
       : "";
-    const temporary = commandExecution === "restricted"
-      ? persistentTemporary
-        ? " $TMPDIR is a writable shell path variable for temporary work. Use paths such as \"$TMPDIR/repo\" or \"$TMPDIR/analyze.py\" instead of literal /tmp or the workspace. Its contents persist across responses in this thread and may be removed after five days of inactivity; keep anything durable in the workspace."
-        : " $TMPDIR is a writable shell path variable for temporary work. Use paths such as \"$TMPDIR/repo\" or \"$TMPDIR/analyze.py\" instead of literal /tmp or the workspace. Its contents are removed after this run; keep anything durable in the workspace."
-      : "";
+    const temporary = persistentTemporary
+      ? " $TMPDIR is writable temporary storage for file tools and enabled shell commands. Its contents persist across responses in this thread and may be removed after five days of inactivity; keep anything durable in the workspace."
+      : " $TMPDIR is writable temporary storage for file tools and enabled shell commands. Its contents are removed after this run; keep anything durable in the workspace.";
     this.environment = `${hostEnvironmentDescription()} ${commandBoundary}${extraAccess}${temporary}`;
   }
 
@@ -102,7 +113,7 @@ export class LocalWorkspace implements Workspace {
   }
 
   async read(filePath: string): Promise<string> {
-    return readFile(await this.resolveExisting(filePath), "utf8");
+    return readFile((await this.resolveExisting(filePath)).path, "utf8");
   }
 
   async write(filePath: string, content: string): Promise<void> {
@@ -121,47 +132,100 @@ export class LocalWorkspace implements Workspace {
     await rename(temporary, target);
   }
 
-  async stageTemporary(filePath: string, content: string): Promise<string | undefined> {
-    if (this.commandExecution !== "restricted") return undefined;
-    return writeTemporaryFile(await this.temporaryDirectory(), filePath, content);
+  async search(query: string, options: SearchOptions, signal?: AbortSignal): Promise<string[]> {
+    const locations = options.path === undefined
+      ? await Promise.all([this.resolveExisting("."), this.resolveExisting("$TMPDIR")])
+      : [await this.resolveExisting(options.path)];
+    const matches = await Promise.all(locations.map((location) =>
+      this.searchLocation(query, location, options, signal)));
+    return matches.flat().slice(0, options.maxResults);
   }
 
-  async search(query: string, options: SearchOptions, signal?: AbortSignal): Promise<string[]> {
-    const searchPath = this.relative(await this.resolveExisting(options.path ?? "."));
+  private searchLocation(
+    query: string,
+    location: ResolvedWorkspacePath,
+    options: SearchOptions,
+    signal?: AbortSignal,
+  ): Promise<string[]> {
     const args = [
-      "--line-number", "--no-heading", "--color", "never",
+      "--json", "--context", "2", "--color", "never",
+      "--path-separator=/",
       "--max-columns", "1000", "--max-columns-preview",
     ];
 
     if (options.glob) args.push("--glob", options.glob);
-    args.push(query, searchPath || ".");
+    args.push(query, location.relative || ".");
 
     return new Promise((resolve, reject) => {
-      const child = spawn(ripgrepExecutable, args, { cwd: this.root, signal });
-      const matches: string[] = [];
+      const child = spawn(ripgrepExecutable, args, { cwd: location.base, signal });
+      const matches: Array<{ lines: string[]; after: number }> = [];
+      let previous: SearchLine[] = [];
+      let previousPath: string | undefined;
       let pending = "";
       let errorOutput = "";
+      let parseError: unknown;
       let stopped = false;
+
+      const consume = (output: string): void => {
+        const line = parseSearchLine(output);
+        if (!line) return;
+        if (line.path !== previousPath) {
+          previous = [];
+          for (const match of matches) match.after = 0;
+          previousPath = line.path;
+        }
+
+        const context = this.searchResult(location, line, false);
+        for (const match of matches) {
+          if (match.after > 0) {
+            match.lines.push(context);
+            match.after -= 1;
+          }
+        }
+        if (line.match && matches.length < options.maxResults) {
+          matches.push({
+            lines: [
+              ...previous.map((entry) => this.searchResult(location, entry, false)),
+              this.searchResult(location, line, true),
+            ],
+            after: 2,
+          });
+        }
+
+        previous = [...previous.slice(-1), line];
+        if (matches.length >= options.maxResults && matches.at(-1)?.after === 0) {
+          stopped = true;
+          child.kill();
+        }
+      };
 
       child.stdout.setEncoding("utf8");
       child.stdout.on("data", (chunk: string) => {
         const lines = `${pending}${chunk}`.split("\n");
         pending = lines.pop() ?? "";
         for (const line of lines) {
-          if (line) matches.push(line);
-          if (matches.length >= options.maxResults) {
-            stopped = true;
+          try {
+            if (line) consume(line);
+          } catch (error) {
+            parseError = error;
             child.kill();
-            break;
           }
+          if (stopped || parseError) break;
         }
       });
       child.stderr.setEncoding("utf8");
       child.stderr.on("data", (chunk: string) => { errorOutput += chunk; });
       child.once("error", reject);
       child.once("close", (code) => {
-        if (!stopped && pending && matches.length < options.maxResults) matches.push(pending);
-        if (stopped || code === 0 || code === 1) resolve(matches);
+        if (!parseError && pending) {
+          try {
+            consume(pending);
+          } catch (error) {
+            parseError = error;
+          }
+        }
+        if (parseError) reject(parseError);
+        else if (stopped || code === 0 || code === 1) resolve(matches.map((match) => match.lines.join("\n")));
         else reject(new Error(errorOutput.trim() || `ripgrep exited ${code}`));
       });
     });
@@ -184,7 +248,7 @@ export class LocalWorkspace implements Workspace {
       const result = await runRestrictedCommand(
         command,
         this.root,
-        commandCwd,
+        commandCwd.path,
         timeoutMs,
         signal,
         this.sandboxAccess,
@@ -196,7 +260,7 @@ export class LocalWorkspace implements Workspace {
       signal?.throwIfAborted();
       const decision = await this.approveCommand({
         command,
-        cwd: this.relative(commandCwd) || ".",
+        cwd: this.logicalPath(commandCwd),
         reason: result.stderr,
         ...await this.suggestedSandboxPaths(command),
       });
@@ -208,7 +272,7 @@ export class LocalWorkspace implements Workspace {
         const retried = await runRestrictedCommand(
           command,
           this.root,
-          commandCwd,
+          commandCwd.path,
           timeoutMs,
           signal,
           this.sandboxAccess,
@@ -218,11 +282,11 @@ export class LocalWorkspace implements Workspace {
         return { ...retried, approval: decision };
       }
       if (decision === "response" || decision === "thread") this.commandExecution = "unsafe";
-      const retried = await this.runUnsafe(command, commandCwd, timeoutMs, signal);
+      const retried = await this.runUnsafe(command, commandCwd.path, timeoutMs, signal);
       return { ...retried, approval: decision };
     }
 
-    return this.runUnsafe(command, commandCwd, timeoutMs, signal);
+    return this.runUnsafe(command, commandCwd.path, timeoutMs, signal);
   }
 
   private async runUnsafe(
@@ -231,9 +295,11 @@ export class LocalWorkspace implements Workspace {
     timeoutMs: number,
     signal?: AbortSignal,
   ): Promise<CommandResult> {
+    const temporary = await this.temporaryDirectory();
     try {
       const { stdout, stderr } = await execAsync(command, {
         cwd: commandCwd,
+        env: { ...process.env, TMPDIR: temporary, TMP: temporary, TEMP: temporary },
         timeout: timeoutMs,
         maxBuffer: 512 * 1024,
         signal,
@@ -276,40 +342,48 @@ export class LocalWorkspace implements Workspace {
   }
 
   private temporaryDirectory(): Promise<string> {
-    this.sandboxTemporary ??= this.persistentTemporary
+    this.sandboxTemporary ??= (this.persistentTemporary
       ? prepareScratchDirectory(this.persistentTemporary)
-      : mkdtemp(path.join(tmpdir(), "snaffle-sandbox-"));
+      : mkdtemp(path.join(tmpdir(), "snaffle-sandbox-")))
+      .then((directory) => realpath(directory));
     return this.sandboxTemporary;
   }
 
-  private resolve(input: string): string {
-    const resolved = path.resolve(this.root, input);
-    if (!path.isAbsolute(input)) {
-      const relative = path.relative(this.root, resolved);
-      if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-        throw new Error(`Path leaves the workspace: ${input}`);
-      }
+  private async resolve(input: string): Promise<ResolvedWorkspacePath> {
+    let kind: ResolvedWorkspacePath["kind"] = "workspace";
+    let base = this.root;
+    let requested = input;
+    if (input === "$TMPDIR" || input.startsWith("$TMPDIR/")) {
+      kind = "temporary";
+      base = await this.temporaryDirectory();
+      requested = input === "$TMPDIR" ? "." : input.slice("$TMPDIR/".length);
+    } else if (input.startsWith("$") || input.startsWith("~")) {
+      throw new Error(`Only $TMPDIR is supported as a logical path prefix: ${input}`);
     }
 
-    // Canonical checks in resolveExisting and resolveWrite handle absolute path aliases and symlinks.
-    return resolved;
+    const resolved = path.resolve(base, requested);
+    if ((kind === "temporary" || !path.isAbsolute(requested)) && !inside(base, resolved)) {
+      throw new Error(`Path leaves the ${kind === "temporary" ? "temporary storage" : "workspace"}: ${input}`);
+    }
+    return { kind, base, path: resolved, relative: path.relative(base, resolved) };
   }
 
-  private async resolveExisting(input: string): Promise<string> {
-    const resolved = this.resolve(input);
-    const actual = await realpath(resolved);
-    this.assertInside(actual, input);
-    return actual;
+  protected async resolveExisting(input: string): Promise<ResolvedWorkspacePath> {
+    const resolved = await this.resolve(input);
+    const actual = await realpath(resolved.path);
+    this.assertInside(resolved, actual, input);
+    return { ...resolved, path: actual, relative: path.relative(resolved.base, actual) };
   }
 
   private async resolveWrite(input: string): Promise<string> {
-    const target = this.resolve(input);
-    this.assertWritable(target, input);
+    const resolved = await this.resolve(input);
+    const target = resolved.path;
+    this.assertWritable(resolved, target, input);
 
     try {
       const actual = await realpath(target);
-      this.assertInside(actual, input);
-      this.assertWritable(actual, input);
+      this.assertInside(resolved, actual, input);
+      this.assertWritable(resolved, actual, input);
       return target;
     } catch (error) {
       if (!isMissingPath(error)) throw error;
@@ -319,8 +393,8 @@ export class LocalWorkspace implements Workspace {
     while (true) {
       try {
         const actual = await realpath(existing);
-        this.assertInside(actual, input);
-        this.assertWritable(actual, input);
+        this.assertInside(resolved, actual, input);
+        this.assertWritable(resolved, actual, input);
         break;
       } catch (error) {
         if (!isMissingPath(error)) throw error;
@@ -332,42 +406,63 @@ export class LocalWorkspace implements Workspace {
 
     await mkdir(path.dirname(target), { recursive: true });
     const parent = await realpath(path.dirname(target));
-    this.assertInside(parent, input);
-    this.assertWritable(parent, input);
+    this.assertInside(resolved, parent, input);
+    this.assertWritable(resolved, parent, input);
     return target;
   }
 
-  private assertInside(resolved: string, input: string): void {
-    const relative = path.relative(this.root, resolved);
+  private assertInside(location: ResolvedWorkspacePath, resolved: string, input: string): void {
+    const relative = path.relative(location.base, resolved);
     if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-      throw new Error(`Path leaves the workspace: ${input}`);
+      throw new Error(`Path leaves the ${location.kind === "temporary" ? "temporary storage" : "workspace"}: ${input}`);
     }
-    if (relative.split(path.sep).includes(".git")) {
+    if (location.kind === "workspace" && relative.split(path.sep).includes(".git")) {
       throw new Error(`Git metadata is managed by ${PROJECT.name} and cannot be accessed through file tools`);
     }
   }
 
-  private assertWritable(resolved: string, input: string): void {
+  private assertWritable(location: ResolvedWorkspacePath, resolved: string, input: string): void {
+    if (location.kind === "temporary") return;
     const relative = path.relative(personalSnaffleDirectory(), resolved);
     if (!relative || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))) {
       throw new Error(`Personal ${PROJECT.name} configuration cannot be changed through file tools: ${input}`);
     }
   }
 
-  private relative(input: string): string {
-    return path.relative(this.root, input);
+  private logicalPath(location: ResolvedWorkspacePath): string {
+    const relative = location.relative.split(path.sep).join("/");
+    if (location.kind === "temporary") return relative ? `$TMPDIR/${relative}` : "$TMPDIR";
+    return relative || ".";
+  }
+
+  private searchResult(location: ResolvedWorkspacePath, line: SearchLine, match: boolean): string {
+    const relative = line.path.startsWith("./") ? line.path.slice(2) : line.path;
+    const logicalPath = location.kind === "temporary" ? `$TMPDIR/${relative}` : relative;
+    const separator = match ? ":" : "-";
+    return `${logicalPath}${separator}${line.line}${separator}${line.text}`;
   }
 }
 
-export async function writeTemporaryFile(directory: string, filePath: string, content: string): Promise<string> {
-  const parts = filePath.replaceAll("\\", "/").split("/");
-  if (!filePath || path.posix.isAbsolute(filePath) || parts.includes("..")) {
-    throw new Error("Invalid temporary file path");
-  }
-  const target = path.join(directory, ...parts);
-  await mkdir(path.dirname(target), { recursive: true });
-  await writeFile(target, content, "utf8");
-  return `$TMPDIR/${parts.join("/")}`;
+function parseSearchLine(output: string): SearchLine | undefined {
+  const event = JSON.parse(output) as {
+    type?: unknown;
+    data?: {
+      path?: { text?: unknown };
+      lines?: { text?: unknown };
+      line_number?: unknown;
+    };
+  };
+  if (event.type !== "match" && event.type !== "context") return undefined;
+  const filePath = event.data?.path?.text;
+  const text = event.data?.lines?.text;
+  const line = event.data?.line_number;
+  if (typeof filePath !== "string" || typeof text !== "string" || typeof line !== "number") return undefined;
+  return {
+    path: filePath,
+    line,
+    text: text.replace(/\r?\n$/, ""),
+    match: event.type === "match",
+  };
 }
 
 function literalAbsolutePaths(command: string): string[] {

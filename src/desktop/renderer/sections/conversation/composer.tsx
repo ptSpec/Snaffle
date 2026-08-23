@@ -254,7 +254,7 @@ export function Composer({
             </strong>
             <p>
               {unsafe
-                ? "Shell commands run as your user and can access host files, network, and inherited environment. File tools remain workspace-only."
+                ? "Shell commands run as your user and can access host files, network, and inherited environment. File tools remain limited to the workspace and private temporary storage."
                 : restrictedEngine === "microsandbox"
                   ? !microsandboxAvailable
                     ? microsandboxDetail

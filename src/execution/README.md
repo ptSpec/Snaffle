@@ -11,11 +11,12 @@ This domain owns workspace file access, command execution, cancellation, and bac
 
 ## Invariants
 
-Every backend should preserve the same workspace-relative file and command behavior so tools do not need backend-specific logic.
+Every backend should preserve the same workspace-relative and `$TMPDIR` file and command behavior so tools do not need backend-specific logic.
 
-- File operations accept relative paths and absolute paths only when their canonical target remains inside the workspace; symlink escapes are rejected.
+- Relative file paths resolve inside the workspace. The exact `$TMPDIR` or `$TMPDIR/...` prefix resolves inside private thread scratch storage. Safe absolute workspace paths remain accepted; other variable-like prefixes, home aliases, external paths, and symlink escapes are rejected.
+- File search covers the workspace and thread scratch by default. An explicit relative or `$TMPDIR` path narrows the search to that root, and scratch results retain their reusable `$TMPDIR/...` prefix.
 - Model-controlled commands are restricted by default on macOS and Linux and receive no provider credentials. Windows starts with unrestricted host execution while Microsandbox remains experimental. Once restricted execution is selected, an unavailable engine blocks the run instead of silently falling back.
-- Users may grant specific additional folders to restricted shell commands as read-only or read/write for one thread, workspace, or all workspaces. Native execution can request a grant after an OS denial and retry. Microsandbox applies explicit grants when the next VM starts and does not infer host access from missing guest paths. Global grants and the `network: "allow" | "deny"` setting live in `~/.snaffle/sandbox-access.json`; restricted tools cannot modify that personal configuration. File tools remain workspace-only and workspace Git metadata remains protected.
+- Users may grant specific additional folders to restricted shell commands as read-only or read/write for one thread, workspace, or all workspaces. Native execution can request a grant after an OS denial and retry. Microsandbox applies explicit grants when the next VM starts and does not infer host access from missing guest paths. Global grants and the `network: "allow" | "deny"` setting live in `~/.snaffle/sandbox-access.json`; restricted tools cannot modify that personal configuration. File tools remain limited to the workspace and thread scratch, and workspace Git metadata remains protected.
 - Restricted desktop commands share one private `$TMPDIR` per thread. Native execution receives its protected host path; Microsandbox sees it only as `/tmp/snaffle`. It survives follow-up responses and app restarts, is removed with the thread, and is cleaned after five days of inactivity.
 - Restricted commands may use the network by default. A global setting can keep sandboxed shell commands offline without changing their filesystem boundary.
 - Cancellation terminates active child work where the platform supports it and prevents pending work from starting.

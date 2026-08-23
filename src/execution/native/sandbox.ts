@@ -102,7 +102,7 @@ export function hostEnvironmentDescription(): string {
         ? "Windows"
         : "Linux";
   const shell = process.platform === "win32" ? "PowerShell" : "POSIX shell";
-  return `${platform} ${process.arch}, ${shell}. Commands start in the workspace root; use workspace-relative paths.`;
+  return `${platform} ${process.arch}, ${shell}. Commands start in the workspace root; relative paths use the workspace.`;
 }
 
 export async function runRestrictedCommand(
@@ -204,6 +204,9 @@ async function runLinux(
 ): Promise<SandboxResult> {
   const gitMetadata = await findGitMetadata(workspace);
   const personalState = personalSnaffleDirectory();
+  const sandboxCwd = inside(temporary, cwd)
+    ? path.posix.join("/tmp", ...path.relative(temporary, cwd).split(path.sep))
+    : cwd;
   await mkdir(personalState, { recursive: true });
   const args = [
     "--die-with-parent",
@@ -218,7 +221,7 @@ async function runLinux(
     "--bind", workspace, workspace,
     ...gitMetadata.flatMap((entry) => ["--ro-bind", entry, entry]),
     "--ro-bind", personalState, personalState,
-    "--chdir", cwd,
+    "--chdir", sandboxCwd,
     ...restrictedShell(command, timeoutMs),
   ];
 

@@ -29,7 +29,7 @@ export function currentEnvironmentContent(
   const runtime = executionEnvironment
     ? `- Command environment: ${executionEnvironment}`
     : `- Platform: ${platform} ${process.arch}
-- Workspace: current project root; use workspace-relative paths
+- Workspace: current project root; relative paths use the workspace and $TMPDIR is temporary storage
 - Shell: ${shell}`;
 
   return `Current environment:

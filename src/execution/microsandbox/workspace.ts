@@ -11,7 +11,6 @@ import { prepareScratchDirectory } from "../scratch.js";
 import {
   LocalWorkspace,
   type CommandResult,
-  writeTemporaryFile,
 } from "../workspace.js";
 
 const runFile = promisify(execFile);
@@ -40,11 +39,11 @@ export class MicrosandboxWorkspace extends LocalWorkspace {
   private constructor(
     root: string,
     private readonly sandbox: Sandbox,
-    private readonly mountedTemporary: string,
+    mountedTemporary: string,
     networkEnabled: boolean,
     sandboxAccess: SandboxAccess[],
   ) {
-    super(root, "disabled");
+    super(root, "disabled", undefined, [], mountedTemporary);
     const additionalAccess = sandboxAccess.length
       ? ` Additional locations: ${sandboxAccess.map((entry, index) => {
           const guestPath = guestAccessPath(entry.path, index);
@@ -52,7 +51,7 @@ export class MicrosandboxWorkspace extends LocalWorkspace {
           return `${entry.writable ? "read and write" : "read only"} ${location}`;
         }).join("; ")}.`
       : "";
-    this.environment = `Linux ${process.arch}, /bin/sh. Commands start in ${GUEST_WORKSPACE}; use workspace-relative paths. $TMPDIR is a writable path for temporary work that persists across responses in this thread. Only ${GUEST_WORKSPACE}, $TMPDIR, and listed additional locations are host-backed.${additionalAccess} Commands ${networkEnabled ? "can use the network" : "cannot use the network"}. Provider credentials are not available.`;
+    this.environment = `Linux ${process.arch}, /bin/sh. Commands start in ${GUEST_WORKSPACE}; relative paths use the workspace. $TMPDIR is writable temporary storage shared by file tools and commands and persists across responses in this thread. Only ${GUEST_WORKSPACE}, $TMPDIR, and listed additional locations are host-backed.${additionalAccess} Commands ${networkEnabled ? "can use the network" : "cannot use the network"}. Provider credentials are not available.`;
   }
 
   static async create(
@@ -99,10 +98,6 @@ export class MicrosandboxWorkspace extends LocalWorkspace {
       networkEnabled,
       resolvedAccess,
     );
-  }
-
-  override stageTemporary(filePath: string, content: string): Promise<string> {
-    return writeTemporaryFile(this.mountedTemporary, filePath, content);
   }
 
   override async close(): Promise<void> {
@@ -180,17 +175,11 @@ export class MicrosandboxWorkspace extends LocalWorkspace {
   }
 
   private async guestPath(input: string): Promise<string> {
-    const actual = await realpath(path.resolve(this.root, input));
-    const relative = path.relative(this.root, actual);
-    if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-      throw new Error(`Path leaves the workspace: ${input}`);
-    }
-    if (relative.split(path.sep).includes(".git")) {
-      throw new Error("Git metadata cannot be used as a command working directory");
-    }
-    return relative
-      ? path.posix.join(GUEST_WORKSPACE, ...relative.split(path.sep))
-      : GUEST_WORKSPACE;
+    const resolved = await this.resolveExisting(input);
+    const guestRoot = resolved.kind === "temporary" ? GUEST_TEMPORARY : GUEST_WORKSPACE;
+    return resolved.relative
+      ? path.posix.join(guestRoot, ...resolved.relative.split(path.sep))
+      : guestRoot;
   }
 }
 
