@@ -94,7 +94,10 @@ export class LocalWorkspace implements Workspace {
     const temporary = persistentTemporary
       ? " $TMPDIR is writable temporary storage for file tools and enabled shell commands. Its contents persist across responses in this thread and may be removed after five days of inactivity; keep anything durable in the workspace."
       : " $TMPDIR is writable temporary storage for file tools and enabled shell commands. Its contents are removed after this run; keep anything durable in the workspace.";
-    this.environment = `${hostEnvironmentDescription()} ${commandBoundary}${extraAccess}${temporary}`;
+    const home = commandExecution === "restricted"
+      ? " In restricted commands, HOME and ~ refer to private temporary storage, not the host home directory. An explicit home path requests user approval."
+      : "";
+    this.environment = `${hostEnvironmentDescription()} ${commandBoundary}${extraAccess}${temporary}${home}`;
   }
 
   grantSandboxAccess(access: SandboxAccess): void {
@@ -243,6 +246,22 @@ export class LocalWorkspace implements Workspace {
     }
 
     const commandCwd = await this.resolveExisting(cwd ?? ".");
+
+    if (this.commandExecution === "restricted" && referencesHostHome(command)) {
+      const reason = "Command explicitly references the host home directory. Restricted HOME is private temporary storage.";
+      if (!this.approveCommand) return { exitCode: 1, stdout: "", stderr: `${reason} Use unrestricted execution to continue.` };
+      const decision = await this.approveCommand({
+        command,
+        cwd: this.logicalPath(commandCwd),
+        reason,
+      });
+      if (decision === "deny" || decision === "sandbox") {
+        return { exitCode: 1, stdout: "", stderr: `${reason} Host access was not approved.` };
+      }
+      signal?.throwIfAborted();
+      if (decision === "response" || decision === "thread") this.commandExecution = "unsafe";
+      return { ...await this.runUnsafe(command, commandCwd.path, timeoutMs, signal), approval: decision };
+    }
 
     if (this.commandExecution === "restricted") {
       const result = await runRestrictedCommand(
@@ -469,6 +488,10 @@ function literalAbsolutePaths(command: string): string[] {
   return (command.match(/"[^"]*"|'[^']*'|[^\s]+/g) ?? [])
     .map((token) => token.replace(/^["'(<]+|["'),;>]+$/g, ""))
     .filter((token) => path.isAbsolute(token));
+}
+
+function referencesHostHome(command: string): boolean {
+  return /(^|[\s;&|<(="])(?:~(?=\/|[\s;&|>)])|\$(?:HOME|\{HOME\})(?=\/|"\/))/.test(command);
 }
 
 function inside(root: string, candidate: string): boolean {

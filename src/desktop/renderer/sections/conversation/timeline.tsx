@@ -491,6 +491,7 @@ function ApprovalEntry({
   }
 
   const networkRequest = item.reason.includes("requests network access");
+  const hostHomeRequest = item.reason.includes("references the host home directory");
   const scopeLabel = scope === "thread"
     ? "for this thread"
     : scope === "workspace"
@@ -498,6 +499,8 @@ function ApprovalEntry({
       : "in all workspaces";
   const explanation = networkRequest
     ? "Restricted mode blocks network access. You can allow this command to run with your normal user access."
+    : hostHomeRequest
+      ? "Restricted HOME and ~ use private temporary storage. Allow this command to run once with your normal host home, or deny it."
     : folders.length
       ? `Allow ${writable ? "read and write" : "read"} access ${scopeLabel} and retry inside the sandbox.`
       : "Snaffle could not identify the required folder. Choose one to retry inside the sandbox, or use Allow once to run this command outside it.";
@@ -518,11 +521,11 @@ function ApprovalEntry({
     }
   }
 
-  const canGrantFolders = !networkRequest && Boolean(onChooseSandboxFolder && onGrantSandboxAccess);
+  const canGrantFolders = !networkRequest && !hostHomeRequest && Boolean(onChooseSandboxFolder && onGrantSandboxAccess);
 
   return (
     <section className="approval-card">
-      <strong>Command needs extra access</strong>
+      <strong>{hostHomeRequest ? "Command requests host home access" : "Command needs extra access"}</strong>
       <code>{item.command}</code>
       <p>{explanation}</p>
       {folders.length ? (

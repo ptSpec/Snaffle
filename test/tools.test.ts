@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { createServer } from "node:net";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { healToolCall, healToolInput } from "../src/tools/input.js";
@@ -653,6 +654,77 @@ test("restricted commands can be approved once or for the thread", async (t) => 
   assert.equal(after.exitCode, 0);
   assert.equal(approvals, 2);
   assert.equal(await readFile(path.join(root, ".git/after"), "utf8"), "after");
+});
+
+test("explicit host home references require approval before restricted execution", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "sandbox-home-approval-"));
+  const decisions = ["deny", "once"] as const;
+  const requests: string[] = [];
+  let approvals = 0;
+  const workspace = new LocalWorkspace(root, "restricted", async (request) => {
+    requests.push(request.reason);
+    return decisions[approvals++] ?? "deny";
+  });
+  t.after(() => Promise.all([workspace.close(), rm(root, { recursive: true, force: true })]));
+
+  const denied = await workspace.run("cat ~/.zshrc 2>/dev/null || echo misleading-missing", undefined, 5000);
+  const allowed = await workspace.run('printf %s "$HOME"/.zshrc', undefined, 5000);
+
+  assert.equal(denied.stdout, "");
+  assert.match(denied.stderr, /Host access was not approved/);
+  assert.equal(allowed.stdout, path.join(homedir(), ".zshrc"));
+  assert.equal(allowed.approval, "once");
+  assert.equal(approvals, 2);
+  assert.ok(requests.every((reason) => reason.includes("host home directory")));
+});
+
+test("macOS native sandbox allows private sockets and IP networking but blocks host Unix sockets", async (t) => {
+  if (process.platform !== "darwin") return t.skip("Seatbelt-specific behavior");
+  if (!nativeSandboxStatus().available) return t.skip(nativeSandboxStatus().detail);
+
+  const root = await mkdtemp(path.join(tmpdir(), "sandbox-network-workspace-"));
+  const outside = await mkdtemp(path.join(tmpdir(), "sandbox-network-socket-"));
+  const socketPath = path.join(outside, "daemon.sock");
+  const unixServer = createServer((socket) => socket.end("unix-reachable"));
+  const tcpServer = createServer((socket) => socket.end("tcp-reachable"));
+  await new Promise<void>((resolve, reject) => {
+    unixServer.once("error", reject);
+    unixServer.listen(socketPath, resolve);
+  });
+  await new Promise<void>((resolve, reject) => {
+    tcpServer.once("error", reject);
+    tcpServer.listen(0, "127.0.0.1", resolve);
+  });
+  const address = tcpServer.address();
+  assert.ok(address && typeof address !== "string");
+  const decisions = ["deny", "once"] as const;
+  let approvals = 0;
+  const workspace = new LocalWorkspace(root, "restricted", async () => decisions[approvals++] ?? "deny");
+  t.after(async () => {
+    await workspace.close();
+    await Promise.all([
+      new Promise<void>((resolve) => unixServer.close(() => resolve())),
+      new Promise<void>((resolve) => tcpServer.close(() => resolve())),
+    ]);
+    await Promise.all([root, outside].map((directory) => rm(directory, { recursive: true, force: true })));
+  });
+
+  const client = "const net=require('node:net');const target=process.argv[1];const socket=/^\\d+$/.test(target)?net.connect(Number(target),'127.0.0.1'):net.connect(target);socket.on('data',data=>process.stdout.write(data));socket.on('error',error=>{console.error(error.message);process.exit(2)});";
+  const roundTrip = "const net=require('node:net');const target=process.argv[1];const server=net.createServer(socket=>socket.end('private'));server.listen(target,()=>{const client=net.connect(target);client.on('data',data=>process.stdout.write(data));client.on('end',()=>server.close())});server.on('error',error=>{console.error(error.message);process.exit(2)});";
+  const unix = await workspace.run(`node -e ${JSON.stringify(client)} ${JSON.stringify(socketPath)}`, undefined, 5000);
+  const approvedUnix = await workspace.run(`node -e ${JSON.stringify(client)} ${JSON.stringify(socketPath)}`, undefined, 5000);
+  const tcp = await workspace.run(`node -e ${JSON.stringify(client)} ${address.port}`, undefined, 5000);
+  const projectSocket = await workspace.run(`node -e ${JSON.stringify(roundTrip)} workspace.sock`, undefined, 5000);
+  const temporarySocket = await workspace.run(`node -e ${JSON.stringify(roundTrip)} "$TMPDIR/private.sock"`, undefined, 5000);
+
+  assert.notEqual(unix.exitCode, 0);
+  assert.match(unix.stderr, /EPERM|Operation not permitted/i);
+  assert.equal(approvedUnix.stdout, "unix-reachable");
+  assert.equal(approvedUnix.approval, "once");
+  assert.equal(approvals, 2);
+  assert.equal(tcp.stdout, "tcp-reachable");
+  assert.equal(projectSocket.stdout, "private");
+  assert.equal(temporarySocket.stdout, "private");
 });
 
 test("restricted commands can retry with a newly granted folder", async (t) => {

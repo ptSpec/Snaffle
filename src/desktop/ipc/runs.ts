@@ -477,8 +477,8 @@ export function registerRunIpc(options: {
         options.sendEvent(threadId, event);
       },
     }).then(async () => {
-      const entries = await options.store.entries(threadId);
       if (active.get(threadId) === run) active.delete(threadId);
+      const entries = await options.store.entries(threadId);
       options.sendEvent(threadId, {
         type: "run.persisted",
         entries: entries.map((entry) => ({ sequence: entry.sequence, entryId: entry.id })),

@@ -259,7 +259,7 @@ export function Composer({
                   ? !microsandboxAvailable
                     ? microsandboxDetail
                     : <>Shell commands run in an isolated Linux environment using up to 2 GiB of memory and {sandboxNetworkEnabled ? "can use the network" : "cannot use the network"}. Only this workspace, private temporary storage, and locations below are host-backed.</>
-                  : <>Shell commands can write in this workspace, use private temporary files, and {sandboxNetworkEnabled ? "use the network" : "cannot use the network"}.<br />Other host files and workspace Git metadata remain protected.</>}
+                    : <>Shell commands can write in this workspace, use private temporary files, and {sandboxNetworkEnabled ? "use the network" : "cannot use the network"}. HOME and ~ use private temporary storage.<br />Other host files, service sockets, and workspace Git metadata remain protected.</>}
             </p>
             {!unsafe ? (
               <div className="sandbox-engine-access">
@@ -291,7 +291,7 @@ export function Composer({
               <div className="sandbox-network-access">
                 <div className="sandbox-access-heading">
                   <span>Network access</span>
-                  <small>Restricted commands</small>
+                  <small>IP + private sockets</small>
                 </div>
                 <div className="sandbox-location-options" aria-label="Network access">
                   <button
