@@ -4,13 +4,13 @@ import { truncateHead } from "./output.js";
 export const searchTool: Tool = {
   name: "search_files",
   description:
-    "Search file contents with ripgrep inside the workspace. Results are bounded; narrow the query or path if output is truncated.",
+    "Search file contents with ripgrep and show two surrounding lines for each match. By default, searches the workspace and $TMPDIR temporary storage. Results are bounded; narrow the query or path if output is truncated.",
   exampleInput: { query: "functionName", path: "src", glob: "*.ts", maxResults: 20 },
   inputSchema: {
     type: "object",
     properties: {
       query: { type: "string", description: "Required. Ripgrep regular expression." },
-      path: { type: "string", description: "Optional. Workspace-relative directory or file; omit to search the whole workspace." },
+      path: { type: "string", description: "Optional. Workspace-relative or $TMPDIR directory or file; omit to search both roots." },
       glob: { type: "string", description: "Optional. File glob such as *.ts." },
       maxResults: { type: "integer", description: "Optional. Maximum matches; defaults to 50.", minimum: 1, maximum: 200 },
     },
@@ -34,12 +34,12 @@ export const searchTool: Tool = {
       maxResults: maxResults + 1,
     }, context?.signal);
     if (!matches.length) return { content: "No matches." };
-    const visible = matches.slice(0, maxResults).map((match) =>
-      match.length > 1_000 ? `${match.slice(0, 1_000)}… [line truncated]` : match,
-    );
+    const visible = matches.slice(0, maxResults).map((match) => match.split("\n").map((line) =>
+      line.length > 1_000 ? `${line.slice(0, 1_000)}… [line truncated]` : line,
+    ).join("\n"));
     const resultNotice = matches.length > maxResults
       ? `\n\n[More than ${maxResults} matches found. Narrow the query or path to see others.]`
       : "";
-    return { content: truncateHead(`${visible.join("\n")}${resultNotice}`) };
+    return { content: truncateHead(`${visible.join("\n--\n")}${resultNotice}`) };
   },
 };

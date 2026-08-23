@@ -10,7 +10,7 @@ export const runTool: Tool = {
     type: "object",
     properties: {
       command: { type: "string", description: "Required. Shell command to execute." },
-      cwd: { type: "string", description: "Optional. Workspace-relative working directory; omit to use the workspace root. Never send an empty string." },
+      cwd: { type: "string", description: "Optional. Workspace-relative or $TMPDIR working directory; omit to use the workspace root. Never send an empty string." },
       timeoutMs: { type: "integer", description: "Optional. Timeout in milliseconds; defaults to 120000.", minimum: 1000, maximum: 300000 },
     },
     required: ["command"],

@@ -16,6 +16,7 @@ import {
   TOOL_RESULT_SUMMARY_LIMIT,
 } from "../src/context/summary.js";
 import { buildContextReport } from "../src/context/report.js";
+import { currentEnvironmentContent } from "../src/context/environment.js";
 import type { Message, ToolSpec } from "../src/protocol.js";
 import { withRecoveredPlan, type PlanItem } from "../src/tools/plan.js";
 
@@ -34,6 +35,17 @@ const checkpoint: ContextCheckpoint = {
   injectedCharacters: null,
   appliedThroughSequence: null,
 };
+
+test("the command environment replaces host platform and shell details", () => {
+  const content = currentEnvironmentContent(
+    new Date("2026-08-22T12:00:00Z"),
+    "Linux arm64, /bin/sh. Commands start in /workspace.",
+  );
+
+  assert.match(content, /Command environment: Linux arm64, \/bin\/sh/);
+  assert.doesNotMatch(content, /- Platform:/);
+  assert.doesNotMatch(content, /- Shell:/);
+});
 
 test("context projection uses the checkpoint tail and omits completed reasoning", () => {
   const entries = [

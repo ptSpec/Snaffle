@@ -5,7 +5,22 @@ import { PROJECT } from "../../identity.js";
 const MAX_RESPONSE_BYTES = 2_000_000;
 const MAX_HTML_RESPONSE_BYTES = 7_000_000;
 
+export type PublicResource = {
+  url: string;
+  contentType: string;
+  bytes: Uint8Array;
+};
+
 export async function fetchPublicText(rawUrl: string, signal?: AbortSignal): Promise<{ url: string; contentType: string; text: string }> {
+  const resource = await fetchPublicResource(rawUrl, signal);
+  return {
+    url: resource.url,
+    contentType: resource.contentType,
+    text: new TextDecoder().decode(resource.bytes),
+  };
+}
+
+export async function fetchPublicResource(rawUrl: string, signal?: AbortSignal): Promise<PublicResource> {
   let url = publicUrl(rawUrl);
 
   for (let redirect = 0; redirect <= 5; redirect += 1) {
@@ -29,14 +44,14 @@ export async function fetchPublicText(rawUrl: string, signal?: AbortSignal): Pro
     return {
       url: response.url || url.toString(),
       contentType: response.headers.get("content-type") ?? "",
-      text: await limitedText(response),
+      bytes: await limitedBytes(response),
     };
   }
 
   throw new Error("Too many redirects");
 }
 
-async function fetchFandomPage(url: URL, signal?: AbortSignal): Promise<{ url: string; contentType: string; text: string } | undefined> {
+async function fetchFandomPage(url: URL, signal?: AbortSignal): Promise<PublicResource | undefined> {
   if (!url.hostname.endsWith(".fandom.com") || !url.pathname.startsWith("/wiki/")) return undefined;
   let page: string;
   try {
@@ -68,7 +83,7 @@ async function fetchFandomPage(url: URL, signal?: AbortSignal): Promise<{ url: s
   return {
     url: url.toString(),
     contentType: "text/html; charset=utf-8",
-    text: `<html><head><title>${escapeHtml(title)}</title></head><body>${html}</body></html>`,
+    bytes: new TextEncoder().encode(`<html><head><title>${escapeHtml(title)}</title></head><body>${html}</body></html>`),
   };
 }
 
@@ -122,11 +137,15 @@ function isPrivateAddress(address: string): boolean {
 }
 
 async function limitedText(response: Response): Promise<string> {
+  return new TextDecoder().decode(await limitedBytes(response));
+}
+
+async function limitedBytes(response: Response): Promise<Uint8Array> {
   const html = /html|xhtml/i.test(response.headers.get("content-type") ?? "");
   const maxBytes = html ? MAX_HTML_RESPONSE_BYTES : MAX_RESPONSE_BYTES;
   const declared = Number(response.headers.get("content-length"));
   if (declared > maxBytes) throw responseTooLarge(html);
-  if (!response.body) return "";
+  if (!response.body) return new Uint8Array();
 
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -147,7 +166,7 @@ async function limitedText(response: Response): Promise<string> {
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return new TextDecoder().decode(bytes);
+  return bytes;
 }
 
 function responseTooLarge(html: boolean): Error {

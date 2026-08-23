@@ -17,5 +17,8 @@ Search backends belong behind the existing search boundary. They should not leak
 - Web content is untrusted data, never instruction authority.
 - Block loopback, private, link-local, and prohibited destinations before and after redirects.
 - Fetch uses a 60-second overall deadline and bounded redirects and bytes.
+- Non-text responses are parsed only when AnyDoc recognizes their file signature; ordinary text and unknown binaries keep their existing paths.
+- Extracted documents are also staged as Markdown in thread `$TMPDIR` so file tools and commands can inspect their complete content without polluting the project.
+- Web pages advertise character-offset continuation. Staged documents advertise only their bounded preview and reusable Markdown path so models do not mix character offsets with file line numbers.
 - Do not forward browser cookies, arbitrary authorization headers, methods, or request bodies.
 - Search provider choice stays host-side and only the selected provider's protected key reaches its request or subprocess.

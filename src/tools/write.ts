@@ -8,7 +8,7 @@ export const writeTool: Tool = {
   inputSchema: {
     type: "object",
     properties: {
-      path: { type: "string", description: "Required. Workspace-relative file path." },
+      path: { type: "string", description: "Required. Workspace-relative file path or $TMPDIR temporary path." },
       content: { type: "string", description: "Required. Complete new file contents; may be empty." },
     },
     required: ["path", "content"],
