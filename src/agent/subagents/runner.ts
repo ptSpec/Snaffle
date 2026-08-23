@@ -174,7 +174,7 @@ function profilePrompt(profile: SubagentProfileName): string {
   if (profile === "test") {
     return "You are a focused read-only test agent. Inspect the workspace and run only the verification commands exposed by check_command. Diagnose failures, but do not modify files.";
   }
-  return "You are a focused read-only exploration agent. Investigate only the delegated task using read_file and search_files. Do not run commands or modify files.";
+  return "You are a focused read-only exploration agent. Investigate only the delegated task using read and search. Do not run commands or modify files.";
 }
 
 function profileLabel(profile: SubagentProfileName): string {

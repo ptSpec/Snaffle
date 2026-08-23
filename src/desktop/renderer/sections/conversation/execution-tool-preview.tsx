@@ -10,7 +10,7 @@ const READ_LINES = 18;
 const WEB_SOURCES = 6;
 
 export function isExecutionPreviewTool(name: string): boolean {
-  return name === "run_command" || name === "search_files" || name === "read_file" || name === "web_search" || name === "web_fetch";
+  return name === "run_command" || name === "search" || name === "read" || name === "web_search" || name === "web_fetch";
 }
 
 export function ExecutionToolPreview({
@@ -292,8 +292,8 @@ function previewFor(item: ToolItem): PreviewData | null {
   const input = recordValue(item.call.input);
   if (!input) return null;
   if (item.call.name === "run_command") return commandData(item, input);
-  if (item.call.name === "search_files") return searchData(item, input);
-  if (item.call.name === "read_file") return readData(item, input);
+  if (item.call.name === "search") return searchData(item, input);
+  if (item.call.name === "read") return readData(item, input);
   if (item.call.name === "web_search") return webSearchData(item, input);
   if (item.call.name === "web_fetch") return webFetchData(item, input);
   return null;

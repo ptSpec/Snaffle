@@ -2,7 +2,7 @@ export type ToolSurfaceMode = "custom" | "expanded";
 export type ModelToolSurface = { mode: ToolSurfaceMode; optionalTools: string[] };
 export type ModelToolSurfaces = Record<string, ModelToolSurface>;
 
-const CORE_TOOLS = new Set(["run_command", "read_file", "search_files", "edit_file", "write_file"]);
+const CORE_TOOLS = new Set(["run_command", "read", "search", "edit", "write"]);
 const CUSTOM_BASE_TOOLS = new Set(["update_plan"]);
 const CUSTOM_TOOL_CHOICES = new Set(["web_search", "web_fetch", "use_skill", "mcp"]);
 

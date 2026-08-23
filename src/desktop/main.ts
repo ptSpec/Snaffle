@@ -897,7 +897,7 @@ function currentToolSpecs(
 }
 
 const MODEL_TOOL_NAMES = new Set([
-  "run_command", "read_file", "search_files", "edit_file", "write_file",
+  "run_command", "read", "search", "edit", "write",
   "update_plan", "web_search", "web_fetch", "use_skill", "mcp", "delegate_task",
 ]);
 

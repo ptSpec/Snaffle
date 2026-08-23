@@ -36,7 +36,7 @@ class ScriptedProvider implements ModelProvider {
         toolCalls: [
           {
             id: "call-1",
-            name: "write_file",
+            name: "write",
             input: { path: "answer.txt", content: "done\n" },
           },
         ],
@@ -76,13 +76,13 @@ test("active capabilities reject duplicate tool names", () => {
       { source: { type: "built-in" }, tool: writeTool },
       { source: { type: "plugin", pluginId: "example" }, tool: writeTool },
     ]),
-    /Active tool name must be unique: write_file/,
+    /Active tool name must be unique: write/,
   );
 });
 
 test("custom model surfaces allow selected tools beyond the recommendation", () => {
   const available = [
-    "run_command", "read_file", "search_files", "edit_file", "write_file",
+    "run_command", "read", "search", "edit", "write",
     "update_plan", "web_search", "web_fetch", "use_skill", "mcp",
   ];
   const custom = activeToolNamesForSurface(
@@ -370,14 +370,14 @@ test("tool examples are shown after failure, not sent in every tool description"
         assert.ok(tools.every((tool) => !("exampleInput" in tool)));
         return {
           text: "",
-          toolCalls: [{ id: "bad-write", name: "write_file", input: { content: "missing path" } }],
+          toolCalls: [{ id: "bad-write", name: "write", input: { content: "missing path" } }],
         };
       }
 
       const failure = messages.at(-1);
       assert.equal(failure?.role, "user");
       assert.match(failure?.content ?? "", /tool input correction notice/);
-      assert.match(failure?.content ?? "", /Here is a valid example input for the write_file tool/);
+      assert.match(failure?.content ?? "", /Here is a valid example input for the write tool/);
       assert.match(failure?.content ?? "", /"path": "src\/config.ts"/);
       return { text: "Corrected the tool input.", toolCalls: [] };
     },
@@ -397,7 +397,7 @@ test("tool examples are shown after failure, not sent in every tool description"
   assert.equal(toolErrorContent(writeTool, new Error("Disk is full")), "Error: Disk is full");
   assert.match(
     toolErrorContent(editTool, new ToolInputError("edits must be a non-empty array")),
-    /Prefer correcting and retrying edit_file/,
+    /Prefer correcting and retrying edit/,
   );
 });
 

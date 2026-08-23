@@ -155,7 +155,7 @@ function ToolCard({
   );
 }
 
-const CORE_TOOLS = new Set(["run_command", "search_files", "read_file", "edit_file", "write_file"]);
+const CORE_TOOLS = new Set(["run_command", "search", "read", "edit", "write"]);
 
 const MANAGED_TOOLS = [
   { label: "Web tools", page: "Web", tools: ["web_search", "web_fetch"] },

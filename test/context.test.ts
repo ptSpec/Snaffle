@@ -57,19 +57,19 @@ test("context projection uses the checkpoint tail and omits completed reasoning"
         role: "assistant" as const,
         content: "done",
         reasoning: "private scratch work",
-        toolCalls: [{ id: "call-1", name: "read_file", input: { path: "counter.py" } }],
+        toolCalls: [{ id: "call-1", name: "read", input: { path: "counter.py" } }],
       },
     },
     { sequence: 5, message: { role: "tool" as const, toolCallId: "call-1", content: "file" } },
   ];
-  const tools: ToolSpec[] = [{ name: "read_file", description: "Read", inputSchema: { type: "object" } }];
+  const tools: ToolSpec[] = [{ name: "read", description: "Read", inputSchema: { type: "object" } }];
   const projection = projectContext(entries, checkpoint, tools);
 
   assert.equal(projection.messages[0]?.role, "system");
   assert.match(projection.messages[1]?.content ?? "", /Stage one is complete/);
   assert.deepEqual(projection.messages.slice(2).map((message) => message.role), ["user", "assistant", "tool"]);
   assert.equal(projection.messages[3]?.role === "assistant" && projection.messages[3].reasoning, undefined);
-  assert.equal(projection.messages[3]?.role === "assistant" && projection.messages[3].toolCalls?.[0]?.name, "read_file");
+  assert.equal(projection.messages[3]?.role === "assistant" && projection.messages[3].toolCalls?.[0]?.name, "read");
   assert.ok(projection.estimatedCharacters > 0);
   assert.equal(projection.estimatedTokens, estimateContextTokens(projection.estimatedCharacters));
 });
@@ -89,13 +89,13 @@ test("summary serialization excludes reasoning but retains tool continuity", () 
 
 test("malformed tool calls become provider-safe correction notices", () => {
   const messages: Message[] = [
-    { role: "assistant", content: "", toolCalls: [{ id: "bad", name: "edit_file", input: "{bad" }] },
+    { role: "assistant", content: "", toolCalls: [{ id: "bad", name: "edit", input: "{bad" }] },
     { role: "tool", toolCallId: "bad", content: "Error: edits must be an array", isError: true },
   ];
   const projected = withoutMalformedToolCalls(messages);
 
   assert.deepEqual(projected.map((message) => message.role), ["user"]);
-  assert.match(projected[0]?.content ?? "", /previous edit_file call had malformed arguments/);
+  assert.match(projected[0]?.content ?? "", /previous edit call had malformed arguments/);
   assert.match(projected[0]?.content ?? "", /edits must be an array/);
   assert.equal(messages[0]?.role === "assistant" && messages[0].toolCalls?.[0]?.input, "{bad");
 });

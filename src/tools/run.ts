@@ -4,7 +4,7 @@ import { DEFAULT_TOOL_OUTPUT_CHARS, truncateTail } from "./output.js";
 export const runTool: Tool = {
   name: "run_command",
   description:
-    "Run one shell command in the workspace and return bounded output. If output is long, the final portion is kept because it usually contains the result or error. For a long multiline program, use write_file to create a script, then run that file with a short command.",
+    "Run one shell command in the workspace and return bounded output. If output is long, the final portion is kept because it usually contains the result or error. For a long multiline program, use write to create a script, then run that file with a short command.",
   exampleInput: { command: "npm test" },
   inputSchema: {
     type: "object",

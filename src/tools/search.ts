@@ -2,7 +2,7 @@ import { integerField, objectInput, stringField, ToolInputError, type Tool } fro
 import { truncateHead } from "./output.js";
 
 export const searchTool: Tool = {
-  name: "search_files",
+  name: "search",
   description:
     "Search file contents with ripgrep and show two surrounding lines for each match. By default, searches the workspace and $TMPDIR temporary storage. Results are bounded; narrow the query or path if output is truncated.",
   exampleInput: { query: "functionName", path: "src", glob: "*.ts", maxResults: 20 },

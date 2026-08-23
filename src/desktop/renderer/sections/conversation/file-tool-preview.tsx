@@ -32,7 +32,7 @@ const MAX_PREVIEW_LINES = 80;
 const MAX_TURN_FILE_LINES = 400;
 
 export function isFileMutationTool(name: string): boolean {
-  return name === "edit_file" || name === "write_file";
+  return name === "edit" || name === "write";
 }
 
 export function FileChangeSummaryCard({
@@ -132,8 +132,8 @@ export function FileToolPreview({
   const state = item.isError
     ? "Failed"
     : item.phase === "running"
-      ? item.call.name === "edit_file" ? "Editing" : "Writing"
-      : item.call.name === "edit_file" ? "Edited" : "Wrote";
+      ? item.call.name === "edit" ? "Editing" : "Writing"
+      : item.call.name === "edit" ? "Edited" : "Wrote";
 
   return (
     <div className={open ? "file-tool-entry open" : "file-tool-entry"}>
@@ -230,7 +230,7 @@ function previewFor(item: ToolItem): Preview | null {
   const path = stringValue(input?.path);
   if (!input || !path) return null;
 
-  if (item.call.name === "write_file") {
+  if (item.call.name === "write") {
     const content = stringValue(input.content, true);
     if (content === undefined) return null;
     const lines = textLines(content).map((text) => ({ kind: "added" as const, text }));
@@ -242,7 +242,7 @@ function previewFor(item: ToolItem): Preview | null {
     };
   }
 
-  if (item.call.name !== "edit_file" || !Array.isArray(input.edits)) return null;
+  if (item.call.name !== "edit" || !Array.isArray(input.edits)) return null;
   const lines: PreviewLine[] = [];
   let editCount = 0;
   for (const rawEdit of input.edits) {
@@ -389,7 +389,7 @@ export function latestToolPreviewId(items: TimelineItem[]): string | null {
 }
 
 function isToolPreviewName(name: string): boolean {
-  return isFileMutationTool(name) || name === "run_command" || name === "search_files" || name === "read_file" || name === "web_search" || name === "web_fetch";
+  return isFileMutationTool(name) || name === "run_command" || name === "search" || name === "read" || name === "web_search" || name === "web_fetch";
 }
 
 function textLines(text: string): string[] {
@@ -406,13 +406,13 @@ function mutationStatsFor(item: ToolItem): {
   const path = stringValue(input?.path);
   if (!input || !path) return null;
 
-  if (item.call.name === "write_file") {
+  if (item.call.name === "write") {
     const content = stringValue(input.content, true);
     return content === undefined
       ? null
       : { path, operation: "wrote", added: lineCount(content), removed: 0 };
   }
-  if (item.call.name !== "edit_file" || !Array.isArray(input.edits)) return null;
+  if (item.call.name !== "edit" || !Array.isArray(input.edits)) return null;
 
   let added = 0;
   let removed = 0;

@@ -31,6 +31,7 @@ export function healToolInput(value: unknown, schema?: JsonSchema): ParsedToolIn
   }
 
   candidate = parseStringifiedProperties(candidate, schema, repairs);
+  candidate = repairKnownAliases(candidate, schema, repairs);
   candidate = wrapSingleArrayItems(candidate, schema, repairs);
   candidate = removeEmptyOptionalStrings(candidate, schema, repairs);
   candidate = raiseLowIntegers(candidate, schema, repairs);
@@ -39,6 +40,42 @@ export function healToolInput(value: unknown, schema?: JsonSchema): ParsedToolIn
     input: candidate,
     ...(healed && repairs.length ? { repair: repairs.join("; ") } : {}),
   };
+}
+
+function repairKnownAliases(
+  input: unknown,
+  schema: JsonSchema | undefined,
+  repairs: string[],
+): unknown {
+  if (!isObject(input) || !isObject(schema?.properties)) return input;
+  let result = input;
+
+  const edits = schema.properties.edits;
+  const editItem = isObject(edits) && isObject(edits.items) ? edits.items : undefined;
+  const editProperties = isObject(editItem?.properties) ? editItem.properties : undefined;
+  if (
+    isObject(edits) && edits.type === "array" &&
+    editProperties?.oldText !== undefined && editProperties.newText !== undefined &&
+    input.edits === undefined && typeof input.oldText === "string" && typeof input.newText === "string"
+  ) {
+    result = { ...input, edits: [{ oldText: input.oldText, newText: input.newText }] };
+    delete result.oldText;
+    delete result.newText;
+    repairs.push('Top-level "oldText" and "newText" were converted to one item in "edits"');
+  }
+
+  const content = schema.properties.content;
+  if (
+    isObject(content) && content.type === "string" &&
+    input.content === undefined && typeof input.contents === "string"
+  ) {
+    if (result === input) result = { ...input };
+    result.content = input.contents;
+    delete result.contents;
+    repairs.push('"contents" was renamed to "content"');
+  }
+
+  return result;
 }
 
 function raiseLowIntegers(

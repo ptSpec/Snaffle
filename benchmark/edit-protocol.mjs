@@ -19,6 +19,7 @@ You may have tools that make logical, computational, or programmable tasks easie
 
 const legacyReadTool = {
   ...readTool,
+  name: "read_file",
   description:
     'Read a UTF-8 file or a bounded range of its lines. Example: {"path":"src/app.ts","startLine":40,"lineCount":80}.',
   async execute(workspace, rawInput) {
@@ -31,6 +32,11 @@ const legacyReadTool = {
     const endLine = Math.min(startLine + selected.length - 1, lines.length);
     return { content: `[lines ${startLine}-${endLine} of ${lines.length}]\n${selected.join("\n")}` };
   },
+};
+
+const legacySearchTool = {
+  ...searchTool,
+  name: "search_files",
 };
 
 const legacyEditTool = {
@@ -93,6 +99,7 @@ const legacyEditTool = {
 
 const legacyWriteTool = {
   ...writeTool,
+  name: "write_file",
   description:
     'Create a file or replace its complete contents. Example: {"path":"src/config.ts","content":"export const port = 3000;\\n"}. Use edit_file for targeted changes.',
   async execute(workspace, rawInput) {
@@ -105,7 +112,7 @@ const legacyWriteTool = {
 };
 
 const variants = {
-  legacyExact: { prompt: LEGACY_PROMPT, tools: [runTool, legacyReadTool, searchTool, legacyEditTool, legacyWriteTool] },
+  legacyExact: { prompt: LEGACY_PROMPT, tools: [runTool, legacyReadTool, legacySearchTool, legacyEditTool, legacyWriteTool] },
   currentExact: { prompt: SYSTEM_PROMPT, tools: [runTool, readTool, searchTool, editTool, writeTool] },
 };
 
@@ -208,8 +215,9 @@ async function runTrial({ model, trial, benchmarkCase, variant, seed }) {
 function traceMetrics(events) {
   const completed = events.filter((event) => event.type === "model.completed");
   const calls = completed.flatMap((event) => event.response.toolCalls);
-  const tools = Object.fromEntries(["run_command", "read_file", "search_files", "edit_file", "write_file"].map((name) => [name, calls.filter((call) => call.name === name).length]));
-  const editCalls = calls.filter((call) => call.name === "edit_file");
+  const tools = Object.fromEntries([...new Set(calls.map((call) => call.name))]
+    .map((name) => [name, calls.filter((call) => call.name === name).length]));
+  const editCalls = calls.filter((call) => call.name === "edit_file" || call.name === "edit");
   return {
     steps: completed.length,
     inputTokens: sum(completed, (event) => event.response.usage?.inputTokens),
@@ -234,7 +242,7 @@ function summary(rows) {
     inputTokens: average(values, "inputTokens"),
     outputTokens: average(values, "outputTokens"),
     toolCalls: average(values, "toolCalls"),
-    reads: average(values.map((value) => ({ reads: value.tools.read_file })), "reads"),
+    reads: average(values.map((value) => ({ reads: (value.tools.read_file ?? 0) + (value.tools.read ?? 0) })), "reads"),
     argumentChars: average(values, "toolArgumentChars"),
     errors: average(values, "toolErrors"),
   }));
