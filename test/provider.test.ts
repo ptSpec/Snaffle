@@ -27,6 +27,30 @@ test("retry backoff stays short twice, then grows to 45 seconds", () => {
   assert.equal(canRetryStatus(500), true);
 });
 
+test("provider times out while waiting for response headers", async (t) => {
+  const server = createServer(() => undefined);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Test server did not start");
+
+  const provider = new OpenAICompatibleProvider({
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    model: "test-model",
+    streamIdleTimeoutMs: 20,
+    maxRetries: 0,
+  });
+
+  await assert.rejects(
+    provider.complete(
+      [{ role: "user", content: "Hello" }],
+      [],
+      new AbortController().signal,
+    ),
+    /Provider returned no response .* after 1 attempts/,
+  );
+});
+
 test("provider-declared model variants preserve the base model identity", () => {
   const variants = providerProfile("openrouter").modelVariants;
 

@@ -1,7 +1,13 @@
 import type { AttachmentRef, ResolvedAttachment } from "../attachments/types.js";
 import { PROJECT } from "../identity.js";
 import type { Message, ModelResponse, ToolCall, ToolSpec } from "../protocol.js";
-import { canRetryStatus, retryAfterMilliseconds, retryBackoffMs, waitForRetry } from "../retry.js";
+import {
+  canRetryStatus,
+  fetchWithResponseTimeout,
+  retryAfterMilliseconds,
+  retryBackoffMs,
+  waitForRetry,
+} from "../retry.js";
 import { healToolInput } from "../tools/input.js";
 import {
   DEFAULT_MODEL_CONTEXT_LENGTH,
@@ -81,7 +87,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
       let retryAfterMs = 0;
 
       try {
-        const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        const response = await fetchWithResponseTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             "content-type": "application/json",
@@ -110,8 +116,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
             ...(this.seed === undefined ? {} : { seed: this.seed }),
             ...reasoningRequest(this.reasoningEffort, this.reasoningFormat),
           }),
-          signal,
-        });
+        }, this.streamIdleTimeoutMs, signal);
         status = response.status;
         retryAfterMs = retryAfterMilliseconds(response.headers.get("retry-after"));
 
