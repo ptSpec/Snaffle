@@ -10,6 +10,7 @@ import { findGitMetadata } from "../native/sandbox.js";
 import { prepareScratchDirectory } from "../scratch.js";
 import {
   LocalWorkspace,
+  type CommandApproval,
   type CommandResult,
 } from "../workspace.js";
 
@@ -41,11 +42,12 @@ export class MicrosandboxWorkspace extends LocalWorkspace {
     private readonly sandbox: Sandbox,
     mountedTemporary: string,
     networkEnabled: boolean,
-    sandboxAccess: SandboxAccess[],
+    private readonly mountedAccess: SandboxAccess[],
+    approve?: CommandApproval,
   ) {
-    super(root, "disabled", undefined, [], mountedTemporary);
-    const additionalAccess = sandboxAccess.length
-      ? ` Additional locations: ${sandboxAccess.map((entry, index) => {
+    super(root, "disabled", approve, mountedAccess, mountedTemporary);
+    const additionalAccess = mountedAccess.length
+      ? ` Additional locations: ${mountedAccess.map((entry, index) => {
           const guestPath = guestAccessPath(entry.path, index);
           const location = guestPath === entry.path ? guestPath : `${guestPath} (host: ${entry.path})`;
           return `${entry.writable ? "read and write" : "read only"} ${location}`;
@@ -59,6 +61,7 @@ export class MicrosandboxWorkspace extends LocalWorkspace {
     temporaryDirectory: string,
     networkEnabled: boolean,
     sandboxAccess: SandboxAccess[],
+    approve?: CommandApproval,
   ): Promise<MicrosandboxWorkspace> {
     const workspace = await realpath(root);
     const temporary = await realpath(await prepareScratchDirectory(temporaryDirectory));
@@ -98,6 +101,7 @@ export class MicrosandboxWorkspace extends LocalWorkspace {
       temporary,
       networkEnabled,
       resolvedAccess,
+      approve,
     );
   }
 
@@ -177,10 +181,22 @@ export class MicrosandboxWorkspace extends LocalWorkspace {
 
   private async guestPath(input: string): Promise<string> {
     const resolved = await this.resolveExisting(input);
-    const guestRoot = resolved.kind === "temporary" ? GUEST_TEMPORARY : GUEST_WORKSPACE;
+    const guestRoot = resolved.kind === "temporary"
+      ? GUEST_TEMPORARY
+      : resolved.kind === "external"
+        ? this.mountedGuestPath(resolved.base)
+        : GUEST_WORKSPACE;
     return resolved.relative
       ? path.posix.join(guestRoot, ...resolved.relative.split(path.sep))
       : guestRoot;
+  }
+
+  private mountedGuestPath(hostPath: string): string {
+    const index = this.mountedAccess.findIndex((entry) => entry.path === hostPath);
+    if (index === -1) {
+      throw new Error("This folder was added during the current run and will be available to shell commands on the next run");
+    }
+    return guestAccessPath(hostPath, index);
   }
 }
 

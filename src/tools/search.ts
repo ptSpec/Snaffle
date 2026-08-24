@@ -10,7 +10,7 @@ export const searchTool: Tool = {
     type: "object",
     properties: {
       query: { type: "string", description: "Required. Ripgrep regular expression." },
-      path: { type: "string", description: "Optional. Workspace-relative or $TMPDIR directory or file; omit to search both roots." },
+      path: { type: "string", description: "Optional. Relative, ../, absolute, or $TMPDIR path; outside locations request approval. Omit to search the workspace and $TMPDIR." },
       glob: { type: "string", description: "Optional. File glob such as *.ts." },
       maxResults: { type: "integer", description: "Optional. Maximum matches; defaults to 50.", minimum: 1, maximum: 200 },
     },

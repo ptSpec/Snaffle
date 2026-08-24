@@ -38,7 +38,16 @@ export type TimelineItem =
       summary?: string;
       text?: string;
     }
-  | { id: string; kind: "approval"; command: string; cwd: string; reason: string; suggestedPaths?: string[]; decision?: CommandApprovalDecision }
+  | {
+      id: string;
+      kind: "approval";
+      command: string;
+      cwd: string;
+      reason: string;
+      suggestedPaths?: string[];
+      fileAccess?: "read" | "write" | "edit" | "search";
+      decision?: CommandApprovalDecision;
+    }
   | {
       id: string;
       kind: "tool";
@@ -138,6 +147,7 @@ export function addRunEvent(
         cwd: event.cwd,
         reason: event.reason,
         ...(event.suggestedPaths?.length ? { suggestedPaths: event.suggestedPaths } : {}),
+        ...(event.fileAccess ? { fileAccess: event.fileAccess } : {}),
       },
     ]);
     return;

@@ -472,7 +472,7 @@ function ApprovalEntry({
   onGrantSandboxAccess?: (id: string, inputs: SandboxAccessInput[]) => Promise<void>;
 }): JSX.Element {
   const [folders, setFolders] = useState(item.suggestedPaths ?? []);
-  const [writable, setWritable] = useState(true);
+  const [writable, setWritable] = useState(item.fileAccess === "read" || item.fileAccess === "search" ? false : true);
   const [scope, setScope] = useState<SandboxAccessInput["scope"]>("thread");
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [granting, setGranting] = useState(false);
@@ -485,13 +485,16 @@ function ApprovalEntry({
         : item.decision === "response"
           ? "Unrestricted access allowed for this response"
         : item.decision === "sandbox"
-          ? "Folder added; command retried in the sandbox"
+          ? item.fileAccess
+            ? "Folder added; file operation retried"
+            : "Folder added; command retried in the sandbox"
           : "Extra access allowed for this thread";
     return <div className={`approval-result ${item.decision}`}>{label}</div>;
   }
 
   const networkRequest = item.reason.includes("requests network access");
   const hostHomeRequest = item.reason.includes("references the host home directory");
+  const fileRequest = item.fileAccess !== undefined;
   const scopeLabel = scope === "thread"
     ? "for this thread"
     : scope === "workspace"
@@ -502,8 +505,10 @@ function ApprovalEntry({
     : hostHomeRequest
       ? "Restricted HOME and ~ use private temporary storage. Allow this command to run once with your normal host home, or deny it."
     : folders.length
-      ? `Allow ${writable ? "read and write" : "read"} access ${scopeLabel} and retry inside the sandbox.`
-      : "Snaffle could not identify the required folder. Choose one to retry inside the sandbox, or use Allow once to run this command outside it.";
+      ? `Allow ${writable ? "read and write" : "read"} access ${scopeLabel} and retry the ${fileRequest ? "file operation" : "command inside the sandbox"}.`
+      : fileRequest
+        ? "Snaffle could not identify the required folder. Choose one to retry the file operation."
+        : "Snaffle could not identify the required folder. Choose one to retry inside the sandbox, or use Allow once to run this command outside it.";
 
   async function chooseFolder(add = false): Promise<void> {
     const selected = await onChooseSandboxFolder?.();
@@ -525,7 +530,7 @@ function ApprovalEntry({
 
   return (
     <section className="approval-card">
-      <strong>{hostHomeRequest ? "Command requests host home access" : "Command needs extra access"}</strong>
+      <strong>{hostHomeRequest ? "Command requests host home access" : fileRequest ? "File operation needs extra access" : "Command needs extra access"}</strong>
       <code>{item.command}</code>
       <p>{explanation}</p>
       {folders.length ? (
@@ -536,13 +541,13 @@ function ApprovalEntry({
       <div className="approval-actions">
         {folders.length && canGrantFolders ? (
           <button type="button" className="primary" disabled={granting} onClick={() => void grantFolders()}>
-            {granting ? "Adding…" : "Add to sandbox"}
+            {granting ? "Adding…" : fileRequest ? "Allow folder" : "Add to sandbox"}
           </button>
         ) : null}
         {canGrantFolders && !folders.length ? (
           <button type="button" onClick={() => void chooseFolder()}>Choose folder</button>
         ) : null}
-        {!networkRequest ? (
+        {!networkRequest && item.fileAccess !== "edit" ? (
           <button type="button" onClick={() => onResolve?.(item.id, "once")}>Allow once</button>
         ) : null}
         {!networkRequest ? (
@@ -561,7 +566,9 @@ function ApprovalEntry({
           {folders.length ? (
             <>
               <div className="approval-folder-options">
-                <button type="button" className={!writable ? "selected" : ""} onClick={() => setWritable(false)}>Read only</button>
+                {!fileRequest || (item.fileAccess !== "write" && item.fileAccess !== "edit") ? (
+                  <button type="button" className={!writable ? "selected" : ""} onClick={() => setWritable(false)}>Read only</button>
+                ) : null}
                 <button type="button" className={writable ? "selected" : ""} onClick={() => setWritable(true)}>Read & write</button>
               </div>
               <div className="approval-folder-options three">
@@ -572,11 +579,13 @@ function ApprovalEntry({
               <button type="button" className="approval-add-folder" onClick={() => void chooseFolder(true)}>Add another folder</button>
             </>
           ) : null}
-          <div className="approval-host-access">
-            <span>Disable sandbox</span>
-            <button type="button" onClick={() => onResolve?.(item.id, "response")}>Unrestricted for this response</button>
-            <button type="button" onClick={() => onResolve?.(item.id, "thread")}>Unrestricted for this thread</button>
-          </div>
+          {!fileRequest ? (
+            <div className="approval-host-access">
+              <span>Disable sandbox</span>
+              <button type="button" onClick={() => onResolve?.(item.id, "response")}>Unrestricted for this response</button>
+              <button type="button" onClick={() => onResolve?.(item.id, "thread")}>Unrestricted for this thread</button>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>
