@@ -2,10 +2,21 @@ import { ipcMain, shell } from "electron";
 import { commitGitChanges, initializeGitRepository, saveGitFile } from "../../git/actions.js";
 import { safeWorkspacePath } from "../../git/process.js";
 import { gitChanges, gitDiffPreview, gitFileContents } from "../../git/repository.js";
+import type { GitWalkthroughContext, GitWalkthroughTarget } from "../../git/types.js";
+import { gitWalkthroughContext, gitWalkthroughOptions } from "../../git/walkthrough.js";
+import { isReasoningEffort } from "../../providers/provider.js";
+import type {
+  GitWalkthroughResult,
+  GitWalkthroughRunInput,
+} from "../api.js";
 import type { DesktopStore } from "../store.js";
 
 export function registerGitIpc(
   store: DesktopStore,
+  runWalkthrough: (
+    context: GitWalkthroughContext,
+    input: Omit<GitWalkthroughRunInput, "workspaceId" | "target">,
+  ) => Promise<GitWalkthroughResult>,
   openFile: (target: string) => Promise<void>,
 ): void {
   const workspacePath = async (value: unknown): Promise<string> => {
@@ -25,6 +36,32 @@ export function registerGitIpc(
 
   ipcMain.handle("desktop:get-git-diff-preview", async (_event, workspaceId: unknown, filePath: unknown) => {
     return gitDiffPreview(await workspacePath(workspaceId), text(filePath, "File path"));
+  });
+
+  ipcMain.handle("desktop:get-git-walkthrough-options", async (_event, workspaceId: unknown) => {
+    return gitWalkthroughOptions(await workspacePath(workspaceId));
+  });
+
+  ipcMain.handle("desktop:get-git-walkthrough", async (_event, value: unknown) => {
+    const workspaceId = text(value, "Workspace ID");
+    const workspace = await workspacePath(workspaceId);
+    const saved = await store.gitWalkthrough(workspaceId);
+    if (!saved) return null;
+    const outdated = await gitWalkthroughContext(workspace, saved.target)
+      .then((context) => context.snapshot !== saved.snapshot, () => true);
+    return { ...saved, outdated };
+  });
+
+  ipcMain.handle("desktop:run-git-walkthrough", async (_event, rawInput: unknown) => {
+    const input = walkthroughInput(rawInput);
+    const context = await gitWalkthroughContext(await workspacePath(input.workspaceId), input.target);
+    const result = await runWalkthrough(context, {
+      providerConnectionId: input.providerConnectionId,
+      model: input.model,
+      ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
+    });
+    await store.saveGitWalkthrough(input.workspaceId, result);
+    return result;
   });
 
   ipcMain.handle("desktop:save-git-file", async (
@@ -80,4 +117,33 @@ function filePaths(value: unknown): string[] {
     throw new Error("Select at least one file to commit");
   }
   return value;
+}
+
+function walkthroughTarget(value: unknown): GitWalkthroughTarget {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Invalid walkthrough target");
+  }
+  const target = value as Record<string, unknown>;
+  if (target.kind === "working") return { kind: "working" };
+  if (target.kind === "branch" && typeof target.baseBranch === "string" && target.baseBranch) {
+    return { kind: "branch", baseBranch: target.baseBranch };
+  }
+  throw new Error("Invalid walkthrough target");
+}
+
+function walkthroughInput(value: unknown): GitWalkthroughRunInput {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Invalid walkthrough request");
+  }
+  const input = value as Record<string, unknown>;
+  if (input.reasoningEffort !== undefined && !isReasoningEffort(input.reasoningEffort)) {
+    throw new Error("Invalid reasoning effort");
+  }
+  return {
+    workspaceId: text(input.workspaceId, "Workspace id"),
+    target: walkthroughTarget(input.target),
+    providerConnectionId: text(input.providerConnectionId, "Provider connection id"),
+    model: text(input.model, "Model"),
+    ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
+  };
 }

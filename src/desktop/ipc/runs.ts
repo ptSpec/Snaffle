@@ -59,6 +59,7 @@ export type RunIpc = {
 
 export function registerRunIpc(options: {
   store: DesktopStore;
+  providerCapacity: ProviderCapacity;
   scratchRoot: string;
   attachments: AttachmentStore;
   compactor: ContextCompactor;
@@ -100,7 +101,7 @@ export function registerRunIpc(options: {
     acceptingSteering: boolean;
   }>();
   const unrestrictedThreads = new Map<string, boolean>();
-  const providerCapacity = new ProviderCapacity();
+  const providerCapacity = options.providerCapacity;
   const implementCapacity = new ProviderCapacity();
   const approvals = new Map<string, {
     threadId: string;

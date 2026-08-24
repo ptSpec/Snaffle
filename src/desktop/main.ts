@@ -1,5 +1,4 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
-import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { loadEnvFile } from "node:process";
@@ -12,6 +11,7 @@ import {
   type SubagentProfile,
 } from "../agent/subagents/profile.js";
 import { delegateTaskTool } from "../agent/subagents/tool.js";
+import { ProviderCapacity } from "../agent/subagents/capacity.js";
 import { AttachmentStore } from "../attachments/store.js";
 import {
   imageUnderstandingProfile,
@@ -105,6 +105,8 @@ import { applicationIcon, createDesktopWindow } from "./window.js";
 import { installDesktopMenu } from "./menu.js";
 import { configureDesktopIdentity, migrateLegacyUserData } from "./identity-migration.js";
 import { ProviderConnections } from "./provider-connections.js";
+import { completeGitWalkthrough } from "./git-walkthrough.js";
+import { openCodeFile } from "./editor-launcher.js";
 import { registerUpdateIpc, type DesktopUpdates } from "./updates.js";
 import { SkillRegistry, skillTool } from "../extensions/skills/index.js";
 
@@ -118,6 +120,8 @@ let mainWindow: BrowserWindow | undefined;
 let store: DesktopStore;
 let attachments: AttachmentStore;
 let runs: RunIpc;
+let walkthroughRunning = false;
+const providerCapacity = new ProviderCapacity();
 let contextCompactor: ContextCompactor;
 let providerConnections: ProviderConnections;
 let terminals: ReturnType<typeof registerTerminalIpc>;
@@ -292,13 +296,34 @@ function createWindow(): void {
 
 function registerIpc(): void {
   registerAttachmentIpc(store, attachments, () => mainWindow);
-  registerGitIpc(store, async (target) => {
-    if (editorCommand) return launchEditor(target);
-    const error = await shell.openPath(target);
-    if (error) throw new Error(error);
-  });
+  registerGitIpc(
+    store,
+    async (context, input) => {
+      if (runs.runningThreadIds().length) throw new Error("Wait for active model runs to finish");
+      if (walkthroughRunning) throw new Error("A Git walkthrough is already running");
+      walkthroughRunning = true;
+      try {
+        const connection = providerConnections.resolve(input.providerConnectionId);
+        const provider = createProvider(
+          connection,
+          input.model,
+          {
+            streamIdleTimeoutMs: providerTimeoutMinutes * 60_000,
+            maxRetries: providerRetries,
+            ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
+          },
+        );
+        const limitedProvider = providerCapacity.limit(provider, connection.requestLimit);
+        return completeGitWalkthrough(context, limitedProvider);
+      } finally {
+        walkthroughRunning = false;
+      }
+    },
+    (target) => openCodeFile(target, editorCommand, editorArguments),
+  );
   runs = registerRunIpc({
     store,
+    providerCapacity,
     scratchRoot: scratchRoot(),
     attachments,
     compactor: contextCompactor,
@@ -947,35 +972,6 @@ async function threadToolSelection(threadId: string): Promise<{
     }
   }
   return { connectionId: selectedProviderConnectionId, model: selectedModel };
-}
-
-async function launchEditor(target: string): Promise<void> {
-  const folder = path.dirname(target);
-  const parsed = editorArguments.match(/(?:[^\s"]+|"[^"]*")+/g)?.map((argument) =>
-    argument.startsWith('"') && argument.endsWith('"') ? argument.slice(1, -1) : argument
-  ) ?? [];
-  const hasTarget = parsed.some((argument) => argument.includes("{path}") || argument.includes("{folder}"));
-  const args = parsed.map((argument) => argument
-    .replaceAll("{path}", target)
-    .replaceAll("{folder}", folder));
-  if (!hasTarget) args.push(target);
-
-  const macApplication = process.platform === "darwin" && /\.app\/?$/i.test(editorCommand);
-  const command = macApplication ? "open" : editorCommand;
-  const launchArgs = macApplication
-    ? editorArguments
-      ? ["-a", editorCommand, "--args", ...args]
-      : ["-a", editorCommand, target]
-    : args;
-
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(command, launchArgs, { detached: true, stdio: "ignore" });
-    child.once("spawn", () => {
-      child.unref();
-      resolve();
-    });
-    child.once("error", reject);
-  });
 }
 
 function validMaxSteps(value: unknown): number | undefined {

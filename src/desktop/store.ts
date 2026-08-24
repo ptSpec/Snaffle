@@ -8,7 +8,13 @@ import type { ThreadSubagentMode } from "../agent/subagents/profile.js";
 import type { PlanItem } from "../tools/plan.js";
 import type { ReasoningEffort } from "../providers/provider.js";
 import { ContextStore } from "../context/store.js";
-import type { DesktopEntry, DesktopSearchResult, DesktopThread, DesktopWorkspace } from "./api.js";
+import type {
+  DesktopEntry,
+  DesktopSearchResult,
+  DesktopThread,
+  DesktopWorkspace,
+  GitWalkthroughResult,
+} from "./api.js";
 import { AsideStore } from "./aside-store.js";
 import { SavedMessageStore } from "./saved-messages-store.js";
 import type { SandboxAccessGrant, SandboxAccessInput } from "../execution/access.js";
@@ -109,6 +115,10 @@ export class DesktopStore {
           created_at INTEGER NOT NULL,
           UNIQUE(scope, target_id, path)
         )`,
+        `CREATE TABLE IF NOT EXISTS git_walkthroughs (
+          workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+          data TEXT NOT NULL
+        )`,
       ],
       "write",
     );
@@ -188,6 +198,24 @@ export class DesktopStore {
       activeWorkspaceId: state.get("active_workspace_id") ?? null,
       activeThreadId: state.get("active_thread_id") ?? null,
     };
+  }
+
+  async gitWalkthrough(workspaceId: string): Promise<GitWalkthroughResult | null> {
+    const result = await this.database.execute({
+      sql: "SELECT data FROM git_walkthroughs WHERE workspace_id = ?",
+      args: [workspaceId],
+    });
+    return result.rows[0]
+      ? JSON.parse(rowText(result.rows[0], "data")) as GitWalkthroughResult
+      : null;
+  }
+
+  async saveGitWalkthrough(workspaceId: string, result: GitWalkthroughResult): Promise<void> {
+    await this.database.execute({
+      sql: `INSERT INTO git_walkthroughs(workspace_id, data) VALUES (?, ?)
+        ON CONFLICT(workspace_id) DO UPDATE SET data = excluded.data`,
+      args: [workspaceId, JSON.stringify(result)],
+    });
   }
 
   async sandboxAccess(workspaceId: string, threadId: string): Promise<SandboxAccessGrant[]> {
