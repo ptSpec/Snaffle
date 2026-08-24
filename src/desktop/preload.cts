@@ -111,6 +111,7 @@ const api: DesktopApi = {
   setEditorLauncher: (command: string, argumentsTemplate: string) =>
     ipcRenderer.invoke("desktop:set-editor-launcher", command, argumentsTemplate),
   chooseEditorApplication: () => ipcRenderer.invoke("desktop:choose-editor-application"),
+  setWalkthroughModel: (setting) => ipcRenderer.invoke("desktop:set-walkthrough-model", setting),
   setMaxSteps: (maxSteps: number) => ipcRenderer.invoke("desktop:set-max-steps", maxSteps),
   setAutoTitleGeneration: (enabled: boolean) =>
     ipcRenderer.invoke("desktop:set-auto-title-generation", enabled),
