@@ -25,6 +25,7 @@ Every backend should preserve the same workspace-relative and `$TMPDIR` file and
 - `run_command` defaults to two minutes and accepts an explicit timeout up to five minutes.
 - Restricted native execution is not a VM and must not be described as providing quotas it does not enforce.
 - Restricted native execution remains unavailable on Windows. Threads start with unrestricted host execution there and the shared sandbox popover offers Microsandbox as the restricted option.
+- The restricted engine is chosen when each run starts. Changing the selector affects later runs without migrating or interrupting work that is already executing in another thread.
 - The workspace supplies the model-facing command environment. Host platform and shell metadata must not contradict a VM or future remote execution target.
 
 ## Microsandbox beta
