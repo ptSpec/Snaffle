@@ -611,12 +611,14 @@ test("temporary paths reject unsupported prefixes, traversal, and symlink escape
 test("restricted commands stay inside the workspace", async (t) => {
   if (!nativeSandboxStatus().available) return t.skip(nativeSandboxStatus().detail);
 
-  const root = await mkdtemp(path.join(tmpdir(), "sandbox-workspace-test-"));
+  const boundaryRoot = await mkdtemp(path.join(process.cwd(), ".sandbox-workspace-test-"));
+  const root = path.join(boundaryRoot, "workspace");
+  await mkdir(root);
   const outside = await mkdtemp(path.join(tmpdir(), "sandbox-outside-test-"));
   const previousApiKey = process.env.OPENROUTER_API_KEY;
   process.env.OPENROUTER_API_KEY = "must-not-enter-the-sandbox";
   t.after(() => Promise.all([
-    rm(root, { recursive: true, force: true }),
+    rm(boundaryRoot, { recursive: true, force: true }),
     rm(outside, { recursive: true, force: true }),
   ]).finally(() => {
     if (previousApiKey === undefined) delete process.env.OPENROUTER_API_KEY;
@@ -638,6 +640,7 @@ test("restricted commands stay inside the workspace", async (t) => {
   const temporaryCwd = await workspace.run("test -f .git/config", "$TMPDIR/repo", 5000);
   const listing = await workspace.run("ls -la", undefined, 5000);
   const nestedDirectory = await workspace.run("cd nested && pwd", undefined, 5000);
+  const parentWrite = await workspace.run("printf hidden > ../outside.txt", undefined, 5000);
   const outsideRead = await workspace.run(`cat ${JSON.stringify(secret)}`, undefined, 5000);
   const gitWrite = await workspace.run("touch .git/forbidden", undefined, 5000);
   const nestedGitWrite = await workspace.run("touch nested/.git/forbidden", undefined, 5000);
@@ -653,6 +656,8 @@ test("restricted commands stay inside the workspace", async (t) => {
   assert.equal(listing.exitCode, 0);
   assert.equal(nestedDirectory.exitCode, 0);
   assert.equal(await readFile(path.join(root, "generated.txt"), "utf8"), "ok");
+  assert.notEqual(parentWrite.exitCode, 0);
+  await assert.rejects(readFile(path.join(boundaryRoot, "outside.txt"), "utf8"));
   assert.notEqual(outsideRead.exitCode, 0);
   assert.notEqual(gitWrite.exitCode, 0);
   assert.notEqual(nestedGitWrite.exitCode, 0);

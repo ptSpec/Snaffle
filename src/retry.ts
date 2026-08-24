@@ -38,3 +38,28 @@ export function waitForRetry(milliseconds: number, signal?: AbortSignal): Promis
     if (signal?.aborted) aborted();
   });
 }
+
+export async function fetchWithResponseTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+  signal: AbortSignal,
+): Promise<Response> {
+  const controller = new AbortController();
+  const abort = (): void => controller.abort(signal.reason);
+  const timeout = setTimeout(
+    () => controller.abort(new Error(
+      `Provider returned no response for ${Math.round(timeoutMs / 1000)} seconds`,
+    )),
+    timeoutMs,
+  );
+  signal.addEventListener("abort", abort, { once: true });
+  if (signal.aborted) abort();
+
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+    signal.removeEventListener("abort", abort);
+  }
+}

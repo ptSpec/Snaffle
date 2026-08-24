@@ -233,6 +233,7 @@ async function runLinux(
     "--bind", workspace, workspace,
     ...gitMetadata.flatMap((entry) => ["--ro-bind", entry, entry]),
     "--ro-bind", personalState, personalState,
+    "--remount-ro", "/",
     "--chdir", sandboxCwd,
     ...restrictedShell(command, timeoutMs),
   ];

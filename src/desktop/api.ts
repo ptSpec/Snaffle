@@ -14,7 +14,14 @@ import type { CompactionMode } from "../context/budget.js";
 import type { ContextCheckpoint } from "../context/projection.js";
 import type { ContextReport } from "../context/report.js";
 import type { SubagentProfile, ThreadSubagentMode } from "../agent/subagents/profile.js";
-import type { GitChanges, GitDiffPreview, GitFileContents } from "../git/types.js";
+import type {
+  GitChanges,
+  GitDiffPreview,
+  GitFileContents,
+  GitWalkthroughChange,
+  GitWalkthroughOptions,
+  GitWalkthroughTarget,
+} from "../git/types.js";
 import type { McpServerConfig, McpServerStatus } from "../mcp/types.js";
 import type { SkillSummary } from "../extensions/skills/types.js";
 import type { ImageUnderstandingProfile } from "../attachments/vision.js";
@@ -25,7 +32,15 @@ import type { RestrictedEngine } from "../execution/workspace.js";
 
 export type { SandboxAccessGrant, SandboxAccessInput } from "../execution/access.js";
 
-export type { GitChanges, GitDiffPreview, GitFileChange, GitFileContents } from "../git/types.js";
+export type {
+  GitChanges,
+  GitDiffPreview,
+  GitFileChange,
+  GitFileContents,
+  GitWalkthroughChange,
+  GitWalkthroughOptions,
+  GitWalkthroughTarget,
+} from "../git/types.js";
 export type { DesktopUpdateState } from "./updates.js";
 
 export type DesktopThread = {
@@ -207,6 +222,27 @@ export type CodeSelectionInput = {
   }>;
 };
 
+export type GitWalkthroughRunInput = {
+  workspaceId: string;
+  target: GitWalkthroughTarget;
+  providerConnectionId: string;
+  model: string;
+  reasoningEffort?: ReasoningEffort;
+};
+
+export type GitWalkthroughResult = {
+  title: string;
+  detail: string;
+  text: string;
+  changes: GitWalkthroughChange[];
+  model: string;
+  durationMs: number;
+  target: GitWalkthroughTarget;
+  snapshot: string;
+  createdAt: number;
+  outdated: boolean;
+};
+
 export interface DesktopApi {
   platform: string;
   getState(): Promise<DesktopState>;
@@ -293,6 +329,9 @@ export interface DesktopApi {
   getGitChanges(workspaceId: string): Promise<GitChanges>;
   getGitFile(workspaceId: string, path: string): Promise<GitFileContents>;
   getGitDiffPreview(workspaceId: string, path: string): Promise<GitDiffPreview>;
+  getGitWalkthroughOptions(workspaceId: string): Promise<GitWalkthroughOptions>;
+  getGitWalkthrough(workspaceId: string): Promise<GitWalkthroughResult | null>;
+  runGitWalkthrough(input: GitWalkthroughRunInput): Promise<GitWalkthroughResult>;
   saveGitFile(workspaceId: string, path: string, content: string, lineEnding: GitFileContents["lineEnding"]): Promise<void>;
   commitGitChanges(workspaceId: string, message: string, paths: string[]): Promise<GitChanges>;
   openWorkspaceFile(workspaceId: string, path: string): Promise<void>;

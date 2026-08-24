@@ -1,10 +1,10 @@
 import { execFile } from "node:child_process";
-import { realpath } from "node:fs/promises";
+import { readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
-import { Sandbox } from "microsandbox";
+import { Sandbox, setRuntimeLibkrunfwPath } from "microsandbox";
 import type { SandboxAccess } from "../access.js";
 import { findGitMetadata } from "../native/sandbox.js";
 import { prepareScratchDirectory } from "../scratch.js";
@@ -90,6 +90,7 @@ export class MicrosandboxWorkspace extends LocalWorkspace {
       );
     }
     if (!networkEnabled) builder = builder.disableNetwork();
+    await configureMicrosandboxRuntime();
 
     return new MicrosandboxWorkspace(
       workspace,
@@ -216,6 +217,21 @@ function microsandboxUnavailableDetail(error: unknown): string {
 }
 
 function microsandboxExecutable(): string {
+  return path.join(
+    microsandboxPackageRoot(),
+    "bin",
+    process.platform === "win32" ? "msb.exe" : "msb",
+  );
+}
+
+async function configureMicrosandboxRuntime(): Promise<void> {
+  const libraryDirectory = path.join(microsandboxPackageRoot(), "lib");
+  const library = (await readdir(libraryDirectory)).find((name) => name.startsWith("libkrunfw."));
+  if (!library) throw new Error(`libkrunfw is missing from ${libraryDirectory}`);
+  setRuntimeLibkrunfwPath(path.join(libraryDirectory, library));
+}
+
+function microsandboxPackageRoot(): string {
   const packageName = process.platform === "darwin" && process.arch === "arm64"
     ? "@superradcompany/microsandbox-darwin-arm64"
     : process.platform === "linux" && process.arch === "x64"
@@ -234,5 +250,5 @@ function microsandboxExecutable(): string {
     /([\\/])app\.asar([\\/])/,
     "$1app.asar.unpacked$2",
   );
-  return path.join(path.dirname(binding), "bin", process.platform === "win32" ? "msb.exe" : "msb");
+  return path.dirname(binding);
 }

@@ -1,7 +1,13 @@
 import type { AttachmentRef, ResolvedAttachment } from "../attachments/types.js";
 import { PROJECT } from "../identity.js";
 import type { Message, ModelResponse, ProviderState, ToolCall, ToolSpec, Usage } from "../protocol.js";
-import { canRetryStatus, retryAfterMilliseconds, retryBackoffMs, waitForRetry } from "../retry.js";
+import {
+  canRetryStatus,
+  fetchWithResponseTimeout,
+  retryAfterMilliseconds,
+  retryBackoffMs,
+  waitForRetry,
+} from "../retry.js";
 import { healToolInput } from "../tools/input.js";
 import {
   DEFAULT_MODEL_CONTEXT_LENGTH,
@@ -62,7 +68,7 @@ export class AnthropicMessagesProvider implements ModelProvider {
       let emptyResponse = false;
       try {
         const request = await toAnthropicRequest(requestMessages, this.resolveAttachment);
-        const response = await fetch(`${this.baseUrl}/messages`, {
+        const response = await fetchWithResponseTimeout(`${this.baseUrl}/messages`, {
           method: "POST",
           headers: anthropicHeaders(this.apiKey),
           body: JSON.stringify({
@@ -73,8 +79,7 @@ export class AnthropicMessagesProvider implements ModelProvider {
             messages: request.messages,
             ...(tools.length ? { tools: tools.map(toAnthropicTool) } : {}),
           }),
-          signal,
-        });
+        }, this.streamIdleTimeoutMs, signal);
         status = response.status;
         retryAfterMs = retryAfterMilliseconds(response.headers.get("retry-after"));
         if (!response.ok) {
