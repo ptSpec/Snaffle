@@ -573,6 +573,44 @@ test("workspace accepts safe absolute paths and rejects paths outside its root",
   await assert.rejects(workspace.write(".git/config", "no"), /managed by Snaffle/);
 });
 
+test("file tools request access for relative and absolute external paths", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "file-access-workspace-"));
+  const outside = await mkdtemp(path.join(path.dirname(root), "file-access-outside-"));
+  const canonicalOutside = await realpath(outside);
+  await writeFile(path.join(outside, "input.txt"), "external content");
+  const requests: Array<{ access: string | undefined; paths: string[] }> = [];
+  let workspace: LocalWorkspace;
+  workspace = new LocalWorkspace(root, "restricted", async (request) => {
+    requests.push({ access: request.fileAccess, paths: request.suggestedPaths ?? [] });
+    workspace.grantSandboxAccess({
+      path: await realpath(request.suggestedPaths![0]!),
+      writable: request.fileAccess === "write",
+    });
+    return "sandbox";
+  });
+  t.after(() => Promise.all([
+    workspace.close(),
+    rm(root, { recursive: true, force: true }),
+    rm(outside, { recursive: true, force: true }),
+  ]));
+
+  const relativeInput = path.relative(root, path.join(outside, "input.txt"));
+  assert.equal(await workspace.read(relativeInput), "external content");
+  await workspace.write(path.join(outside, "output.txt"), "written externally");
+  await editTool.execute(workspace, {
+    path: path.join(outside, "input.txt"),
+    edits: [{ oldText: "external content", newText: "edited external content" }],
+  });
+  const matches = await workspace.search("external", { path: outside, maxResults: 10 });
+
+  assert.deepEqual(requests, [
+    { access: "read", paths: [canonicalOutside] },
+    { access: "write", paths: [canonicalOutside] },
+  ]);
+  assert.equal(await readFile(path.join(outside, "output.txt"), "utf8"), "written externally");
+  assert.ok(matches.some((match) => match.includes(`${path.join(canonicalOutside, "input.txt")}:1:edited external content`)));
+});
+
 test("workspace rejects symlinks that leave its root", async (t) => {
   const { root, workspace } = await fixture();
   const outside = await mkdtemp(path.join(tmpdir(), "tool-outside-test-"));

@@ -136,6 +136,7 @@ export function registerRunIpc(options: {
       cwd: request.cwd,
       reason: request.reason.slice(0, 2000),
       ...(request.suggestedPaths?.length ? { suggestedPaths: request.suggestedPaths } : {}),
+      ...(request.fileAccess ? { fileAccess: request.fileAccess } : {}),
     };
     const decision = new Promise<CommandApprovalDecision>((resolve) => {
       approvals.set(approvalId, { threadId, workspace, resolve });
@@ -186,6 +187,7 @@ export function registerRunIpc(options: {
           temporaryDirectory,
           settings.sandboxNetworkEnabled,
           sandboxAccess,
+          (request) => requestApproval(threadId, workspace, request),
         );
       } catch (error) {
         const recovery = process.platform === "win32"

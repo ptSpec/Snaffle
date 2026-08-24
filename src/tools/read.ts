@@ -9,7 +9,7 @@ export const readTool: Tool = {
   inputSchema: {
     type: "object",
     properties: {
-      path: { type: "string", description: "Required. Workspace-relative file path or $TMPDIR temporary path." },
+      path: { type: "string", description: "Required. Relative, ../, absolute, or $TMPDIR path. Access outside available locations requests user approval." },
       offset: { type: "integer", description: "Optional. First line to return; defaults to 1.", minimum: 1 },
       limit: { type: "integer", description: "Optional. Maximum lines to return; defaults to 2000.", minimum: 1, maximum: 2000 },
     },
