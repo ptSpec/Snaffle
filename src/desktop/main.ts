@@ -71,7 +71,7 @@ import {
   type KetchSearchBackend,
   type WebSearchBackend,
 } from "../tools/web/types.js";
-import type { DesktopState } from "./api.js";
+import type { DesktopState, WalkthroughModelSetting } from "./api.js";
 import { openStore, type DesktopStore } from "./store.js";
 import { registerAttachmentIpc } from "./ipc/attachments.js";
 import { registerAsideIpc } from "./ipc/asides.js";
@@ -140,6 +140,7 @@ let codeBlockFontSize = DEFAULT_CODE_BLOCK_FONT_SIZE;
 let editorFontSize = DEFAULT_EDITOR_FONT_SIZE;
 let editorCommand = "";
 let editorArguments = "";
+let walkthroughModel: WalkthroughModelSetting = { providerConnectionId: "", model: "" };
 let maxSteps = DEFAULT_MAX_STEPS;
 let autoTitleGeneration = true;
 let restrictedEngine: RestrictedEngine = process.platform === "win32" ? "microsandbox" : "native";
@@ -189,6 +190,7 @@ async function start(): Promise<void> {
   editorFontSize = validEditorFontSize(settings.editorFontSize) ?? editorFontSize;
   editorCommand = typeof settings.editorCommand === "string" ? settings.editorCommand : "";
   editorArguments = typeof settings.editorArguments === "string" ? settings.editorArguments : "";
+  walkthroughModel = parseWalkthroughModel(settings.walkthroughModel);
   maxSteps = validMaxSteps(settings.maxSteps) ?? DEFAULT_MAX_STEPS;
   autoTitleGeneration = settings.autoTitleGeneration !== false;
   restrictedEngine = settings.restrictedEngine === "microsandbox"
@@ -566,6 +568,13 @@ function registerIpc(): void {
     return result.canceled ? null : result.filePaths[0] ?? null;
   });
 
+  ipcMain.handle("desktop:set-walkthrough-model", (_event, value: unknown): void => {
+    const next = parseWalkthroughModel(value);
+    if (next.model) providerConnections.resolve(next.providerConnectionId);
+    walkthroughModel = next;
+    saveSettings({ walkthroughModel });
+  });
+
   ipcMain.handle("desktop:choose-sandbox-folder", async (): Promise<string | null> => {
     const result = await dialog.showOpenDialog(mainWindow!, {
       title: "Choose a folder to allow",
@@ -822,6 +831,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     editorFontSize,
     editorCommand,
     editorArguments,
+    walkthroughModel,
     maxSteps,
     autoTitleGeneration,
     sandboxNetworkEnabled,
@@ -846,6 +856,17 @@ function validEditorFontSize(value: unknown): number | undefined {
   return Number.isInteger(value) && Number(value) >= 10 && Number(value) <= 24
     ? Number(value)
     : undefined;
+}
+
+function parseWalkthroughModel(value: unknown): WalkthroughModelSetting {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { providerConnectionId: "", model: "" };
+  }
+  const setting = value as Record<string, unknown>;
+  return typeof setting.providerConnectionId === "string" && typeof setting.model === "string" &&
+    Boolean(setting.providerConnectionId) === Boolean(setting.model)
+    ? { providerConnectionId: setting.providerConnectionId, model: setting.model }
+    : { providerConnectionId: "", model: "" };
 }
 
 function validCodeFontSize(value: unknown): number | undefined {
