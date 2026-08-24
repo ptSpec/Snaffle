@@ -36,6 +36,7 @@ export type CommandApprovalRequest = {
   cwd: string;
   reason: string;
   suggestedPaths?: string[];
+  fileAccess?: "read" | "write" | "edit" | "search";
 };
 
 export type CommandApproval = (
@@ -45,7 +46,7 @@ export type CommandApproval = (
 export interface Workspace {
   readonly root?: string;
   readonly environment: string;
-  read(path: string): Promise<string>;
+  read(path: string, intent?: "read" | "edit"): Promise<string>;
   write(path: string, content: string): Promise<void>;
   search(query: string, options: SearchOptions, signal?: AbortSignal): Promise<string[]>;
   run(command: string, cwd: string | undefined, timeoutMs: number, signal?: AbortSignal): Promise<CommandResult>;
@@ -55,11 +56,13 @@ export type CommandExecution = "disabled" | "restricted" | "unsafe";
 export type RestrictedEngine = "native" | "microsandbox";
 
 type ResolvedWorkspacePath = {
-  kind: "workspace" | "temporary";
+  kind: "workspace" | "temporary" | "external";
   base: string;
   path: string;
   relative: string;
 };
+
+type FileAccess = "read" | "write" | "edit" | "search";
 
 type SearchLine = {
   path: string;
@@ -88,7 +91,7 @@ export class LocalWorkspace implements Workspace {
         ? "Shell commands have the host user's normal access."
         : "Shell commands are disabled.";
     const extraAccess = sandboxAccess.length
-      ? ` Additional shell access: ${sandboxAccess.map((entry) =>
+      ? ` Additional file and shell access: ${sandboxAccess.map((entry) =>
           `${entry.writable ? "read and write" : "read only"} ${entry.path}`).join("; ")}.`
       : "";
     const temporary = persistentTemporary
@@ -115,12 +118,12 @@ export class LocalWorkspace implements Workspace {
     await rm(temporary, { recursive: true, force: true });
   }
 
-  async read(filePath: string): Promise<string> {
-    return readFile((await this.resolveExisting(filePath)).path, "utf8");
+  async read(filePath: string, intent: "read" | "edit" = "read"): Promise<string> {
+    return readFile((await this.resolveExisting(filePath, intent, intent === "edit")).path, "utf8");
   }
 
   async write(filePath: string, content: string): Promise<void> {
-    const target = await this.resolveWrite(filePath);
+    const target = await this.resolveWrite(filePath, "write");
 
     const temporary = `${target}.${process.pid}.tmp`;
     await writeFile(temporary, content, "utf8");
@@ -138,7 +141,7 @@ export class LocalWorkspace implements Workspace {
   async search(query: string, options: SearchOptions, signal?: AbortSignal): Promise<string[]> {
     const locations = options.path === undefined
       ? await Promise.all([this.resolveExisting("."), this.resolveExisting("$TMPDIR")])
-      : [await this.resolveExisting(options.path)];
+      : [await this.resolveExisting(options.path, "search")];
     const matches = await Promise.all(locations.map((location) =>
       this.searchLocation(query, location, options, signal)));
     return matches.flat().slice(0, options.maxResults);
@@ -381,67 +384,145 @@ export class LocalWorkspace implements Workspace {
     }
 
     const resolved = path.resolve(base, requested);
-    if ((kind === "temporary" || !path.isAbsolute(requested)) && !inside(base, resolved)) {
-      throw new Error(`Path leaves the ${kind === "temporary" ? "temporary storage" : "workspace"}: ${input}`);
+    if (kind === "temporary" && !inside(base, resolved)) {
+      throw new Error(`Path leaves the temporary storage: ${input}`);
     }
     return { kind, base, path: resolved, relative: path.relative(base, resolved) };
   }
 
-  protected async resolveExisting(input: string): Promise<ResolvedWorkspacePath> {
+  protected async resolveExisting(
+    input: string,
+    fileAccess?: FileAccess,
+    writable = false,
+  ): Promise<ResolvedWorkspacePath> {
     const resolved = await this.resolve(input);
+    if (
+      resolved.kind === "workspace" &&
+      !inside(this.root, resolved.path) &&
+      !this.approveCommand &&
+      this.sandboxAccess.length === 0
+    ) {
+      throw new Error(`Path leaves the workspace: ${input}`);
+    }
     const actual = await realpath(resolved.path);
-    this.assertInside(resolved, actual, input);
-    return { ...resolved, path: actual, relative: path.relative(resolved.base, actual) };
+    return this.authorizePath(resolved, actual, input, fileAccess, writable);
   }
 
-  private async resolveWrite(input: string): Promise<string> {
+  private async resolveWrite(input: string, fileAccess: FileAccess): Promise<string> {
     const resolved = await this.resolve(input);
     const target = resolved.path;
-    this.assertWritable(resolved, target, input);
 
     try {
       const actual = await realpath(target);
-      this.assertInside(resolved, actual, input);
-      this.assertWritable(resolved, actual, input);
+      await this.authorizePath(resolved, actual, input, fileAccess, true);
       return target;
     } catch (error) {
       if (!isMissingPath(error)) throw error;
     }
 
     let existing = path.dirname(target);
+    const missing: string[] = [path.basename(target)];
+    let authorized: ResolvedWorkspacePath | undefined;
     while (true) {
       try {
         const actual = await realpath(existing);
-        this.assertInside(resolved, actual, input);
-        this.assertWritable(resolved, actual, input);
+        const actualTarget = path.join(actual, ...missing);
+        authorized = await this.authorizePath(resolved, actualTarget, input, fileAccess, true, actual);
         break;
       } catch (error) {
         if (!isMissingPath(error)) throw error;
         const parent = path.dirname(existing);
         if (parent === existing) throw error;
+        missing.unshift(path.basename(existing));
         existing = parent;
       }
     }
 
     await mkdir(path.dirname(target), { recursive: true });
     const parent = await realpath(path.dirname(target));
-    this.assertInside(resolved, parent, input);
-    this.assertWritable(resolved, parent, input);
+    if (!authorized || !inside(authorized.base, parent)) {
+      throw new Error(`Path leaves the workspace: ${input}`);
+    }
     return target;
   }
 
-  private assertInside(location: ResolvedWorkspacePath, resolved: string, input: string): void {
-    const relative = path.relative(location.base, resolved);
-    if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-      throw new Error(`Path leaves the ${location.kind === "temporary" ? "temporary storage" : "workspace"}: ${input}`);
+  private async authorizePath(
+    location: ResolvedWorkspacePath,
+    resolved: string,
+    input: string,
+    fileAccess?: FileAccess,
+    writable = false,
+    suggestedFolder?: string,
+  ): Promise<ResolvedWorkspacePath> {
+    if (location.kind === "temporary") {
+      if (!inside(location.base, resolved)) {
+        throw new Error(`Path leaves the temporary storage: ${input}`);
+      }
+      return { ...location, path: resolved, relative: path.relative(location.base, resolved) };
     }
-    if (location.kind === "workspace" && relative.split(path.sep).includes(".git")) {
-      throw new Error(`Git metadata is managed by ${PROJECT.name} and cannot be accessed through file tools`);
+
+    if (inside(this.root, resolved)) {
+      const relative = path.relative(this.root, resolved);
+      if (relative.split(path.sep).includes(".git")) {
+        throw new Error(`Git metadata is managed by ${PROJECT.name} and cannot be accessed through file tools`);
+      }
+      if (writable) this.assertWritable(resolved, input);
+      return { kind: "workspace", base: this.root, path: resolved, relative };
     }
+
+    if (writable) this.assertWritable(resolved, input);
+    const grant = this.sandboxAccess
+      .filter((entry) => inside(entry.path, resolved) && (!writable || entry.writable))
+      .sort((left, right) => right.path.length - left.path.length)[0];
+    if (grant) {
+      return {
+        kind: "external",
+        base: grant.path,
+        path: resolved,
+        relative: path.relative(grant.path, resolved),
+      };
+    }
+
+    if (!fileAccess || !this.approveCommand) {
+      throw new Error(`Path leaves the workspace: ${input}`);
+    }
+
+    const existingGrant = this.sandboxAccess
+      .filter((entry) => inside(entry.path, resolved))
+      .sort((left, right) => right.path.length - left.path.length)[0];
+    const folder = existingGrant?.path ?? suggestedFolder ?? await externalFolder(resolved);
+    const decision = await this.approveCommand({
+      command: `${fileAccess} ${input}`,
+      cwd: ".",
+      reason: `${fileAccess === "write" ? "Writing" : fileAccess === "edit" ? "Editing" : fileAccess === "search" ? "Searching" : "Reading"} this path requires access outside the workspace and $TMPDIR.`,
+      suggestedPaths: [folder],
+      fileAccess,
+    });
+    if (decision === "deny") {
+      throw new Error(`Access to the external path was denied: ${input}`);
+    }
+    if (decision === "sandbox") {
+      const approved = this.sandboxAccess
+        .filter((entry) => inside(entry.path, resolved) && (!writable || entry.writable))
+        .sort((left, right) => right.path.length - left.path.length)[0];
+      if (!approved) throw new Error(`The added folder does not allow access to: ${input}`);
+      return {
+        kind: "external",
+        base: approved.path,
+        path: resolved,
+        relative: path.relative(approved.path, resolved),
+      };
+    }
+
+    return {
+      kind: "external",
+      base: folder,
+      path: resolved,
+      relative: path.relative(folder, resolved),
+    };
   }
 
-  private assertWritable(location: ResolvedWorkspacePath, resolved: string, input: string): void {
-    if (location.kind === "temporary") return;
+  private assertWritable(resolved: string, input: string): void {
     const relative = path.relative(personalSnaffleDirectory(), resolved);
     if (!relative || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))) {
       throw new Error(`Personal ${PROJECT.name} configuration cannot be changed through file tools: ${input}`);
@@ -451,12 +532,17 @@ export class LocalWorkspace implements Workspace {
   private logicalPath(location: ResolvedWorkspacePath): string {
     const relative = location.relative.split(path.sep).join("/");
     if (location.kind === "temporary") return relative ? `$TMPDIR/${relative}` : "$TMPDIR";
+    if (location.kind === "external") return location.path;
     return relative || ".";
   }
 
   private searchResult(location: ResolvedWorkspacePath, line: SearchLine, match: boolean): string {
     const relative = line.path.startsWith("./") ? line.path.slice(2) : line.path;
-    const logicalPath = location.kind === "temporary" ? `$TMPDIR/${relative}` : relative;
+    const logicalPath = location.kind === "temporary"
+      ? `$TMPDIR/${relative}`
+      : location.kind === "external"
+        ? path.resolve(location.base, relative)
+        : relative;
     const separator = match ? ":" : "-";
     return `${logicalPath}${separator}${line.line}${separator}${line.text}`;
   }
@@ -497,6 +583,10 @@ function referencesHostHome(command: string): boolean {
 function inside(root: string, candidate: string): boolean {
   const relative = path.relative(root, candidate);
   return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
+}
+
+async function externalFolder(target: string): Promise<string> {
+  return (await stat(target)).isDirectory() ? target : path.dirname(target);
 }
 
 type ProcessError = Error & {

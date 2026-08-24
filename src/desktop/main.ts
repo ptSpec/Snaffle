@@ -601,7 +601,6 @@ function registerIpc(): void {
     if (value === "native" && process.platform === "win32") {
       throw new Error("Native restricted execution is unavailable on Windows");
     }
-    if (runs.runningThreadIds().length) throw new Error("Restricted engine cannot change during a run");
     restrictedEngine = value;
     saveSettings({ restrictedEngine });
     return desktopState(false);

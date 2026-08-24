@@ -16,7 +16,7 @@ export const editTool: Tool = {
   inputSchema: {
     type: "object",
     properties: {
-      path: { type: "string", description: "Required. Workspace-relative file path or $TMPDIR temporary path." },
+      path: { type: "string", description: "Required. Relative, ../, absolute, or $TMPDIR path. Access outside available locations requests user approval." },
       oldText: {
         type: "string",
         description: "For one replacement. Small exact current text that occurs once, including whitespace.",
@@ -61,7 +61,7 @@ export const editTool: Tool = {
       throw new ToolInputError("edits must be a non-empty array");
     }
 
-    const original = await workspace.read(filePath);
+    const original = await workspace.read(filePath, "edit");
     const normalized = original.replaceAll("\r\n", "\n");
     const edits = input.edits.map((rawEdit, index) => {
       const edit = objectInput(rawEdit);
