@@ -4,6 +4,9 @@ import { NumberSetting } from "./controls.js";
 import type { SubagentProfile } from "../../../../agent/subagents/profile.js";
 import type { ImageUnderstandingProfile } from "../../../../attachments/vision.js";
 import type { ProviderCatalog, ProviderConnection } from "../../../../providers/provider.js";
+import type { WalkthroughModelSetting } from "../../../api.js";
+
+const CHAT_MODEL = "chat";
 
 export function AgentSettings({
   maxSteps,
@@ -12,6 +15,7 @@ export function AgentSettings({
   providerRetries,
   subagent,
   imageUnderstanding,
+  walkthroughModel,
   providerConnections,
   providerCatalogs,
   error,
@@ -21,6 +25,7 @@ export function AgentSettings({
   onProviderRetries,
   onSubagent,
   onImageUnderstanding,
+  onWalkthroughModel,
 }: {
   maxSteps: number;
   autoTitleGeneration: boolean;
@@ -28,6 +33,7 @@ export function AgentSettings({
   providerRetries: number;
   subagent: SubagentProfile;
   imageUnderstanding: ImageUnderstandingProfile;
+  walkthroughModel: WalkthroughModelSetting;
   providerConnections: ProviderConnection[];
   providerCatalogs: ProviderCatalog[];
   error: string | null;
@@ -37,6 +43,7 @@ export function AgentSettings({
   onProviderRetries: (retries: number) => void;
   onSubagent: (profile: SubagentProfile) => void;
   onImageUnderstanding: (profile: ImageUnderstandingProfile) => void;
+  onWalkthroughModel: (setting: WalkthroughModelSetting) => void;
 }): JSX.Element {
   const [openSection, setOpenSection] = useState<"agent" | "subagent" | "images" | null>("agent");
   const connections = providerConnections.filter((connection) => connection.enabled);
@@ -74,6 +81,14 @@ export function AgentSettings({
     label: choice.modelName,
     detail: `${choice.connectionName} · ${choice.modelId}`,
   }));
+  const walkthroughModelOptions = [
+    { value: CHAT_MODEL, label: "Use chat model", detail: "Follows the active conversation" },
+    ...modelChoices.map((choice) => ({
+      value: modelValue(choice.connectionId, choice.modelId),
+      label: choice.modelName,
+      detail: `${choice.connectionName} · ${choice.modelId}`,
+    })),
+  ];
   if (subagent.model && !modelChoices.some((choice) =>
     choice.connectionId === subagent.providerConnectionId && choice.modelId === subagent.model
   )) {
@@ -90,6 +105,15 @@ export function AgentSettings({
       value: modelValue(subagent.overflowProviderConnectionId, subagent.overflowModel),
       label: subagent.overflowModel,
       detail: "Saved overflow model",
+    });
+  }
+  if (walkthroughModel.model && !modelChoices.some((choice) =>
+    choice.connectionId === walkthroughModel.providerConnectionId && choice.modelId === walkthroughModel.model
+  )) {
+    walkthroughModelOptions.push({
+      value: modelValue(walkthroughModel.providerConnectionId, walkthroughModel.model),
+      label: walkthroughModel.model,
+      detail: "Saved model",
     });
   }
 
@@ -124,6 +148,15 @@ export function AgentSettings({
       providerConnectionId: providerConnectionId ?? "",
       model: model ?? "",
     });
+  }
+
+  function selectWalkthroughModel(value: string): void {
+    if (value === CHAT_MODEL) {
+      onWalkthroughModel({ providerConnectionId: "", model: "" });
+      return;
+    }
+    const [providerConnectionId, model] = value.split("\n");
+    onWalkthroughModel({ providerConnectionId: providerConnectionId ?? "", model: model ?? "" });
   }
 
   return (
@@ -180,6 +213,22 @@ export function AgentSettings({
               max={10}
               onChange={onProviderRetries}
             />
+            <div className="setting-field">
+              <span>
+                <strong>Walkthrough model</strong>
+                <small>Uses the active chat model by default, or a separate model only for Walk with me.</small>
+              </span>
+              <SearchPicker
+                value={walkthroughModel.model
+                  ? modelValue(walkthroughModel.providerConnectionId, walkthroughModel.model)
+                  : CHAT_MODEL}
+                className="subagent-model-picker"
+                placeholder="Use chat model"
+                searchPlaceholder="Search providers and models…"
+                options={walkthroughModelOptions}
+                onChange={selectWalkthroughModel}
+              />
+            </div>
           </div></div>
         </div>
 

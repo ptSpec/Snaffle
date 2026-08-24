@@ -9,6 +9,7 @@ import type { FontId } from "./typography.js";
 import type { ImageUnderstandingProfile } from "../attachments/vision.js";
 import type { ModelToolSurfaces } from "../capabilities/surface.js";
 import type { RestrictedEngine } from "../execution/workspace.js";
+import type { WalkthroughModelSetting } from "./api.js";
 
 export type SavedSettings = {
   onboardingComplete?: unknown;
@@ -24,6 +25,7 @@ export type SavedSettings = {
   editorFontSize?: unknown;
   editorCommand?: unknown;
   editorArguments?: unknown;
+  walkthroughModel?: unknown;
   maxSteps?: unknown;
   autoTitleGeneration?: unknown;
   restrictedEngine?: unknown;
@@ -61,6 +63,7 @@ export type SettingsUpdate = {
   editorFontSize?: number;
   editorCommand?: string;
   editorArguments?: string;
+  walkthroughModel?: WalkthroughModelSetting;
   maxSteps?: number;
   autoTitleGeneration?: boolean;
   restrictedEngine?: RestrictedEngine;

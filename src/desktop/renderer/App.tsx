@@ -23,6 +23,7 @@ import {
   type DesktopThread,
   type DesktopUpdateState,
   type GitWalkthroughResult,
+  type WalkthroughModelSetting,
   type StartRunInput,
   type SavedMessage,
 } from "../api.js";
@@ -149,6 +150,7 @@ const initialState: DesktopState = {
   editorFontSize: DEFAULT_EDITOR_FONT_SIZE,
   editorCommand: "",
   editorArguments: "",
+  walkthroughModel: { providerConnectionId: "", model: "" },
   maxSteps: 50,
   autoTitleGeneration: true,
   sandboxNetworkEnabled: true,
@@ -1939,6 +1941,16 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setWalkthroughModel(walkthroughModel: WalkthroughModelSetting): Promise<void> {
+    try {
+      await window.desktop.setWalkthroughModel(walkthroughModel);
+      setDesktopState((state) => ({ ...state, walkthroughModel }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   async function setProviderTimeoutMinutes(providerTimeoutMinutes: number): Promise<void> {
     try {
       await window.desktop.setProviderTimeoutMinutes(providerTimeoutMinutes);
@@ -2310,6 +2322,7 @@ export function App(): JSX.Element {
             editorFontSize={desktopState.editorFontSize}
             editorCommand={desktopState.editorCommand}
             editorArguments={desktopState.editorArguments}
+            walkthroughModel={desktopState.walkthroughModel}
             maxSteps={desktopState.maxSteps}
             autoTitleGeneration={desktopState.autoTitleGeneration}
             providerTimeoutMinutes={desktopState.providerTimeoutMinutes}
@@ -2344,6 +2357,7 @@ export function App(): JSX.Element {
             onEditorFontSize={(size) => void setEditorFontSize(size)}
             onEditorLauncher={(command, argumentsTemplate) => void setEditorLauncher(command, argumentsTemplate)}
             onChooseEditor={() => void chooseEditorApplication()}
+            onWalkthroughModel={(setting) => void setWalkthroughModel(setting)}
             onMaxSteps={(maxSteps) => void setMaxSteps(maxSteps)}
             onAutoTitleGeneration={(enabled) => void setAutoTitleGeneration(enabled)}
             onProviderTimeoutMinutes={(minutes) => void setProviderTimeoutMinutes(minutes)}
@@ -2564,6 +2578,11 @@ export function App(): JSX.Element {
               selectedModel={selectedModel}
               selectedReasoningEffort={effectiveReasoningEffort || undefined}
               selectedProviderConnectionId={selectedProviderConnectionId}
+              walkthroughModel={desktopState.walkthroughModel.model || selectedModel}
+              walkthroughProviderConnectionId={desktopState.walkthroughModel.providerConnectionId || selectedProviderConnectionId}
+              walkthroughReasoningEffort={desktopState.walkthroughModel.model
+                ? undefined
+                : effectiveReasoningEffort || undefined}
               gitWalkthrough={gitWalkthrough?.open && gitWalkthrough.workspaceId === desktopState.workspace?.id
                 ? gitWalkthrough.result
                 : null}

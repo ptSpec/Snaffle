@@ -26,6 +26,9 @@ export function InspectorPanel({
   selectedModel,
   selectedReasoningEffort,
   selectedProviderConnectionId,
+  walkthroughModel,
+  walkthroughProviderConnectionId,
+  walkthroughReasoningEffort,
   gitWalkthrough,
   latestGitWalkthrough,
   providerNames,
@@ -55,6 +58,9 @@ export function InspectorPanel({
   selectedModel: string;
   selectedReasoningEffort: GitWalkthroughRunInput["reasoningEffort"];
   selectedProviderConnectionId: string;
+  walkthroughModel: string;
+  walkthroughProviderConnectionId: string;
+  walkthroughReasoningEffort: GitWalkthroughRunInput["reasoningEffort"];
   gitWalkthrough: GitWalkthroughResult | null;
   latestGitWalkthrough: GitWalkthroughResult | null;
   providerNames: Record<string, string>;
@@ -231,9 +237,9 @@ export function InspectorPanel({
             request={fileEditorRequest}
             walkthrough={gitWalkthrough}
             latestWalkthrough={latestGitWalkthrough}
-            walkthroughModel={selectedModel}
-            walkthroughProviderConnectionId={selectedProviderConnectionId}
-            walkthroughReasoningEffort={selectedReasoningEffort}
+            walkthroughModel={walkthroughModel}
+            walkthroughProviderConnectionId={walkthroughProviderConnectionId}
+            walkthroughReasoningEffort={walkthroughReasoningEffort}
             onDetailOpen={onGitDetailOpen}
             onRepositoryState={onGitRepositoryState}
             onAskSelection={onAskSelection}

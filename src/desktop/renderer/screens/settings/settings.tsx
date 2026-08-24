@@ -8,7 +8,7 @@ import type { CompactionMode } from "../../../../context/budget.js";
 import type { SubagentProfile } from "../../../../agent/subagents/profile.js";
 import type { ImageUnderstandingProfile } from "../../../../attachments/vision.js";
 import type { McpServerConfig, McpServerStatus } from "../../../../mcp/types.js";
-import type { DesktopUpdateState, ModelToolSetting } from "../../../api.js";
+import type { DesktopUpdateState, ModelToolSetting, WalkthroughModelSetting } from "../../../api.js";
 import type {
   ProviderCatalog,
   ProviderConnection,
@@ -39,6 +39,7 @@ export function Settings({
   editorFontSize,
   editorCommand,
   editorArguments,
+  walkthroughModel,
   maxSteps,
   autoTitleGeneration,
   providerTimeoutMinutes,
@@ -73,6 +74,7 @@ export function Settings({
   onEditorFontSize,
   onEditorLauncher,
   onChooseEditor,
+  onWalkthroughModel,
   onMaxSteps,
   onAutoTitleGeneration,
   onProviderTimeoutMinutes,
@@ -109,6 +111,7 @@ export function Settings({
   editorFontSize: number;
   editorCommand: string;
   editorArguments: string;
+  walkthroughModel: WalkthroughModelSetting;
   maxSteps: number;
   autoTitleGeneration: boolean;
   providerTimeoutMinutes: number;
@@ -143,6 +146,7 @@ export function Settings({
   onEditorFontSize: (size: number) => void;
   onEditorLauncher: (command: string, argumentsTemplate: string) => void;
   onChooseEditor: () => void;
+  onWalkthroughModel: (setting: WalkthroughModelSetting) => void;
   onMaxSteps: (maxSteps: number) => void;
   onAutoTitleGeneration: (enabled: boolean) => void;
   onProviderTimeoutMinutes: (minutes: number) => void;
@@ -255,6 +259,7 @@ export function Settings({
         providerRetries={providerRetries}
         subagent={subagent}
         imageUnderstanding={imageUnderstanding}
+        walkthroughModel={walkthroughModel}
         providerConnections={providerConnections}
         providerCatalogs={providerCatalogs}
         error={error}
@@ -264,6 +269,7 @@ export function Settings({
         onProviderRetries={onProviderRetries}
         onSubagent={onSubagent}
         onImageUnderstanding={onImageUnderstanding}
+        onWalkthroughModel={onWalkthroughModel}
       />
     );
   }

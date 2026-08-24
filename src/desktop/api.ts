@@ -179,6 +179,7 @@ export type DesktopState = {
   compactionMode: CompactionMode;
   compactionThreshold: number;
   imageUnderstanding: ImageUnderstandingProfile;
+  walkthroughModel: WalkthroughModelSetting;
 };
 
 export type ModelToolSetting = ToolSpec & {
@@ -228,6 +229,11 @@ export type GitWalkthroughRunInput = {
   providerConnectionId: string;
   model: string;
   reasoningEffort?: ReasoningEffort;
+};
+
+export type WalkthroughModelSetting = {
+  providerConnectionId: string;
+  model: string;
 };
 
 export type GitWalkthroughResult = {
@@ -304,6 +310,7 @@ export interface DesktopApi {
   setEditorFontSize(size: number): Promise<void>;
   setEditorLauncher(command: string, argumentsTemplate: string): Promise<void>;
   chooseEditorApplication(): Promise<string | null>;
+  setWalkthroughModel(setting: WalkthroughModelSetting): Promise<void>;
   setMaxSteps(maxSteps: number): Promise<void>;
   setAutoTitleGeneration(enabled: boolean): Promise<void>;
   setSandboxNetworkEnabled(enabled: boolean): Promise<void>;
