@@ -1,8 +1,16 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CodeSelectionInput, DesktopWorkspace, GitChanges, GitFileContents } from "../../../../api.js";
+import type {
+  CodeSelectionInput,
+  DesktopWorkspace,
+  GitChanges,
+  GitFileContents,
+  GitWalkthroughResult,
+  GitWalkthroughRunInput,
+} from "../../../../api.js";
 import { SearchPicker } from "../../../components/search-picker.js";
 import type { GitCodeSelection, GitEditorHandle } from "./editor.js";
 import { FileChange } from "./file-change.js";
+import { WalkthroughCanvas, WalkthroughCard } from "./walkthrough.js";
 
 const GitEditor = lazy(() => import("./editor.js"));
 
@@ -10,16 +18,32 @@ export function GitPanel({
   workspace,
   running,
   request,
-  onEditorOpen,
+  walkthrough,
+  latestWalkthrough,
+  walkthroughModel,
+  walkthroughProviderConnectionId,
+  walkthroughReasoningEffort,
+  onDetailOpen,
   onRepositoryState,
   onAskSelection,
+  onWalkthrough,
+  onOpenWalkthrough,
+  onCloseWalkthrough,
 }: {
   workspace: DesktopWorkspace | null;
   running: boolean;
   request: { workspaceId: string; path: string; requestId: number } | null;
-  onEditorOpen(open: boolean): void;
+  walkthrough: GitWalkthroughResult | null;
+  latestWalkthrough: GitWalkthroughResult | null;
+  walkthroughModel: string;
+  walkthroughProviderConnectionId: string;
+  walkthroughReasoningEffort: GitWalkthroughRunInput["reasoningEffort"];
+  onDetailOpen(open: boolean): void;
   onRepositoryState(ready: boolean): void;
   onAskSelection(input: CodeSelectionInput): Promise<void>;
+  onWalkthrough(result: GitWalkthroughResult): void;
+  onOpenWalkthrough(): void;
+  onCloseWalkthrough(): void;
 }): JSX.Element {
   const [changes, setChanges] = useState<GitChanges | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -116,27 +140,39 @@ export function GitPanel({
   }, [selectedPath]);
 
   useEffect(() => {
-    if (!selectedPath) return;
-    const closeEditor = (event: KeyboardEvent): void => {
+    if (!selectedPath && !walkthrough) return;
+    const closeDetail = (event: KeyboardEvent): void => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
       event.preventDefault();
-      setSelectedPath(null);
+      if (selectedPath) setSelectedPath(null);
+      else if (walkthrough) onCloseWalkthrough();
     };
-    window.addEventListener("keydown", closeEditor);
-    return () => window.removeEventListener("keydown", closeEditor);
-  }, [selectedPath]);
+    window.addEventListener("keydown", closeDetail);
+    return () => window.removeEventListener("keydown", closeDetail);
+  }, [onCloseWalkthrough, selectedPath, walkthrough]);
 
   useEffect(() => {
-    onEditorOpen(Boolean(selectedPath));
-  }, [onEditorOpen, selectedPath]);
+    onDetailOpen(Boolean(selectedPath || walkthrough));
+  }, [onDetailOpen, selectedPath, walkthrough]);
 
-  useEffect(() => () => onEditorOpen(false), [onEditorOpen]);
+  useEffect(() => () => onDetailOpen(false), [onDetailOpen]);
 
   const visibleFiles = useMemo(() => {
     const query = filter.trim().toLowerCase();
     return query ? changes?.files.filter((file) => file.path.toLowerCase().includes(query)) ?? [] : changes?.files ?? [];
   }, [changes, filter]);
-  const selectedFile = changes?.files.find((file) => file.path === selectedPath);
+  const trackedSelectedFile = changes?.files.find((file) => file.path === selectedPath);
+  const walkthroughSelectedFile = selectedPath
+    ? walkthrough?.changes.find((change) => change.path === selectedPath)
+    : undefined;
+  const selectedFile = trackedSelectedFile ?? (walkthroughSelectedFile ? {
+    path: walkthroughSelectedFile.path,
+    status: walkthroughSelectedFile.kind === "untracked" ? "?" : "M",
+    additions: changedLines(walkthroughSelectedFile.patch, "+"),
+    deletions: changedLines(walkthroughSelectedFile.patch, "-"),
+    exists: !walkthroughSelectedFile.patch.includes("\n+++ /dev/null"),
+    editable: true,
+  } : undefined);
   const selectedCommitPaths = changes?.files.filter((file) => commitPaths.has(file.path)).map((file) => file.path) ?? [];
   const allFilesSelected = changes?.files.length === selectedCommitPaths.length && selectedCommitPaths.length > 0;
 
@@ -257,11 +293,17 @@ export function GitPanel({
         <div className="change-detail">
           <div className="change-detail-heading">
             <div className="change-navigation">
-              <button className="change-back" type="button" onClick={() => setSelectedPath(null)} aria-label="Back to changed files" title="Back to changed files (Esc)">
+              <button
+                className="change-back"
+                type="button"
+                onClick={() => setSelectedPath(null)}
+                aria-label={walkthrough ? "Back to walkthrough" : "Back to changed files"}
+                title={walkthrough ? "Back to walkthrough (Esc)" : "Back to changed files (Esc)"}
+              >
                 <svg className="change-back-icon" aria-hidden="true" viewBox="0 0 10 16">
                   <path d="M8 1 1 8l7 7" />
                 </svg>
-                <span>Back (Esc)</span>
+                <span>{walkthrough ? "Back to walkthrough" : "Back (Esc)"}</span>
               </button>
               <SearchPicker
                 className="change-file-picker"
@@ -301,6 +343,12 @@ export function GitPanel({
             </Suspense>
           ) : failure ? null : <p className="inspector-empty">Loading file…</p>}
         </div>
+      ) : walkthrough ? (
+        <WalkthroughCanvas
+          result={walkthrough}
+          onBack={onCloseWalkthrough}
+          onOpenFile={setSelectedPath}
+        />
       ) : (
         <>
           <div className="changes-summary">
@@ -314,6 +362,20 @@ export function GitPanel({
             <span className="change-counts"><b>+{changes.additions}</b> <i>−{changes.deletions}</i></span>
             <button type="button" onClick={() => void refresh()} disabled={loading} title="Refresh changes">↻</button>
           </div>
+          <WalkthroughCard
+            workspaceId={workspace.id}
+            hasWorkingChanges={changes.files.length > 0}
+            running={running}
+            latest={latestWalkthrough}
+            providerConnectionId={walkthroughProviderConnectionId}
+            model={walkthroughModel}
+            reasoningEffort={walkthroughReasoningEffort}
+            onOpenLatest={onOpenWalkthrough}
+            onComplete={(result) => {
+              setSelectedPath(null);
+              onWalkthrough(result);
+            }}
+          />
           {changes.files.length ? (
             <details className="commit-panel">
               <summary className="commit-summary">
@@ -438,6 +500,12 @@ function GitState({
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function changedLines(patch: string, prefix: "+" | "-"): number {
+  return patch.split("\n").filter((line) =>
+    line.startsWith(prefix) && !line.startsWith(`${prefix.repeat(3)} `)
+  ).length;
 }
 
 function SearchIcon(): JSX.Element {

@@ -153,6 +153,11 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:get-git-file", workspaceId, path),
   getGitDiffPreview: (workspaceId: string, path: string) =>
     ipcRenderer.invoke("desktop:get-git-diff-preview", workspaceId, path),
+  getGitWalkthroughOptions: (workspaceId: string) =>
+    ipcRenderer.invoke("desktop:get-git-walkthrough-options", workspaceId),
+  getGitWalkthrough: (workspaceId: string) =>
+    ipcRenderer.invoke("desktop:get-git-walkthrough", workspaceId),
+  runGitWalkthrough: (input) => ipcRenderer.invoke("desktop:run-git-walkthrough", input),
   saveGitFile: (workspaceId: string, path: string, content: string, lineEnding: GitFileContents["lineEnding"]) =>
     ipcRenderer.invoke("desktop:save-git-file", workspaceId, path, content, lineEnding),
   commitGitChanges: (workspaceId: string, message: string, paths: string[]) =>

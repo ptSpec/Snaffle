@@ -22,6 +22,7 @@ import {
   type DesktopState,
   type DesktopThread,
   type DesktopUpdateState,
+  type GitWalkthroughResult,
   type StartRunInput,
   type SavedMessage,
 } from "../api.js";
@@ -209,6 +210,11 @@ export function App(): JSX.Element {
   const [fileEditorRequest, setFileEditorRequest] = useState<FileEditorRequest | null>(null);
   const [changesTurnRequest, setChangesTurnRequest] = useState<ChangesTurnRequest | null>(null);
   const [gitRepositoryReady, setGitRepositoryReady] = useState(false);
+  const [gitWalkthrough, setGitWalkthrough] = useState<{
+    workspaceId: string;
+    result: GitWalkthroughResult;
+    open: boolean;
+  } | null>(null);
   const [view, setView] = useState<AppView>("conversation");
   const [commandMode, setCommandMode] = useState<"all" | "slash" | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -355,7 +361,7 @@ export function App(): JSX.Element {
   const leftAutoCollapsed = useRef(false);
   const rightPanelFocused = useRef(false);
   const inspectorTabValue = useRef<InspectorTab>(inspectorTab);
-  const gitEditorOpen = useRef(false);
+  const gitDetailOpen = useRef(false);
   const fileEditorRequestId = useRef(0);
   const changesTurnRequestId = useRef(0);
   const layoutBeforeRightPanelFocus = useRef<{
@@ -422,11 +428,11 @@ export function App(): JSX.Element {
   const selectInspectorTab = useCallback((tab: InspectorTab): void => {
     inspectorTabValue.current = tab;
     setInspectorTab(tab);
-    setRightPanelFocus(tab === "git" && gitEditorOpen.current);
+    setRightPanelFocus(tab === "git" && gitDetailOpen.current);
   }, [setRightPanelFocus]);
 
-  const handleGitEditorOpen = useCallback((open: boolean): void => {
-    gitEditorOpen.current = open;
+  const handleGitDetailOpen = useCallback((open: boolean): void => {
+    gitDetailOpen.current = open;
     if (inspectorTabValue.current === "git") setRightPanelFocus(open);
   }, [setRightPanelFocus]);
 
@@ -451,10 +457,17 @@ export function App(): JSX.Element {
     const workspace = desktopState.workspace;
     let current = true;
     setGitRepositoryReady(false);
+    setGitWalkthrough(null);
     if (workspace) {
       void window.desktop.getGitChanges(workspace.id).then(
         (changes) => { if (current) setGitRepositoryReady(changes.state === "ready"); },
         () => { if (current) setGitRepositoryReady(false); },
+      );
+      void window.desktop.getGitWalkthrough(workspace.id).then(
+        (result) => {
+          if (current && result) setGitWalkthrough({ workspaceId: workspace.id, result, open: false });
+        },
+        (cause) => { if (current) setError(errorMessage(cause)); },
       );
     }
     return () => { current = false; };
@@ -2549,7 +2562,14 @@ export function App(): JSX.Element {
               timeline={timeline}
               running={running}
               selectedModel={selectedModel}
+              selectedReasoningEffort={effectiveReasoningEffort || undefined}
               selectedProviderConnectionId={selectedProviderConnectionId}
+              gitWalkthrough={gitWalkthrough?.open && gitWalkthrough.workspaceId === desktopState.workspace?.id
+                ? gitWalkthrough.result
+                : null}
+              latestGitWalkthrough={gitWalkthrough && gitWalkthrough.workspaceId === desktopState.workspace?.id
+                ? gitWalkthrough.result
+                : null}
               providerNames={Object.fromEntries(desktopState.providerConnections.map((connection) => [connection.id, connection.name]))}
               modelInstructions={desktopState.modelInstructions}
               toolSpecs={desktopState.toolSpecs}
@@ -2562,9 +2582,19 @@ export function App(): JSX.Element {
               onExitFocus={() => setRightPanelFocus(false)}
               onSelect={setSelectedItemId}
               onNavigateTurn={scrollToTimelineItem}
-              onEditorOpen={handleGitEditorOpen}
+              onGitDetailOpen={handleGitDetailOpen}
               onGitRepositoryState={setGitRepositoryReady}
               onAskSelection={attachCodeSelection}
+              onGitWalkthrough={(result) => {
+                const workspaceId = desktopState.workspace?.id;
+                if (workspaceId) setGitWalkthrough({ workspaceId, result, open: true });
+              }}
+              onOpenGitWalkthrough={() => setGitWalkthrough((current) => current
+                ? { ...current, open: true }
+                : null)}
+              onCloseGitWalkthrough={() => setGitWalkthrough((current) => current
+                ? { ...current, open: false }
+                : null)}
               onCollapse={hideRightPanel}
             />
           ) : null}

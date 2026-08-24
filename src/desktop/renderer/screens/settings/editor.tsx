@@ -27,15 +27,18 @@ export function EditorSettings({
       <div className="settings-content">
         <p className="eyebrow">Settings</p>
         <h1>Editor</h1>
-        <p className="settings-description">Choose which application opens files from the Git panel.</p>
+        <p className="settings-description">
+          Choose which application opens files from the Git panel. Automatic uses VS Code when installed,
+          then the platform text editor.
+        </p>
 
         <div className="editor-current">
           <span>Current editor</span>
-          <strong title={command || "System default"}>{command || "System default"}</strong>
+          <strong title={command || "Automatic"}>{command || "Automatic"}</strong>
         </div>
         <div className="editor-actions">
           <button className="primary" type="button" onClick={onChoose}>Choose application…</button>
-          <button type="button" disabled={!command} onClick={() => onChange("", "")}>Use system default</button>
+          <button type="button" disabled={!command} onClick={() => onChange("", "")}>Use automatic</button>
         </div>
 
         <details className="editor-advanced">
@@ -79,4 +82,3 @@ export function EditorSettings({
     </section>
   );
 }
-

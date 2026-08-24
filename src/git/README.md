@@ -8,6 +8,7 @@ It must not import Electron or renderer code. Desktop IPC exposes these operatio
 
 - `process.ts` runs bounded Git commands.
 - `repository.ts` reads repository state and structured changes.
+- `walkthrough.ts` builds balanced per-file working-tree and merge-base branch evidence for isolated Inspector walkthroughs.
 - `actions.ts` performs saves and selective local commits.
 - `types.ts` defines the provider-neutral data consumed by desktop IPC and UI.
 

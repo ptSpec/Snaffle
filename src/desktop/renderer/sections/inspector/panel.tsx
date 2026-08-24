@@ -1,5 +1,10 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { CodeSelectionInput, DesktopWorkspace } from "../../../api.js";
+import type {
+  CodeSelectionInput,
+  DesktopWorkspace,
+  GitWalkthroughResult,
+  GitWalkthroughRunInput,
+} from "../../../api.js";
 import type { TimelineItem } from "../conversation/timeline-state.js";
 import { ExecutionOverview } from "./overview.js";
 import { Inspector } from "./inspect.js";
@@ -19,7 +24,10 @@ export function InspectorPanel({
   timeline,
   running,
   selectedModel,
+  selectedReasoningEffort,
   selectedProviderConnectionId,
+  gitWalkthrough,
+  latestGitWalkthrough,
   providerNames,
   modelInstructions,
   toolSpecs,
@@ -32,9 +40,12 @@ export function InspectorPanel({
   onExitFocus,
   onSelect,
   onNavigateTurn,
-  onEditorOpen,
+  onGitDetailOpen,
   onGitRepositoryState,
   onAskSelection,
+  onGitWalkthrough,
+  onOpenGitWalkthrough,
+  onCloseGitWalkthrough,
   onCollapse,
 }: {
   workspace: DesktopWorkspace | null;
@@ -42,7 +53,10 @@ export function InspectorPanel({
   timeline: TimelineItem[];
   running: boolean;
   selectedModel: string;
+  selectedReasoningEffort: GitWalkthroughRunInput["reasoningEffort"];
   selectedProviderConnectionId: string;
+  gitWalkthrough: GitWalkthroughResult | null;
+  latestGitWalkthrough: GitWalkthroughResult | null;
   providerNames: Record<string, string>;
   modelInstructions: string[];
   toolSpecs: ToolSpec[];
@@ -55,9 +69,12 @@ export function InspectorPanel({
   onExitFocus(): void;
   onSelect(id: string | null): void;
   onNavigateTurn(id: string): void;
-  onEditorOpen(open: boolean): void;
+  onGitDetailOpen(open: boolean): void;
   onGitRepositoryState(ready: boolean): void;
   onAskSelection(input: CodeSelectionInput): Promise<void>;
+  onGitWalkthrough(result: GitWalkthroughResult): void;
+  onOpenGitWalkthrough(): void;
+  onCloseGitWalkthrough(): void;
   onCollapse(): void;
 }): JSX.Element {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -212,9 +229,17 @@ export function InspectorPanel({
             workspace={workspace}
             running={running}
             request={fileEditorRequest}
-            onEditorOpen={onEditorOpen}
+            walkthrough={gitWalkthrough}
+            latestWalkthrough={latestGitWalkthrough}
+            walkthroughModel={selectedModel}
+            walkthroughProviderConnectionId={selectedProviderConnectionId}
+            walkthroughReasoningEffort={selectedReasoningEffort}
+            onDetailOpen={onGitDetailOpen}
             onRepositoryState={onGitRepositoryState}
             onAskSelection={onAskSelection}
+            onWalkthrough={onGitWalkthrough}
+            onOpenWalkthrough={onOpenGitWalkthrough}
+            onCloseWalkthrough={onCloseGitWalkthrough}
           />
         )}
       </div>
