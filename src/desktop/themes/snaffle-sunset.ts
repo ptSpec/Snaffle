@@ -25,7 +25,8 @@ export const snaffleSunsetTheme = {
     "code-keyword": "#8c3fa8",
     "code-string": "#26705d",
     "code-number": "#5367b8",
+    "code-function": "#a13f64",
     "code-type": "#5d4ac3",
-    "code-tag": "#a05b70",
+    "code-tag": "#8a5200",
   },
 } satisfies Theme;
