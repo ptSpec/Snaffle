@@ -2,13 +2,12 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type CSSP
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import {
   HighlightStyle,
-  StreamLanguage,
   bracketMatching,
   indentOnInput,
   syntaxHighlighting,
 } from "@codemirror/language";
 import { getChunks, getOriginalDoc, unifiedMergeView, type Chunk } from "@codemirror/merge";
-import { EditorState, RangeSetBuilder, type Extension } from "@codemirror/state";
+import { EditorState, RangeSetBuilder } from "@codemirror/state";
 import {
   EditorView,
   GutterMarker,
@@ -21,6 +20,7 @@ import {
   lineNumbers,
 } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
+import { languageForPath } from "../../../components/file-language.js";
 import "./editor.css";
 
 export type GitEditorHandle = { value(): string };
@@ -108,7 +108,7 @@ const GitEditor = forwardRef<GitEditorHandle, {
               }
             }),
             editorTheme,
-            language,
+            ...(language ? [language] : []),
           ],
         }),
       });
@@ -182,10 +182,6 @@ const addedGutterMarker = new class extends GutterMarker {
   elementClass = "cm-changedLineGutter";
 }();
 
-const removedGutterMarker = new class extends GutterMarker {
-  elementClass = "cm-deletedLineGutter";
-}();
-
 const modifiedGutterMarker = new class extends GutterMarker {
   elementClass = "cm-inlineChangedLineGutter";
 }();
@@ -206,9 +202,6 @@ const rightDiffGutter = gutter({
       }
     }
     return builder.finish();
-  },
-  widgetMarker(view, widget) {
-    return widget.toDOM(view).classList.contains("cm-deletedChunk") ? removedGutterMarker : null;
   },
 });
 
@@ -264,9 +257,13 @@ const editorTheme = EditorView.theme({
   },
   ".cm-deletedChunk": {
     backgroundColor: "transparent",
+    boxShadow: "inset 3px 0 var(--diff-removed-text), inset -3px 0 var(--diff-removed-text)",
   },
   ".cm-inlineChangedLine": { backgroundColor: "transparent" },
   ".cm-deletedChunk, .cm-deletedChunk *": { userSelect: "text" },
+  ".cm-deletedChunk, .cm-deletedChunk *, .cm-deletedText, .cm-deletedText *": {
+    color: "var(--code-text) !important",
+  },
   ".cm-deletedChunk ::selection": { backgroundColor: "var(--editor-selection-background)" },
   ".cm-deletedLine del, &.cm-merge-b del.cm-deletedText": {
     textDecoration: "line-through",
@@ -274,11 +271,12 @@ const editorTheme = EditorView.theme({
     textDecorationThickness: "1px",
   },
   "&.cm-merge-b .cm-deletedText": { background: "none" },
-  "&.cm-merge-b .cm-changedText, &.cm-merge-b .cm-insertedLine": {
-    background: "linear-gradient(color-mix(in srgb, var(--diff-added-text) 68%, transparent), color-mix(in srgb, var(--diff-added-text) 68%, transparent)) bottom / 100% 2px no-repeat",
+  "&.cm-merge-b .cm-changedText": {
+    background: "linear-gradient(color-mix(in srgb, var(--syntax-type) 68%, transparent), color-mix(in srgb, var(--syntax-type) 68%, transparent)) bottom / 100% 2px no-repeat",
   },
+  "&.cm-merge-b .cm-insertedLine": { background: "none" },
   "&.cm-merge-b .cm-changedLineGutter": { background: "var(--diff-added-text)" },
-  ".cm-deletedLineGutter": { background: "var(--diff-removed-text)" },
+  ".cm-deletedLineGutter": { background: "transparent" },
   ".cm-inlineChangedLineGutter": { background: "var(--syntax-type)" },
   ".cm-changeGutter-right": { width: "4px", paddingLeft: "0" },
   ".cm-changeGutter-right .cm-gutterElement": { minWidth: "4px" },
@@ -293,44 +291,9 @@ const editorHighlighting = HighlightStyle.define([
   { tag: [tags.keyword, tags.modifier], color: "var(--syntax-keyword)" },
   { tag: [tags.string, tags.regexp], color: "var(--syntax-string)" },
   { tag: [tags.number, tags.bool, tags.null], color: "var(--syntax-number)" },
-  { tag: tags.function(tags.variableName), color: "var(--syntax-function)" },
+  { tag: tags.variableName, color: "var(--syntax-type)" },
+  { tag: [tags.function(tags.variableName), tags.definition(tags.variableName), tags.propertyName], color: "var(--syntax-function)" },
   { tag: [tags.typeName, tags.className], color: "var(--syntax-type)" },
+  { tag: [tags.tagName, tags.attributeName], color: "var(--syntax-tag)" },
   { tag: [tags.operator, tags.punctuation], color: "var(--syntax-operator)" },
 ]);
-
-async function languageForPath(filePath: string): Promise<Extension> {
-  const extension = filePath.split(".").pop()?.toLowerCase();
-  if (["js", "jsx", "mjs", "cjs"].includes(extension ?? "")) {
-    return StreamLanguage.define((await import("@codemirror/legacy-modes/mode/javascript")).javascript);
-  }
-  if (["ts", "tsx", "mts", "cts"].includes(extension ?? "")) {
-    return StreamLanguage.define((await import("@codemirror/legacy-modes/mode/javascript")).typescript);
-  }
-  if (extension === "json") {
-    return StreamLanguage.define((await import("@codemirror/legacy-modes/mode/javascript")).json);
-  }
-  if (extension === "py") return StreamLanguage.define((await import("@codemirror/legacy-modes/mode/python")).python);
-  if (["sh", "bash", "zsh"].includes(extension ?? "")) {
-    return StreamLanguage.define((await import("@codemirror/legacy-modes/mode/shell")).shell);
-  }
-  if (["css", "scss", "less"].includes(extension ?? "")) {
-    return StreamLanguage.define((await import("@codemirror/legacy-modes/mode/css")).css);
-  }
-  if (["html", "htm", "xml", "svg"].includes(extension ?? "")) {
-    return StreamLanguage.define((await import("@codemirror/legacy-modes/mode/xml")).html);
-  }
-  if (["yaml", "yml"].includes(extension ?? "")) {
-    return StreamLanguage.define((await import("@codemirror/legacy-modes/mode/yaml")).yaml);
-  }
-  if (extension === "rs") return StreamLanguage.define((await import("@codemirror/legacy-modes/mode/rust")).rust);
-  if (extension === "go") return StreamLanguage.define((await import("@codemirror/legacy-modes/mode/go")).go);
-  if (["c", "h", "cc", "cpp", "cxx", "hpp", "java", "cs", "kt", "kts", "dart"].includes(extension ?? "")) {
-    const mode = await import("@codemirror/legacy-modes/mode/clike");
-    if (extension === "java") return StreamLanguage.define(mode.java);
-    if (extension === "cs") return StreamLanguage.define(mode.csharp);
-    if (extension === "kt" || extension === "kts") return StreamLanguage.define(mode.kotlin);
-    if (extension === "dart") return StreamLanguage.define(mode.dart);
-    return StreamLanguage.define(extension === "c" || extension === "h" ? mode.c : mode.cpp);
-  }
-  return [];
-}

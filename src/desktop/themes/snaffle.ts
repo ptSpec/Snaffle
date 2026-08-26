@@ -22,5 +22,9 @@ export const snaffleTheme = {
     brand: SNAFFLE_YELLOW,
     "brand-detail": SNAFFLE_BACKGROUND,
     "code-background": SNAFFLE_BACKGROUND,
+    "code-keyword": "#FE5150",
+    "code-number": "#41AAFC",
+    "code-function": SNAFFLE_YELLOW,
+    "code-type": "#1DA689",
   },
 } satisfies Theme;

@@ -6,6 +6,7 @@ import type {
   GitWalkthroughRunInput,
   GitWalkthroughTarget,
 } from "../../../../api.js";
+import { FileSyntax } from "../../../components/file-syntax.js";
 import { SearchPicker } from "../../../components/search-picker.js";
 import { MarkdownContent } from "../../conversation/markdown.js";
 import "./walkthrough.css";
@@ -233,7 +234,7 @@ function WalkthroughChangeBlock({
   onOpen(): void;
 }): JSX.Element {
   const lines = change.patch.split("\n");
-  const excerpt = lines.slice(startLine - 1, endLine).join("\n");
+  const excerpt = lines.slice(startLine - 1, endLine);
   return (
     <section className="walkthrough-change" aria-label={`${kindLabel(change.kind)} change in ${change.path}`}>
       <header>
@@ -242,9 +243,13 @@ function WalkthroughChangeBlock({
         <small>Lines {startLine}–{endLine} of {lines.length}{change.truncated ? " · bounded snapshot" : ""}</small>
         <button type="button" onClick={onOpen}>Open full file</button>
       </header>
-      <div className="walkthrough-change-patch markdown-content">
-        <MarkdownContent text={fencedDiff(excerpt)} />
-      </div>
+      <pre className="walkthrough-change-patch"><code>{excerpt.map((line, index) => (
+        <span className={walkthroughLineClass(line)} key={`${startLine + index}:${line}`}>
+          {line.startsWith("+") && !line.startsWith("+++")
+            ? <><b aria-hidden="true">+</b><FileSyntax path={change.path} text={line.slice(1)} /></>
+            : line || " "}
+        </span>
+      ))}</code></pre>
     </section>
   );
 }
@@ -290,10 +295,11 @@ function formatSavedAt(createdAt: number): string {
   return new Date(createdAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 }
 
-function fencedDiff(text: string): string {
-  const longest = Math.max(3, ...[...text.matchAll(/`+/g)].map((match) => match[0].length + 1));
-  const fence = "`".repeat(longest);
-  return `${fence}diff\n${text}\n${fence}`;
+function walkthroughLineClass(line: string): string {
+  if (line.startsWith("+") && !line.startsWith("+++")) return "added";
+  if (line.startsWith("-") && !line.startsWith("---")) return "removed";
+  if (line.startsWith("@@")) return "hunk";
+  return "context";
 }
 
 function kindLabel(kind: GitWalkthroughChange["kind"]): string {

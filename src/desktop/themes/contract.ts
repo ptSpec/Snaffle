@@ -18,6 +18,7 @@ export const THEME_COLOR_DESCRIPTIONS = {
   "code-keyword": "Syntax-highlighted language keywords.",
   "code-string": "Syntax-highlighted strings.",
   "code-number": "Syntax-highlighted numbers and literals.",
+  "code-function": "Syntax-highlighted function and method names.",
   "code-type": "Syntax-highlighted types and classes.",
   "code-tag": "Syntax-highlighted markup tags and attributes.",
 } as const;

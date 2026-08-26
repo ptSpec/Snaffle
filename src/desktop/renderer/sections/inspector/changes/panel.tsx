@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { FileSyntax } from "../../../components/file-syntax.js";
 import { SearchPicker } from "../../../components/search-picker.js";
 import {
   fileChangeTurns,
@@ -129,17 +130,17 @@ function FileDiff({
 }): JSX.Element {
   return (
     <div className="agent-change-diff">
-      <pre><code>{file.lines.map((line, index) => <DiffLine key={`${turn.id}:${file.path}:${index}`} line={line} />)}</code></pre>
+      <pre><code>{file.lines.map((line, index) => <DiffLine key={`${turn.id}:${file.path}:${index}`} line={line} path={file.path} />)}</code></pre>
       {file.hiddenLines ? <small>… {file.hiddenLines} more lines</small> : null}
     </div>
   );
 }
 
-function DiffLine({ line }: { line: FileChangeLine }): JSX.Element {
+function DiffLine({ line, path }: { line: FileChangeLine; path: string }): JSX.Element {
   return (
     <span className={`agent-change-line ${line.kind}`}>
       <span aria-hidden="true">{line.kind === "added" ? "+" : line.kind === "removed" ? "−" : "·"}</span>
-      <span>{line.text || " "}</span>
+      <span>{line.kind === "added" ? <FileSyntax path={path} text={line.text} /> : line.text || " "}</span>
     </span>
   );
 }
