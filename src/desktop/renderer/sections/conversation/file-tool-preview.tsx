@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { FileSyntax } from "../../components/file-syntax.js";
 import type { TimelineItem } from "./timeline-state.js";
 
 type ToolItem = Extract<TimelineItem, { kind: "tool" }>;
@@ -184,7 +185,9 @@ export function FileToolPreview({
                     <span className="file-tool-preview-prefix" aria-hidden="true">
                       {line.kind === "added" ? "+" : line.kind === "removed" ? "−" : "·"}
                     </span>
-                    <span className="file-tool-preview-text">{line.text || " "}</span>
+                    <span className="file-tool-preview-text">
+                      {line.kind === "added" ? <FileSyntax path={preview.path} text={line.text} /> : line.text || " "}
+                    </span>
                   </span>
                 ))}
               </code>

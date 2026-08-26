@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { GitDiffPreview, GitFileChange } from "../../../../api.js";
+import { FileSyntax } from "../../../components/file-syntax.js";
 import "./preview.css";
 
 export function FileChange({
@@ -181,7 +182,13 @@ function DiffPreview({
       {preview ? (
         <pre>
           <code>
-            {preview.lines.map((line, index) => <span className={lineClass(line)} key={`${index}:${line}`}>{line || " "}</span>)}
+            {preview.lines.map((line, index) => (
+              <span className={lineClass(line)} key={`${index}:${line}`}>
+                {line.startsWith("+") && !line.startsWith("+++")
+                  ? <><b aria-hidden="true">+</b><FileSyntax path={path} text={line.slice(1)} /></>
+                  : line || " "}
+              </span>
+            ))}
             {preview.truncated ? <span className="truncated">… preview truncated</span> : null}
           </code>
         </pre>
@@ -196,8 +203,8 @@ function FileName({ path }: { path: string }): JSX.Element {
 }
 
 function lineClass(line: string): string {
-  if (line.startsWith("+")) return "added";
-  if (line.startsWith("-")) return "removed";
+  if (line.startsWith("+") && !line.startsWith("+++")) return "added";
+  if (line.startsWith("-") && !line.startsWith("---")) return "removed";
   if (line.startsWith("@@")) return "hunk";
   return "context";
 }

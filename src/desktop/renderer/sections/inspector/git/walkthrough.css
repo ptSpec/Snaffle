@@ -345,11 +345,45 @@
   background: var(--control-background);
 }
 
-.walkthrough-change-patch .code-block {
+.walkthrough-change-patch {
+  max-height: 420px;
   margin: 0;
+  overflow: auto;
+  padding: 6px 0;
+  color: var(--code-text);
+  background: var(--code-background);
   border: 0;
   border-radius: 0;
-  box-shadow: none;
+  font: calc(var(--editor-font-size, 13px) - 1px)/1.55 var(--font-code);
+}
+
+.walkthrough-change-patch code {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+}
+
+.walkthrough-change-patch code > span {
+  display: block;
+  min-height: 1.55em;
+  padding: 0 10px;
+  white-space: pre;
+}
+
+.walkthrough-change-patch .added > b {
+  color: var(--diff-added-text);
+  font-weight: inherit;
+}
+
+.walkthrough-change-patch .removed {
+  color: var(--code-text);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--diff-removed-text) 58%, transparent);
+}
+
+.walkthrough-change-patch .hunk {
+  color: var(--diff-modified-text);
+  background: var(--diff-modified-background);
 }
 
 @container (max-width: 380px) {

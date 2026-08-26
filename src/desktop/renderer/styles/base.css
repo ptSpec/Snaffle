@@ -60,7 +60,7 @@
   --syntax-keyword: var(--code-keyword);
   --syntax-string: var(--code-string);
   --syntax-number: var(--code-number);
-  --syntax-function: var(--primary);
+  --syntax-function: var(--code-function);
   --syntax-type: var(--code-type);
   --syntax-tag: var(--code-tag);
   --syntax-operator: var(--code-text);
@@ -79,6 +79,38 @@
   background: var(--app-background);
   font-family: var(--font-interface);
   font-synthesis: none;
+}
+
+.file-syntax :is(.tok-comment) {
+  color: var(--syntax-comment);
+}
+
+.file-syntax :is(.tok-keyword, .tok-modifier) {
+  color: var(--syntax-keyword);
+}
+
+.file-syntax :is(.tok-string, .tok-string2, .tok-regexp) {
+  color: var(--syntax-string);
+}
+
+.file-syntax :is(.tok-number, .tok-bool, .tok-null) {
+  color: var(--syntax-number);
+}
+
+.file-syntax :is(.tok-variableName, .tok-typeName, .tok-className) {
+  color: var(--syntax-type);
+}
+
+.file-syntax :is(.tok-propertyName, .tok-variableName.tok-definition) {
+  color: var(--syntax-function);
+}
+
+.file-syntax :is(.tok-tagName, .tok-attributeName) {
+  color: var(--syntax-tag);
+}
+
+.file-syntax :is(.tok-operator, .tok-punctuation) {
+  color: var(--syntax-operator);
 }
 
 html[data-animations="off"] *,

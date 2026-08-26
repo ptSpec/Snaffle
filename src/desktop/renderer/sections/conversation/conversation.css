@@ -851,8 +851,10 @@ html[data-appearance="dark"] .markdown-content .code-block {
 }
 
 .hljs-deletion {
-  color: var(--diff-removed-text);
-  background: var(--diff-removed-background);
+  color: var(--code-text);
+  background: transparent;
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--diff-removed-text) 58%, transparent);
 }
 
 .streaming-cursor {

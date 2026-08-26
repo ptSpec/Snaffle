@@ -25,7 +25,8 @@ export const morningBrewTheme = {
     "code-keyword": "#a4265b",
     "code-string": "#147253",
     "code-number": "#c2412d",
+    "code-function": "#806f00",
     "code-type": "#5c4aa5",
-    "code-tag": "#9b5b37",
+    "code-tag": "#0878b9",
   },
 } satisfies Theme;

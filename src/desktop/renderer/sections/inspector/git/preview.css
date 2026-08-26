@@ -44,10 +44,15 @@
   min-width: 100%;
 }
 
-.git-hover-preview pre span {
+.git-hover-preview pre code > span {
   display: block;
   min-height: 1.45em;
   padding: 0 9px;
+}
+
+.git-hover-preview .added > b {
+  color: var(--diff-added-text);
+  font-weight: inherit;
 }
 
 .git-hover-preview .added,

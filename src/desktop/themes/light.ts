@@ -23,8 +23,9 @@ export const lightTheme = {
     "code-comment": "#6e7781",
     "code-keyword": "#cf222e",
     "code-string": "#0a3069",
-    "code-number": "#0550ae",
-    "code-type": "#953800",
+    "code-number": "#0878b9",
+    "code-function": "#8250df",
+    "code-type": "#087a65",
     "code-tag": "#8f4f36",
   },
 } satisfies Theme;
