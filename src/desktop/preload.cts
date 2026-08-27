@@ -19,6 +19,12 @@ import type { ImageUnderstandingProfile } from "../attachments/vision.js";
 import type { ModelToolSurface } from "../capabilities/surface.js";
 import type { SandboxAccessInput } from "../execution/access.js";
 import type { RestrictedEngine } from "../execution/workspace.js";
+import type {
+  SpeechModel,
+  SpeechModelStatus,
+  SpeechSettings,
+  SpeechTranscriptEvent,
+} from "../speech/config.js";
 
 const api: DesktopApi = {
   platform: process.platform,
@@ -102,6 +108,17 @@ const api: DesktopApi = {
   setTheme: (themeId: string) => ipcRenderer.invoke("desktop:set-theme", themeId),
   setAnimationsEnabled: (enabled: boolean) =>
     ipcRenderer.invoke("desktop:set-animations-enabled", enabled),
+  setSpeechSettings: (settings: SpeechSettings) =>
+    ipcRenderer.invoke("desktop:set-speech-settings", settings),
+  installSpeechModel: (model: SpeechModel) =>
+    ipcRenderer.invoke("desktop:install-speech-model", model),
+  removeSpeechModel: (model: SpeechModel) =>
+    ipcRenderer.invoke("desktop:remove-speech-model", model),
+  startSpeechRecognition: (model: SpeechModel, language: string) =>
+    ipcRenderer.invoke("desktop:start-speech-recognition", model, language),
+  sendSpeechAudio: (samples: Float32Array, sampleRate: number) =>
+    ipcRenderer.send("desktop:speech-audio", samples, sampleRate),
+  stopSpeechRecognition: () => ipcRenderer.invoke("desktop:stop-speech-recognition"),
   setTypography: (interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId) =>
     ipcRenderer.invoke("desktop:set-typography", interfaceFont, primary, secondary, code),
   setTypographyScale: (role: "interface" | "conversation", value: number) =>
@@ -197,6 +214,16 @@ const api: DesktopApi = {
     const receiveEvent = (_event: Electron.IpcRendererEvent, event: DesktopTerminalExitEvent) => listener(event);
     ipcRenderer.on("desktop:terminal-exit", receiveEvent);
     return () => ipcRenderer.removeListener("desktop:terminal-exit", receiveEvent);
+  },
+  onSpeechModelStatus(listener: (status: SpeechModelStatus) => void): () => void {
+    const receiveEvent = (_event: Electron.IpcRendererEvent, status: SpeechModelStatus) => listener(status);
+    ipcRenderer.on("desktop:speech-model-status", receiveEvent);
+    return () => ipcRenderer.removeListener("desktop:speech-model-status", receiveEvent);
+  },
+  onSpeechTranscript(listener: (event: SpeechTranscriptEvent) => void): () => void {
+    const receiveEvent = (_event: Electron.IpcRendererEvent, event: SpeechTranscriptEvent) => listener(event);
+    ipcRenderer.on("desktop:speech-transcript", receiveEvent);
+    return () => ipcRenderer.removeListener("desktop:speech-transcript", receiveEvent);
   },
 };
 

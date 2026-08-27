@@ -52,6 +52,18 @@ export function createDesktopWindow(
   });
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.session.setPermissionCheckHandler((webContents, permission, _origin, details) =>
+    webContents?.id === window.webContents.id && permission === "media" && details.mediaType === "audio"
+  );
+  window.webContents.session.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    const mediaTypes = "mediaTypes" in details ? details.mediaTypes : undefined;
+    callback(
+      webContents.id === window.webContents.id &&
+      permission === "media" &&
+      mediaTypes?.length === 1 &&
+      mediaTypes[0] === "audio",
+    );
+  });
   window.webContents.on("did-finish-load", () => {
     window.webContents.setZoomLevel(0);
   });

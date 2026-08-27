@@ -10,6 +10,7 @@ import type { ImageUnderstandingProfile } from "../attachments/vision.js";
 import type { ModelToolSurfaces } from "../capabilities/surface.js";
 import type { RestrictedEngine } from "../execution/workspace.js";
 import type { WalkthroughModelSetting } from "./api.js";
+import type { SpeechSettings } from "../speech/config.js";
 
 export type SavedSettings = {
   onboardingComplete?: unknown;
@@ -47,6 +48,7 @@ export type SavedSettings = {
   disabledTools?: unknown;
   imageUnderstanding?: unknown;
   modelToolSurfaces?: unknown;
+  speech?: unknown;
 };
 
 export type SettingsUpdate = {
@@ -85,6 +87,7 @@ export type SettingsUpdate = {
   disabledTools?: string[];
   imageUnderstanding?: ImageUnderstandingProfile;
   modelToolSurfaces?: ModelToolSurfaces;
+  speech?: SpeechSettings;
 };
 
 export function loadSettings(file: string): SavedSettings {
