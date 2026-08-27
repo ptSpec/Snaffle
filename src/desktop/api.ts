@@ -29,6 +29,12 @@ import type { ModelToolSurface, ModelToolSurfaces } from "../capabilities/surfac
 import type { DesktopUpdateState } from "./updates.js";
 import type { SandboxAccessGrant, SandboxAccessInput } from "../execution/access.js";
 import type { RestrictedEngine } from "../execution/workspace.js";
+import type {
+  SpeechModel,
+  SpeechModelStatus,
+  SpeechSettings,
+  SpeechTranscriptEvent,
+} from "../speech/config.js";
 
 export type { SandboxAccessGrant, SandboxAccessInput } from "../execution/access.js";
 
@@ -179,6 +185,8 @@ export type DesktopState = {
   compactionMode: CompactionMode;
   compactionThreshold: number;
   imageUnderstanding: ImageUnderstandingProfile;
+  speech: SpeechSettings;
+  speechModels: SpeechModelStatus[];
   walkthroughModel: WalkthroughModelSetting;
 };
 
@@ -304,6 +312,12 @@ export interface DesktopApi {
   resolveCommandApproval(id: string, decision: CommandApprovalDecision): Promise<DesktopState>;
   setTheme(themeId: string): Promise<void>;
   setAnimationsEnabled(enabled: boolean): Promise<void>;
+  setSpeechSettings(settings: SpeechSettings): Promise<DesktopState>;
+  installSpeechModel(model: SpeechModel): Promise<SpeechModelStatus[]>;
+  removeSpeechModel(model: SpeechModel): Promise<SpeechModelStatus[]>;
+  startSpeechRecognition(model: SpeechModel, language: string): Promise<void>;
+  sendSpeechAudio(samples: Float32Array, sampleRate: number): void;
+  stopSpeechRecognition(): Promise<void>;
   setTypography(interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId): Promise<void>;
   setTypographyScale(role: "interface" | "conversation", value: number): Promise<void>;
   setCodeBlockFontSize(size: number): Promise<void>;
@@ -353,4 +367,6 @@ export interface DesktopApi {
   onUpdateState(listener: (state: DesktopUpdateState) => void): () => void;
   onTerminalData(listener: (event: DesktopTerminalDataEvent) => void): () => void;
   onTerminalExit(listener: (event: DesktopTerminalExitEvent) => void): () => void;
+  onSpeechModelStatus(listener: (status: SpeechModelStatus) => void): () => void;
+  onSpeechTranscript(listener: (event: SpeechTranscriptEvent) => void): () => void;
 }

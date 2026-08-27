@@ -682,6 +682,18 @@
   outline: none;
 }
 
+.voice-download-progress {
+  width: 100%;
+  height: 5px;
+  margin: 10px 0 4px;
+  accent-color: var(--accent);
+}
+
+.voice-model-actions {
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
 .mcp-add-server {
   width: max-content;
   margin-top: 14px;

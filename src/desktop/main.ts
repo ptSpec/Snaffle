@@ -109,6 +109,15 @@ import { completeGitWalkthrough } from "./git-walkthrough.js";
 import { openCodeFile } from "./editor-launcher.js";
 import { registerUpdateIpc, type DesktopUpdates } from "./updates.js";
 import { SkillRegistry, skillTool } from "../extensions/skills/index.js";
+import {
+  DEFAULT_SPEECH_SETTINGS,
+  parseSpeechSettings,
+  SPEECH_MODELS,
+  type SpeechModel,
+  type SpeechSettings,
+} from "../speech/config.js";
+import { SpeechModels } from "../speech/models.js";
+import { findQwenRuntime, SpeechService } from "../speech/service.js";
 
 const userDataMigration = configureDesktopIdentity();
 const desktopDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -161,6 +170,9 @@ let disabledTools: string[] = [];
 let modelToolSurfaces: ModelToolSurfaces = {};
 let mcpEnabled = true;
 let imageUnderstanding: ImageUnderstandingProfile = imageUnderstandingProfile(undefined);
+let speech: SpeechSettings = DEFAULT_SPEECH_SETTINGS;
+let speechModels: SpeechModels;
+let speechService: SpeechService;
 let onboardingComplete = true;
 
 
@@ -180,6 +192,7 @@ async function start(): Promise<void> {
       ? themeById(settings.themeId) ?? DEFAULT_THEME
       : DEFAULT_THEME;
   animationsEnabled = settings.animationsEnabled !== false;
+  speech = supportedSpeechSettings(settings.speech);
   interfaceFont = fontById(settings.interfaceFont)?.id ?? DEFAULT_FONTS.interface;
   primaryFont = fontById(settings.primaryFont)?.id ?? DEFAULT_FONTS.primary;
   secondaryFont = fontById(settings.secondaryFont)?.id ?? DEFAULT_FONTS.secondary;
@@ -262,6 +275,14 @@ async function start(): Promise<void> {
     onEvent: sendRunEvent,
   });
   attachments = new AttachmentStore(path.join(app.getPath("userData"), "attachments"));
+  const qwenRuntime = findQwenRuntime();
+  speechModels = new SpeechModels(
+    path.join(app.getPath("userData"), "speech-models"),
+    (status) => mainWindow?.webContents.send("desktop:speech-model-status", status),
+    qwenRuntime,
+  );
+  speechService = new SpeechService(speechModels, qwenRuntime);
+  speechService.setKeepLoaded(speech.keepModelLoaded);
   if (process.platform === "darwin" && development) app.dock?.setIcon(applicationIcon(development));
   if (development && (await store.state()).workspaces.length === 0) {
     await store.addWorkspace(
@@ -490,6 +511,48 @@ function registerIpc(): void {
     animationsEnabled = value;
     saveSettings({ animationsEnabled });
   });
+
+  ipcMain.handle("desktop:set-speech-settings", async (_event, value: unknown): Promise<DesktopState> => {
+    const next = supportedSpeechSettings(value);
+    if (next.localModel !== speech.localModel || !next.enabled) {
+      speechService.close();
+    }
+    speech = next;
+    speechService.setKeepLoaded(speech.keepModelLoaded);
+    saveSettings({ speech });
+    return desktopState(false);
+  });
+
+  ipcMain.handle("desktop:install-speech-model", async (_event, value: unknown) => {
+    await speechModels.install(parseSpeechModel(value));
+    return speechModels.list();
+  });
+
+  ipcMain.handle("desktop:remove-speech-model", (_event, value: unknown) => {
+    speechService.close();
+    speechModels.remove(parseSpeechModel(value));
+    return speechModels.list();
+  });
+
+  ipcMain.handle("desktop:start-speech-recognition", async (
+    _event,
+    modelValue: unknown,
+    languageValue: unknown,
+  ): Promise<void> => {
+    const model = parseSpeechModel(modelValue);
+    const language = typeof languageValue === "string" ? languageValue : "auto";
+    await speechService.start(model, language, (event) =>
+      mainWindow?.webContents.send("desktop:speech-transcript", event)
+    );
+  });
+
+  ipcMain.on("desktop:speech-audio", (_event, value: unknown, rateValue: unknown): void => {
+    if (!(value instanceof Float32Array) || value.length > 16_384) return;
+    if (!Number.isFinite(rateValue) || Number(rateValue) < 8_000 || Number(rateValue) > 96_000) return;
+    speechService.audio(value, Number(rateValue));
+  });
+
+  ipcMain.handle("desktop:stop-speech-recognition", (): Promise<void> => speechService.stop());
 
   ipcMain.handle("desktop:set-typography", (_event, interfaceValue: unknown, primary: unknown, secondary: unknown, code: unknown): void => {
     const nextInterface = fontById(interfaceValue)?.id;
@@ -840,6 +903,8 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     compactionMode,
     compactionThreshold: customCompactionThreshold,
     imageUnderstanding,
+    speech,
+    speechModels: speechModels.list(),
   };
 }
 
@@ -855,6 +920,19 @@ function validEditorFontSize(value: unknown): number | undefined {
   return Number.isInteger(value) && Number(value) >= 10 && Number(value) <= 24
     ? Number(value)
     : undefined;
+}
+
+function parseSpeechModel(value: unknown): SpeechModel {
+  const model = SPEECH_MODELS.find((item) => item.id === value)?.id;
+  if (!model) throw new Error("Unknown speech model");
+  return model;
+}
+
+function supportedSpeechSettings(value: unknown): SpeechSettings {
+  const settings = parseSpeechSettings(value);
+  return process.platform !== "darwin" && settings.localModel === "qwen3-asr-1.7b"
+    ? { ...settings, localModel: DEFAULT_SPEECH_SETTINGS.localModel }
+    : settings;
 }
 
 function parseWalkthroughModel(value: unknown): WalkthroughModelSetting {
@@ -1138,6 +1216,7 @@ app.on("before-quit", () => {
   updates?.dispose();
   runs?.stopAll();
   terminals?.closeAll();
+  speechService?.close();
   void mcpManager.close();
   store?.close();
 });
