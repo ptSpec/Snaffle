@@ -44,6 +44,12 @@
   color: var(--status-danger-text);
 }
 
+.sidebar-context-menu button.separated {
+  margin-top: 4px;
+  border-top: 1px solid var(--border-default);
+  border-radius: 0 0 5px 5px;
+}
+
 .sidebar-context-menu button:disabled {
   opacity: 0.42;
 }

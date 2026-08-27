@@ -20,6 +20,7 @@ import { customToolChoices, type ModelToolSurface } from "../../../../capabiliti
 import type { SandboxAccessGrant, SandboxAccessInput } from "../../../../execution/access.js";
 import type { RestrictedEngine } from "../../../../execution/workspace.js";
 import { Dictation } from "./dictation.js";
+import { SidebarContextMenu as ContextMenu, type SidebarContextMenuItem as ContextMenuItem } from "../sidebar/context-menu.js";
 
 export function Composer({
   task,
@@ -92,6 +93,47 @@ export function Composer({
   const [sandboxPath, setSandboxPath] = useState("");
   const [sandboxWritable, setSandboxWritable] = useState(false);
   const [sandboxScope, setSandboxScope] = useState<SandboxAccessInput["scope"]>("global");
+  const [contextMenu, setContextMenu] = useState<{ top: number; left: number; start: number; end: number } | null>(null);
+
+  function selectComposer(start: number, end: number): void {
+    requestAnimationFrame(() => {
+      taskInput.current?.focus();
+      taskInput.current?.setSelectionRange(start, end);
+    });
+  }
+
+  function replaceComposerSelection(value: string, start: number, end: number): void {
+    onTask(`${task.slice(0, start)}${value}${task.slice(end)}`);
+    selectComposer(start + value.length, start + value.length);
+  }
+
+  const composerContextItems: ContextMenuItem[] = contextMenu ? [
+    {
+      label: "Cut",
+      disabled: contextMenu.start === contextMenu.end || preparing,
+      action: () => void window.desktop.writeClipboardText(task.slice(contextMenu.start, contextMenu.end)).then(() => {
+        replaceComposerSelection("", contextMenu.start, contextMenu.end);
+      }),
+    },
+    {
+      label: "Copy",
+      disabled: contextMenu.start === contextMenu.end,
+      action: () => void window.desktop.writeClipboardText(task.slice(contextMenu.start, contextMenu.end)),
+    },
+    {
+      label: "Paste",
+      disabled: preparing,
+      action: () => void window.desktop.readClipboardText().then((value) => {
+        replaceComposerSelection(value, contextMenu.start, contextMenu.end);
+      }),
+    },
+    {
+      label: "Select all",
+      disabled: !task,
+      separated: true,
+      action: () => selectComposer(0, task.length),
+    },
+  ] : [];
 
   async function chooseSandboxLocation(): Promise<void> {
     const location = await onChooseSandboxLocation();
@@ -145,6 +187,15 @@ export function Composer({
         disabled={preparing}
         onChange={(event) => onTask(event.target.value)}
         onPaste={onPaste}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setContextMenu({
+            top: event.clientY,
+            left: event.clientX,
+            start: event.currentTarget.selectionStart,
+            end: event.currentTarget.selectionEnd,
+          });
+        }}
         onKeyDown={(event) => {
           if (
             event.key === "/" && !task && !event.metaKey && !event.ctrlKey && !event.altKey &&
@@ -172,6 +223,14 @@ export function Composer({
         placeholder="Describe the coding task…"
         rows={1}
       />
+      {contextMenu ? (
+        <ContextMenu
+          top={contextMenu.top}
+          left={contextMenu.left}
+          items={composerContextItems}
+          onClose={() => setContextMenu(null)}
+        />
+      ) : null}
 
       {queuedMessage ? (
         <div className="queued-follow-up">
