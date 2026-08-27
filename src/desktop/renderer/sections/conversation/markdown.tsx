@@ -155,7 +155,7 @@ function CodeBlock({ children }: ComponentProps<"pre">): JSX.Element {
 
   async function copyCode(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(code);
+      await window.desktop.writeClipboardText(code);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
     } catch {

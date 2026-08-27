@@ -701,17 +701,19 @@ function MessageFooter({
   canKeepAside?: boolean;
   onToggleKeptAside?: () => void;
 }): JSX.Element {
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
 
   async function copy(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1200);
+      await window.desktop.writeClipboardText(text);
+      setCopyState("copied");
     } catch {
-      setCopied(false);
+      setCopyState("failed");
     }
+    window.setTimeout(() => setCopyState("idle"), 1200);
   }
+
+  const copyLabel = copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy";
 
   return (
     <footer className="message-footer">
@@ -749,9 +751,15 @@ function MessageFooter({
             <span className="action-label">Fork</span>
           </button>
         ) : null}
-        <button type="button" onClick={() => void copy()} title="Copy message" aria-label="Copy message">
+        <button
+          className={copyState === "failed" ? "copy-failed" : undefined}
+          type="button"
+          onClick={() => void copy()}
+          title={copyState === "idle" ? "Copy message" : copyLabel}
+          aria-label={copyState === "idle" ? "Copy message" : copyLabel}
+        >
           <CopyIcon />
-          <span className="action-label">{copied ? "Copied" : "Copy"}</span>
+          <span className="action-label">{copyLabel}</span>
         </button>
         {onEdit ? (
           <button type="button" onClick={onEdit} title="Edit message" aria-label="Edit message">

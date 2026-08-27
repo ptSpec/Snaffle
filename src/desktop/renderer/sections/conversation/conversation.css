@@ -460,6 +460,11 @@ html[data-appearance="dark"] .jump-to-latest {
   opacity: 1;
 }
 
+.message-actions button.copy-failed {
+  color: var(--status-danger-text);
+  opacity: 1;
+}
+
 .message-actions .message-save.saved {
   color: var(--accent);
   opacity: 1;
@@ -497,6 +502,15 @@ html[data-appearance="dark"] .jump-to-latest {
 
 .message-actions.compact .action-label {
   display: none;
+}
+
+.message-actions.compact button.copy-failed {
+  width: auto;
+  padding: 0 5px;
+}
+
+.message-actions.compact .copy-failed .action-label {
+  display: inline;
 }
 
 .markdown-content {

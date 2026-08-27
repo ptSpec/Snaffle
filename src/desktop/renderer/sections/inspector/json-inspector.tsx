@@ -9,7 +9,7 @@ export function JsonInspector({ value }: { value: unknown }): JSX.Element {
 
   async function copyJson(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(formatJson(value));
+      await window.desktop.writeClipboardText(formatJson(value));
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
     } catch {
@@ -54,7 +54,7 @@ export function CopyableOutput({
 
   async function copyOutput(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(children);
+      await window.desktop.writeClipboardText(children);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
     } catch {

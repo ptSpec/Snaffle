@@ -85,6 +85,7 @@ const api: DesktopApi = {
   importCodeSelection: (input) => ipcRenderer.invoke("desktop:import-code-selection", input),
   readClipboardText: () => ipcRenderer.invoke("desktop:read-clipboard-text"),
   readClipboardHtml: () => ipcRenderer.invoke("desktop:read-clipboard-html"),
+  writeClipboardText: (text: string) => ipcRenderer.invoke("desktop:write-clipboard-text", text),
   removeAttachment: (id: string) => ipcRenderer.invoke("desktop:remove-attachment", id),
   setAttachmentContext: (threadId: string, sequence: number, attachmentId: string, include: boolean) =>
     ipcRenderer.invoke("desktop:set-attachment-context", threadId, sequence, attachmentId, include),

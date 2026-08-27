@@ -156,7 +156,7 @@ function CommandPreview({ preview, running }: { preview: CommandData; running: b
 
   async function copyCommand(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(preview.command);
+      await window.desktop.writeClipboardText(preview.command);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1_200);
     } catch {

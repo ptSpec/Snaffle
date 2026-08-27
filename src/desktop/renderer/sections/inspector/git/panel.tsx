@@ -223,7 +223,7 @@ export function GitPanel({
   async function copyPath(filePath = selectedPath, relative = false): Promise<void> {
     if (!workspace || !filePath) return;
     try {
-      await navigator.clipboard.writeText(relative ? filePath : absoluteWorkspacePath(workspace.path, filePath));
+      await window.desktop.writeClipboardText(relative ? filePath : absoluteWorkspacePath(workspace.path, filePath));
       if (filePath === selectedPath) {
         setPathCopied(true);
         window.setTimeout(() => setPathCopied(false), 1200);

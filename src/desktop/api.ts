@@ -298,6 +298,7 @@ export interface DesktopApi {
   importCodeSelection(input: CodeSelectionInput): Promise<AttachmentPreview>;
   readClipboardText(): Promise<string>;
   readClipboardHtml(): Promise<string>;
+  writeClipboardText(text: string): Promise<void>;
   removeAttachment(id: string): Promise<void>;
   setAttachmentContext(threadId: string, sequence: number, attachmentId: string, include: boolean): Promise<void>;
   startRun(input: StartRunInput): Promise<void>;

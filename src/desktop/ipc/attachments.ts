@@ -76,6 +76,10 @@ export function registerAttachmentIpc(
 
   ipcMain.handle("desktop:read-clipboard-text", () => clipboard.readText());
   ipcMain.handle("desktop:read-clipboard-html", () => clipboard.readHTML());
+  ipcMain.handle("desktop:write-clipboard-text", (_event, value: unknown) => {
+    if (typeof value !== "string") throw new Error("Clipboard content must be text");
+    clipboard.writeText(value);
+  });
   ipcMain.handle("desktop:remove-attachment", (_event, value: unknown) => attachments.remove(id(value, "Attachment")));
 
   ipcMain.handle(
