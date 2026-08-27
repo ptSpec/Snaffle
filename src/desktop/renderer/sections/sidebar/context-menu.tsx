@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export type SidebarContextMenuItem = {
   label: string;
@@ -46,7 +47,7 @@ export function SidebarContextMenu({
     };
   }, [onClose]);
 
-  return (
+  return createPortal(
     <div className="sidebar-context-menu" ref={element} role="menu" style={position}>
       {items.map((item) => (
         <button
@@ -63,6 +64,7 @@ export function SidebarContextMenu({
           {item.label}
         </button>
       ))}
-    </div>
+    </div>,
+    document.body,
   );
 }

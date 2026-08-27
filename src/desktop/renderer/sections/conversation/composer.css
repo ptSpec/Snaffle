@@ -1467,6 +1467,10 @@ html[data-theme="amoled"] .send-button:not(.stop) .send-button-orb {
   filter: grayscale(1) contrast(0) brightness(1.56);
 }
 
+html[data-theme="light"] .send-button:not(.stop) .send-button-orb {
+  filter: grayscale(1) contrast(0) brightness(1.82);
+}
+
 .send-button-symbol {
   position: absolute;
   inset: 0;
