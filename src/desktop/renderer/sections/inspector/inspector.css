@@ -343,6 +343,7 @@
   background: transparent;
   border: 0;
   cursor: pointer;
+  user-select: none;
 }
 
 .execution-turn-copy:hover strong {
@@ -430,7 +431,7 @@
 .execution-events {
   overflow: hidden;
   margin: 0;
-  --execution-tree-background: var(--inspector-background);
+  --execution-tree-background: var(--app-background);
 }
 
 .execution-event.model > .execution-tree-marker {
@@ -447,6 +448,7 @@
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
+  user-select: none;
 }
 
 .execution-event-context {
