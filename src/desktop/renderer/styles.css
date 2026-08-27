@@ -5,6 +5,7 @@
 @import "./sections/conversation/activity.css";
 @import "./components/thinking-orb.css";
 @import "./sections/conversation/composer.css";
+@import "./sections/conversation/dictation.css";
 @import "./sections/conversation/attachments.css";
 @import "./screens/settings/settings.css";
 @import "./screens/bookmarks/bookmarks.css";

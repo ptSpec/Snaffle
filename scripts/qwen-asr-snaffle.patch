@@ -1,0 +1,123 @@
+--- a/main.c
++++ b/main.c
+@@ -12,6 +12,81 @@
+ #include <stdlib.h>
+ #include <string.h>
+ 
++#define SNAFFLE_FINAL "\n\036SNAFFLE_FINAL\n"
++
++static int snaffle_input_closed = 0;
++
++static int snaffle_read(void *buffer, size_t length) {
++    size_t offset = 0;
++    while (offset < length) {
++        size_t n = fread((unsigned char *)buffer + offset, 1, length - offset, stdin);
++        if (n == 0) return 0;
++        offset += n;
++    }
++    return 1;
++}
++
++static void snaffle_append(qwen_live_audio_t *live, const unsigned char *pcm, size_t bytes) {
++    int count = (int)(bytes / 2);
++    pthread_mutex_lock(&live->mutex);
++    int64_t needed = live->n_samples + count;
++    if (needed > live->capacity) {
++        int64_t capacity = live->capacity ? live->capacity : 32000;
++        while (capacity < needed) capacity *= 2;
++        float *samples = realloc(live->samples, (size_t)capacity * sizeof(float));
++        if (!samples) {
++            pthread_mutex_unlock(&live->mutex);
++            return;
++        }
++        live->samples = samples;
++        live->capacity = capacity;
++    }
++    const int16_t *input = (const int16_t *)pcm;
++    for (int index = 0; index < count; index++) {
++        live->samples[live->n_samples + index] = input[index] / 32768.0f;
++    }
++    live->n_samples += count;
++    pthread_cond_signal(&live->cond);
++    pthread_mutex_unlock(&live->mutex);
++}
++
++static void *snaffle_reader(void *argument) {
++    qwen_live_audio_t *live = argument;
++    unsigned char header[5];
++    while (snaffle_read(header, sizeof(header))) {
++        uint32_t length = (uint32_t)header[1] | ((uint32_t)header[2] << 8) |
++                          ((uint32_t)header[3] << 16) | ((uint32_t)header[4] << 24);
++        if (header[0] == 2) break;
++        if (header[0] != 1 || length > 1024 * 1024 || (length & 1)) break;
++        unsigned char *pcm = malloc(length);
++        if (!pcm || !snaffle_read(pcm, length)) {
++            free(pcm);
++            snaffle_input_closed = 1;
++            break;
++        }
++        snaffle_append(live, pcm, length);
++        free(pcm);
++    }
++    if (feof(stdin)) snaffle_input_closed = 1;
++    pthread_mutex_lock(&live->mutex);
++    live->eof = 1;
++    pthread_cond_signal(&live->cond);
++    pthread_mutex_unlock(&live->mutex);
++    return NULL;
++}
++
++static qwen_live_audio_t *snaffle_audio_start(void) {
++    qwen_live_audio_t *live = calloc(1, sizeof(*live));
++    if (!live) return NULL;
++    pthread_mutex_init(&live->mutex, NULL);
++    pthread_cond_init(&live->cond, NULL);
++    if (pthread_create(&live->thread, NULL, snaffle_reader, live) != 0) {
++        qwen_live_audio_free(live);
++        return NULL;
++    }
++    return live;
++}
++
+ /* Token streaming callback: print each piece as it's decoded */
+ static void stream_token(const char *piece, void *userdata) {
+     (void)userdata;
+@@ -88,6 +163,7 @@
+     int past_text_conditioning_mode = -1; /* -1 auto, 0 off, 1 on */
+     int skip_silence = 0;
+     int emit_tokens = 1;
++    int snaffle_server = 0;
+ 
+     for (int i = 1; i < argc; i++) {
+         if (strcmp(argv[i], "-d") == 0 && i + 1 < argc) {
+@@ -123,6 +199,8 @@
+             force_language = argv[++i];
+         } else if (strcmp(argv[i], "--stdin") == 0) {
+             use_stdin = 1;
++        } else if (strcmp(argv[i], "--snaffle-server") == 0) {
++            snaffle_server = 1;
+         } else if (strcmp(argv[i], "--monitor") == 0) {
+             qwen_monitor = 1;
+         } else if (strcmp(argv[i], "--debug") == 0) {
+@@ -204,6 +282,21 @@
+      * In silent mode we print the final string returned by the API. */
+     if (emit_tokens) qwen_set_token_callback(ctx, stream_token, NULL);
+     else qwen_set_token_callback(ctx, NULL, NULL);
++
++    if (snaffle_server) {
++        while (!snaffle_input_closed) {
++            qwen_live_audio_t *live = snaffle_audio_start();
++            if (!live) break;
++            char *result = qwen_transcribe_stream_live(ctx, live);
++            qwen_live_audio_free(live);
++            if (!result) break;
++            free(result);
++            fputs(SNAFFLE_FINAL, stdout);
++            fflush(stdout);
++        }
++        qwen_free(ctx);
++        return 0;
++    }
+ 
+     /* Transcribe */
+     char *text = NULL;

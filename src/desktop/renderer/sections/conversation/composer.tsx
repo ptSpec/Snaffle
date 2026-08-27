@@ -19,6 +19,7 @@ import { providerVisual } from "./provider-mark.js";
 import { customToolChoices, type ModelToolSurface } from "../../../../capabilities/surface.js";
 import type { SandboxAccessGrant, SandboxAccessInput } from "../../../../execution/access.js";
 import type { RestrictedEngine } from "../../../../execution/workspace.js";
+import { Dictation } from "./dictation.js";
 
 export function Composer({
   task,
@@ -56,6 +57,9 @@ export function Composer({
   error,
   platform,
   queuedMessage,
+  voiceEnabled,
+  voiceReady,
+  voiceAutoStopOnSilence,
   onTask,
   onSubmit,
   onDragging,
@@ -79,6 +83,9 @@ export function Composer({
   onQueue,
   onCancelQueued,
   onSlashCommand,
+  onVoiceStart,
+  onVoiceAudio,
+  onVoiceStop,
 }: ComposerProps): JSX.Element {
   const [addingSandboxLocation, setAddingSandboxLocation] = useState(false);
   const [editingSandboxLocation, setEditingSandboxLocation] = useState<SandboxAccessGrant | null>(null);
@@ -462,25 +469,37 @@ export function Composer({
             ) : null}
           </span>
         ) : null}
-        <button
-          className={preparing ? "send-button preparing" : running ? "send-button stop" : "send-button"}
-          type={running || preparing ? "button" : "submit"}
-          onClick={preparing ? undefined : running ? onStop : undefined}
-          disabled={preparing}
-          aria-label={preparing ? "Preparing execution environment" : running ? "Stop run" : "Send task"}
-          aria-disabled={!running && Boolean(blocker)}
-          title={preparing ? "Preparing execution environment…" : running ? "Stop run" : blocker ?? "Send task"}
-        >
-          <span className="send-button-orb" aria-hidden="true">
-            <ThinkingOrb motion={orbMotion} speed={1.7} />
-          </span>
-          <span className="send-button-symbol send-button-send-symbol" aria-hidden="true">
-            <svg viewBox="0 0 20 20">
-              <path d="M10 15V5m0 0L6 9m4-4 4 4" />
-            </svg>
-          </span>
-          <span className="send-button-symbol send-button-stop-symbol" aria-hidden="true" />
-        </button>
+        <div className="composer-submit-cluster">
+          {voiceEnabled ? (
+            <Dictation
+              disabled={preparing || !voiceReady}
+              platform={platform}
+              stopAfterSilence={voiceAutoStopOnSilence}
+              onStart={onVoiceStart}
+              onAudio={onVoiceAudio}
+              onStop={onVoiceStop}
+            />
+          ) : null}
+          <button
+            className={preparing ? "send-button preparing" : running ? "send-button stop" : "send-button"}
+            type={running || preparing ? "button" : "submit"}
+            onClick={preparing ? undefined : running ? onStop : undefined}
+            disabled={preparing}
+            aria-label={preparing ? "Preparing execution environment" : running ? "Stop run" : "Send task"}
+            aria-disabled={!running && Boolean(blocker)}
+            title={preparing ? "Preparing execution environment…" : running ? "Stop run" : blocker ?? "Send task"}
+          >
+            <span className="send-button-orb" aria-hidden="true">
+              <ThinkingOrb motion={orbMotion} speed={1.7} />
+            </span>
+            <span className="send-button-symbol send-button-send-symbol" aria-hidden="true">
+              <svg viewBox="0 0 20 20">
+                <path d="M10 15V5m0 0L6 9m4-4 4 4" />
+              </svg>
+            </span>
+            <span className="send-button-symbol send-button-stop-symbol" aria-hidden="true" />
+          </button>
+        </div>
       </div>
       {preparing
         ? <div className="provider-wait" role="status">Preparing execution environment…</div>
@@ -663,6 +682,9 @@ type ComposerProps = {
   error: string | null;
   platform: string;
   queuedMessage: string | null;
+  voiceEnabled: boolean;
+  voiceReady: boolean;
+  voiceAutoStopOnSilence: boolean;
   onTask(value: string): void;
   onSubmit(event: FormEvent<HTMLFormElement>): void;
   onDragging(value: boolean): void;
@@ -686,4 +708,7 @@ type ComposerProps = {
   onQueue(): void;
   onCancelQueued(): void;
   onSlashCommand(): void;
+  onVoiceStart(): Promise<void>;
+  onVoiceAudio(samples: Float32Array, sampleRate: number): void;
+  onVoiceStop(): Promise<void>;
 };

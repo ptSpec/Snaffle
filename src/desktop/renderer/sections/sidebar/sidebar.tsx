@@ -13,7 +13,7 @@ import { ThinkingOrb } from "../../components/thinking-orb.js";
 import { SidebarContextMenu, type SidebarContextMenuItem } from "./context-menu.js";
 
 export type AppView = "conversation" | "saved" | "search" | "settings";
-export type SettingsPage = "appearance" | "providers" | "editor" | "agent" | "model" | "context" | "web" | "mcp" | "updates";
+export type SettingsPage = "appearance" | "providers" | "editor" | "voice" | "agent" | "model" | "context" | "web" | "mcp" | "updates";
 
 type SidebarMenu =
   | { kind: "thread"; top: number; left: number; thread: DesktopThread; workspaceId: string }
@@ -410,6 +410,13 @@ export function Sidebar({
               onClick={() => onSettingsPage("editor")}
             >
               <span>Editor</span>
+            </button>
+            <button
+              className={settingsPage === "voice" ? "sidebar-action active" : "sidebar-action"}
+              type="button"
+              onClick={() => onSettingsPage("voice")}
+            >
+              <span>Voice</span>
             </button>
             <button
               className={settingsPage === "agent" ? "sidebar-action active" : "sidebar-action"}

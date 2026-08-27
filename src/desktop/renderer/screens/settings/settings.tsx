@@ -24,6 +24,9 @@ import { WebSettings } from "./web.js";
 import { McpSettings } from "./mcp.js";
 import { ModelSettings } from "./model.js";
 import { UpdateSettings } from "./updates.js";
+import { VoiceSettings } from "./voice.js";
+import type { SpeechSettings } from "../../../../speech/config.js";
+import type { SpeechModel, SpeechModelStatus } from "../../../../speech/config.js";
 
 export function Settings({
   page,
@@ -54,6 +57,8 @@ export function Settings({
   webSearchEnabled,
   webSearchBackend,
   webSearchKeyBackends,
+  speech,
+  speechModels,
   providerConnections,
   mcpEnabled,
   mcpServers,
@@ -85,6 +90,9 @@ export function Settings({
   onWebSearchEnabled,
   onWebSearchBackend,
   onWebSearchApiKey,
+  onSpeechSettings,
+  onInstallSpeechModel,
+  onRemoveSpeechModel,
   onSaveProvider,
   onRemoveProvider,
   onTestProvider,
@@ -126,6 +134,8 @@ export function Settings({
   webSearchEnabled: boolean;
   webSearchBackend: WebSearchBackend;
   webSearchKeyBackends: KetchSearchBackend[];
+  speech: SpeechSettings;
+  speechModels: SpeechModelStatus[];
   providerConnections: ProviderConnection[];
   mcpEnabled: boolean;
   mcpServers: McpServerConfig[];
@@ -157,6 +167,9 @@ export function Settings({
   onWebSearchEnabled: (enabled: boolean) => void;
   onWebSearchBackend: (backend: WebSearchBackend) => void;
   onWebSearchApiKey: (backend: KetchSearchBackend, apiKey: string) => void;
+  onSpeechSettings: (settings: SpeechSettings) => void;
+  onInstallSpeechModel: (model: SpeechModel) => void;
+  onRemoveSpeechModel: (model: SpeechModel) => void;
   onSaveProvider(input: ProviderConnectionInput): Promise<void>;
   onRemoveProvider(id: string): Promise<void>;
   onTestProvider(input: ProviderConnectionInput): Promise<ProviderStatus>;
@@ -246,6 +259,19 @@ export function Settings({
         onSave={onSaveMcpServer}
         onRemove={onRemoveMcpServer}
         onTest={onTestMcpServer}
+      />
+    );
+  }
+
+  if (page === "voice") {
+    return (
+      <VoiceSettings
+        settings={speech}
+        models={speechModels}
+        error={error}
+        onChange={onSpeechSettings}
+        onInstall={onInstallSpeechModel}
+        onRemove={onRemoveSpeechModel}
       />
     );
   }

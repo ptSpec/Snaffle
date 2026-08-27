@@ -4,6 +4,7 @@ productName: Snaffle
 asar: true
 asarUnpack:
   - node_modules/@superradcompany/microsandbox-*/**/*
+  - node_modules/sherpa-onnx-*/**/*
 
 directories:
   output: release
@@ -33,6 +34,8 @@ publish:
 mac:
   icon: assets/logo.icns
   category: public.app-category.developer-tools
+  extendInfo:
+    NSMicrophoneUsageDescription: Snaffle uses the microphone for voice input.
   target:
     - dmg
     - zip

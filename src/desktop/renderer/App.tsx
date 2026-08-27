@@ -75,6 +75,8 @@ import type { OrbMotion } from "./components/thinking-orb.js";
 import { Composer } from "./sections/conversation/composer.js";
 import type { SandboxAccessInput } from "../../execution/access.js";
 import type { RestrictedEngine } from "../../execution/workspace.js";
+import { DEFAULT_SPEECH_SETTINGS, type SpeechSettings } from "../../speech/config.js";
+import type { SpeechModel, SpeechModelStatus } from "../../speech/config.js";
 import { AsideShelf } from "./sections/conversation/aside-shelf.js";
 import { CommandPalette, type AppCommand } from "./commands/palette.js";
 import { TerminalPanel } from "./sections/terminal/terminal.js";
@@ -170,6 +172,8 @@ const initialState: DesktopState = {
     providerConnectionId: "",
     model: "",
   },
+  speech: DEFAULT_SPEECH_SETTINGS,
+  speechModels: [],
   compactionMode: "automatic",
   compactionThreshold: 65,
 };
@@ -197,6 +201,7 @@ export function App(): JSX.Element {
   const [selectedProviderConnectionId, setSelectedProviderConnectionId] = useState("openrouter");
   const [providerAllowances, setProviderAllowances] = useState<Record<string, ProviderAllowance | null>>({});
   const [task, setTask] = useState("");
+  const speechDraft = useRef("");
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentPreview[]>([]);
   const [draggingAttachments, setDraggingAttachments] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
@@ -263,6 +268,24 @@ export function App(): JSX.Element {
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => window.desktop.onSpeechModelStatus((status: SpeechModelStatus) => {
+    setDesktopState((current) => ({
+      ...current,
+      speechModels: current.speechModels.some((model) => model.id === status.id)
+        ? current.speechModels.map((model) => model.id === status.id ? status : model)
+        : [...current.speechModels, status],
+    }));
+  }), []);
+
+  useEffect(() => window.desktop.onSpeechTranscript((event) => {
+    if (event.error) {
+      setError(event.error);
+      return;
+    }
+    const base = speechDraft.current.trimEnd();
+    setTask([base, event.text.trim()].filter(Boolean).join(base ? " " : ""));
+  }), []);
 
   async function checkForUpdates(): Promise<void> {
     try {
@@ -2076,6 +2099,59 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setSpeechSettings(speech: SpeechSettings): Promise<void> {
+    try {
+      const state = await window.desktop.setSpeechSettings(speech);
+      setDesktopState((current) => ({ ...current, speech: state.speech }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function installSpeechModel(model: SpeechModel): Promise<void> {
+    try {
+      const speechModels = await window.desktop.installSpeechModel(model);
+      setDesktopState((current) => ({ ...current, speechModels }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function removeSpeechModel(model: SpeechModel): Promise<void> {
+    try {
+      const speechModels = await window.desktop.removeSpeechModel(model);
+      setDesktopState((current) => ({ ...current, speechModels }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function startSpeechRecognition(): Promise<void> {
+    speechDraft.current = task;
+    try {
+      setError(null);
+      await window.desktop.startSpeechRecognition(
+        desktopState.speech.localModel,
+        desktopState.speech.language,
+      );
+    } catch (cause) {
+      setError(errorMessage(cause));
+      throw cause;
+    }
+  }
+
+  async function stopSpeechRecognition(): Promise<void> {
+    try {
+      await window.desktop.stopSpeechRecognition();
+    } catch (cause) {
+      setError(errorMessage(cause));
+      throw cause;
+    }
+  }
+
   function beginResize(
     side: "left" | "right",
     event: ReactPointerEvent<HTMLDivElement>,
@@ -2337,6 +2413,8 @@ export function App(): JSX.Element {
             webSearchEnabled={desktopState.webSearchEnabled}
             webSearchBackend={desktopState.webSearchBackend}
             webSearchKeyBackends={desktopState.webSearchKeyBackends}
+            speech={desktopState.speech}
+            speechModels={desktopState.speechModels}
             providerConnections={desktopState.providerConnections}
             mcpEnabled={desktopState.mcpEnabled}
             mcpServers={desktopState.mcpServers}
@@ -2368,6 +2446,9 @@ export function App(): JSX.Element {
             onWebSearchEnabled={(enabled) => void setWebSearchEnabled(enabled)}
             onWebSearchBackend={(backend) => void setWebSearchBackend(backend)}
             onWebSearchApiKey={(backend, apiKey) => void setWebSearchApiKey(backend, apiKey)}
+            onSpeechSettings={(speech) => void setSpeechSettings(speech)}
+            onInstallSpeechModel={(model) => void installSpeechModel(model)}
+            onRemoveSpeechModel={(model) => void removeSpeechModel(model)}
             onSaveProvider={saveProviderConnection}
             onRemoveProvider={removeProviderConnection}
             onTestProvider={(input) => window.desktop.getProviderStatus(input)}
@@ -2537,6 +2618,11 @@ export function App(): JSX.Element {
             error={error}
             platform={window.desktop.platform}
             queuedMessage={queuedFollowUp?.request.task ?? null}
+            voiceEnabled={desktopState.speech.enabled}
+            voiceAutoStopOnSilence={desktopState.speech.autoStopOnSilence}
+            voiceReady={desktopState.speechModels.some(
+              (model) => model.id === desktopState.speech.localModel && model.phase === "ready",
+            )}
             onTask={setTask}
             onSubmit={(event) => void startRun(event)}
             onDragging={setDraggingAttachments}
@@ -2560,6 +2646,9 @@ export function App(): JSX.Element {
             onQueue={queueFollowUp}
             onCancelQueued={cancelQueuedFollowUp}
             onSlashCommand={() => setCommandMode("slash")}
+            onVoiceStart={startSpeechRecognition}
+            onVoiceAudio={(samples, sampleRate) => window.desktop.sendSpeechAudio(samples, sampleRate)}
+            onVoiceStop={stopSpeechRecognition}
           />
           </section>
         )}
