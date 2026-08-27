@@ -230,6 +230,14 @@ export function Sidebar({
     }
   }
 
+  async function copyThreadTitle(title: string): Promise<void> {
+    try {
+      await window.desktop.writeClipboardText(title);
+    } catch (cause) {
+      onError(errorMessage(cause));
+    }
+  }
+
   function openThreadMenu(event: ReactMouseEvent, thread: DesktopThread): void {
     if (!state.workspace) return;
     event.preventDefault();
@@ -248,6 +256,7 @@ export function Sidebar({
           label: menu.thread.bookmarked ? "Remove bookmark" : "Bookmark thread",
           action: () => void toggleBookmark(menu.thread.id, !menu.thread.bookmarked),
         },
+        { label: "Copy thread title", action: () => void copyThreadTitle(menu.thread.title) },
         { label: revealWorkspaceLabel(), action: () => void revealWorkspace(menu.workspaceId) },
         {
           label: "Delete thread",
