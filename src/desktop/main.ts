@@ -318,6 +318,12 @@ function createWindow(): void {
 }
 
 function registerIpc(): void {
+  ipcMain.handle("desktop:add-word-to-dictionary", (event, value: unknown): boolean => {
+    if (typeof value !== "string" || !value || value.length > 100) {
+      throw new Error("Dictionary word must be text no longer than 100 characters");
+    }
+    return event.sender.session.addWordToSpellCheckerDictionary(value);
+  });
   registerAttachmentIpc(store, attachments, () => mainWindow);
   registerGitIpc(
     store,

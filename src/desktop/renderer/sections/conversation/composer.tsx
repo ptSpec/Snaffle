@@ -22,6 +22,14 @@ import type { RestrictedEngine } from "../../../../execution/workspace.js";
 import { Dictation } from "./dictation.js";
 import { SidebarContextMenu as ContextMenu, type SidebarContextMenuItem as ContextMenuItem } from "../sidebar/context-menu.js";
 
+type ComposerContextMenu = {
+  top: number;
+  left: number;
+  start: number;
+  end: number;
+  spelling?: { word: string; start: number; end: number; suggestions: string[] };
+};
+
 export function Composer({
   task,
   taskInput,
@@ -84,6 +92,7 @@ export function Composer({
   onQueue,
   onCancelQueued,
   onSlashCommand,
+  onVoicePrepare,
   onVoiceStart,
   onVoiceAudio,
   onVoiceStop,
@@ -93,7 +102,7 @@ export function Composer({
   const [sandboxPath, setSandboxPath] = useState("");
   const [sandboxWritable, setSandboxWritable] = useState(false);
   const [sandboxScope, setSandboxScope] = useState<SandboxAccessInput["scope"]>("global");
-  const [contextMenu, setContextMenu] = useState<{ top: number; left: number; start: number; end: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<ComposerContextMenu | null>(null);
 
   function selectComposer(start: number, end: number): void {
     requestAnimationFrame(() => {
@@ -107,10 +116,24 @@ export function Composer({
     selectComposer(start + value.length, start + value.length);
   }
 
+  const spellingItems: ContextMenuItem[] = contextMenu?.spelling ? [
+    ...contextMenu.spelling.suggestions.map((suggestion) => ({
+      label: suggestion,
+      action: () => replaceComposerSelection(suggestion, contextMenu.spelling!.start, contextMenu.spelling!.end),
+    })),
+    {
+      label: `Add “${contextMenu.spelling.word}” to dictionary`,
+      separated: true,
+      action: () => void window.desktop.addWordToDictionary(contextMenu.spelling!.word),
+    },
+  ] : [];
+
   const composerContextItems: ContextMenuItem[] = contextMenu ? [
+    ...spellingItems,
     {
       label: "Cut",
       disabled: contextMenu.start === contextMenu.end || preparing,
+      separated: spellingItems.length > 0,
       action: () => void window.desktop.writeClipboardText(task.slice(contextMenu.start, contextMenu.end)).then(() => {
         replaceComposerSelection("", contextMenu.start, contextMenu.end);
       }),
@@ -189,11 +212,14 @@ export function Composer({
         onPaste={onPaste}
         onContextMenu={(event) => {
           event.preventDefault();
+          const start = event.currentTarget.selectionStart;
+          const end = event.currentTarget.selectionEnd;
           setContextMenu({
             top: event.clientY,
             left: event.clientX,
-            start: event.currentTarget.selectionStart,
-            end: event.currentTarget.selectionEnd,
+            start,
+            end,
+            ...spellingAt(task, start, end),
           });
         }}
         onKeyDown={(event) => {
@@ -534,6 +560,7 @@ export function Composer({
               disabled={preparing || !voiceReady}
               platform={platform}
               stopAfterSilence={voiceAutoStopOnSilence}
+              onPrepare={onVoicePrepare}
               onStart={onVoiceStart}
               onAudio={onVoiceAudio}
               onStop={onVoiceStop}
@@ -568,6 +595,41 @@ export function Composer({
       {error ? <div className="composer-error" role="alert">{error}</div> : null}
     </form>
   );
+}
+
+function spellingAt(text: string, selectionStart: number, selectionEnd: number): Pick<ComposerContextMenu, "spelling"> {
+  const range = wordRangeAt(text, selectionStart, selectionEnd);
+  if (!range) return {};
+  const suggestions = window.desktop.getWordSuggestions(range.word).slice(0, 5);
+  return suggestions.length ? { spelling: { ...range, suggestions } } : {};
+}
+
+function wordRangeAt(
+  text: string,
+  selectionStart: number,
+  selectionEnd: number,
+): { word: string; start: number; end: number } | undefined {
+  if (selectionStart !== selectionEnd) {
+    const word = text.slice(selectionStart, selectionEnd);
+    return isWord(word) ? { word, start: selectionStart, end: selectionEnd } : undefined;
+  }
+
+  let start = selectionStart;
+  let end = selectionStart;
+  if (start > 0 && !isWordCharacter(text[start] ?? "")) start -= 1;
+  if (!isWordCharacter(text[start] ?? "")) return undefined;
+  while (start > 0 && isWordCharacter(text[start - 1] ?? "")) start -= 1;
+  while (end < text.length && isWordCharacter(text[end] ?? "")) end += 1;
+  const word = text.slice(start, end);
+  return isWord(word) ? { word, start, end } : undefined;
+}
+
+function isWord(value: string): boolean {
+  return /^\p{L}[\p{L}\p{M}'’-]*\p{L}$/u.test(value) || /^\p{L}$/u.test(value);
+}
+
+function isWordCharacter(value: string): boolean {
+  return /^[\p{L}\p{M}'’-]$/u.test(value);
 }
 
 function sandboxScopeLabel(scope: SandboxAccessGrant["scope"]): string {
@@ -767,6 +829,7 @@ type ComposerProps = {
   onQueue(): void;
   onCancelQueued(): void;
   onSlashCommand(): void;
+  onVoicePrepare(): void;
   onVoiceStart(): Promise<void>;
   onVoiceAudio(samples: Float32Array, sampleRate: number): void;
   onVoiceStop(): Promise<void>;

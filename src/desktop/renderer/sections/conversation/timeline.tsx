@@ -391,7 +391,7 @@ function ActivityGroup({
       </summary>
       {open ? (
         <>
-          {!turnRunning ? (
+          {!turnRunning && items.length > 3 ? (
             <div className="activity-group-actions">
               <button
                 type="button"
@@ -407,7 +407,7 @@ function ActivityGroup({
               </button>
             </div>
           ) : null}
-          <div className="execution-tree activity-group-body">
+          <div className={`execution-tree activity-group-body${items.length === 1 ? " single" : ""}`}>
             {items.map((child) => {
               const childStatus = activityItemStatus(child);
               return (

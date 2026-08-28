@@ -201,7 +201,7 @@ export function App(): JSX.Element {
   const [selectedProviderConnectionId, setSelectedProviderConnectionId] = useState("openrouter");
   const [providerAllowances, setProviderAllowances] = useState<Record<string, ProviderAllowance | null>>({});
   const [task, setTask] = useState("");
-  const speechDraft = useRef("");
+  const speechDraft = useRef({ prefix: "", suffix: "" });
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentPreview[]>([]);
   const [draggingAttachments, setDraggingAttachments] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
@@ -283,8 +283,14 @@ export function App(): JSX.Element {
       setError(event.error);
       return;
     }
-    const base = speechDraft.current.trimEnd();
-    setTask([base, event.text.trim()].filter(Boolean).join(base ? " " : ""));
+    const transcript = event.text.trim();
+    if (!transcript) return;
+    const { prefix, suffix } = speechDraft.current;
+    const before = prefix && !/\s$/.test(prefix) ? " " : "";
+    const after = suffix && !/^[\s.,!?;:)\]}]/.test(suffix) ? " " : "";
+    setTask(`${prefix}${before}${transcript}${after}${suffix}`);
+    const caret = prefix.length + before.length + transcript.length;
+    requestAnimationFrame(() => taskInput.current?.setSelectionRange(caret, caret));
   }), []);
 
   async function checkForUpdates(): Promise<void> {
@@ -2129,8 +2135,18 @@ export function App(): JSX.Element {
     }
   }
 
+  function prepareSpeechRecognition(): void {
+    const input = taskInput.current;
+    const draft = input?.value ?? task;
+    const start = Math.min(input?.selectionStart ?? draft.length, draft.length);
+    const end = input?.selectionEnd ?? start;
+    speechDraft.current = {
+      prefix: draft.slice(0, start),
+      suffix: draft.slice(end),
+    };
+  }
+
   async function startSpeechRecognition(): Promise<void> {
-    speechDraft.current = task;
     try {
       setError(null);
       await window.desktop.startSpeechRecognition(
@@ -2646,6 +2662,7 @@ export function App(): JSX.Element {
             onQueue={queueFollowUp}
             onCancelQueued={cancelQueuedFollowUp}
             onSlashCommand={() => setCommandMode("slash")}
+            onVoicePrepare={prepareSpeechRecognition}
             onVoiceStart={startSpeechRecognition}
             onVoiceAudio={(samples, sampleRate) => window.desktop.sendSpeechAudio(samples, sampleRate)}
             onVoiceStop={stopSpeechRecognition}

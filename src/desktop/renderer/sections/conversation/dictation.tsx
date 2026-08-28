@@ -6,6 +6,7 @@ export function Dictation({
   disabled,
   platform,
   stopAfterSilence,
+  onPrepare,
   onStart,
   onAudio,
   onStop,
@@ -13,6 +14,7 @@ export function Dictation({
   disabled: boolean;
   platform: string;
   stopAfterSilence: boolean;
+  onPrepare: () => void;
   onStart: () => Promise<void>;
   onAudio: (samples: Float32Array, sampleRate: number) => void;
   onStop: () => Promise<void>;
@@ -47,6 +49,7 @@ export function Dictation({
   }
 
   async function start(): Promise<void> {
+    onPrepare();
     setSilenceCountdown(null);
     setStatus("starting");
     try {

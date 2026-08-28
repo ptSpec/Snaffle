@@ -88,6 +88,9 @@ export function Inspector({
   }
 
   const duration = item.durationMs ? formatDuration(item.durationMs) : null;
+  const structuredOutput = item.phase === "completed" && !item.isError
+    ? parseJsonOutput(item.content)
+    : undefined;
   return (
     <div className="tool-call-inspector">
       <header className="inspector-detail-header">
@@ -108,9 +111,13 @@ export function Inspector({
       <details className="inspector-section" open>
         <summary>{item.isError ? "Error" : "Output"}</summary>
         {item.phase === "completed" ? (
-          <CopyableOutput className={item.isError ? "inspector-tool-output failed" : "inspector-tool-output"}>
-            {item.content || "No output"}
-          </CopyableOutput>
+          structuredOutput !== undefined ? (
+            <JsonInspector value={structuredOutput} />
+          ) : (
+            <CopyableOutput className={item.isError ? "inspector-tool-output failed" : "inspector-tool-output"}>
+              {item.content || "No output"}
+            </CopyableOutput>
+          )
         ) : <p className="muted">{waitingMessage}</p>}
       </details>
 
@@ -142,6 +149,19 @@ function recordValue(value: unknown): Record<string, unknown> | undefined {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value ? value : undefined;
+}
+
+function parseJsonOutput(value: string | undefined): Record<string, unknown> | unknown[] | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return undefined;
+
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    return Array.isArray(parsed) ? parsed : recordValue(parsed);
+  } catch {
+    return undefined;
+  }
 }
 
 function readableToolName(name: string): string {

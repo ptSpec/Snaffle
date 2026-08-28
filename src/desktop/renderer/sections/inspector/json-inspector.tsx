@@ -2,7 +2,7 @@ import hljs from "highlight.js/lib/common";
 import { useState } from "react";
 
 export function JsonInspector({ value }: { value: unknown }): JSX.Element {
-  const [raw, setRaw] = useState(false);
+  const [raw, setRaw] = useState(true);
   const [copied, setCopied] = useState(false);
   if (!isJsonContainer(value)) return <pre>{formatJson(value)}</pre>;
   const entries = Object.entries(value);
