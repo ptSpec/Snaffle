@@ -40,6 +40,7 @@ const port = parentPort;
 if (!port) throw new Error("Speech worker requires a parent port");
 
 const QWEN_FINAL_MARKER = "\n\u001eSNAFFLE_FINAL\n";
+const TRAILING_SILENCE_SECONDS = 0.35;
 
 let model: SpeechModel | undefined;
 let modelDirectory = "";
@@ -191,6 +192,7 @@ function acceptAudio(chunk: Float32Array, sampleRate: number): void {
 }
 
 function stop(): void {
+  appendTrailingSilence();
   if (qwenProcess) {
     writeQwenFrame(qwenProcess, 2);
     return;
@@ -208,6 +210,20 @@ function stop(): void {
   onlineStream = undefined;
   samples = [];
   sampleCount = 0;
+}
+
+function appendTrailingSilence(): void {
+  if (qwenProcess) {
+    writeQwenFrame(qwenProcess, 1, Buffer.alloc(Math.round(16_000 * TRAILING_SILENCE_SECONDS) * 2));
+    return;
+  }
+  const silence = new Float32Array(Math.round(inputSampleRate * TRAILING_SILENCE_SECONDS));
+  if (onlineRecognizer && onlineStream) {
+    onlineStream.acceptWaveform({ samples: silence, sampleRate: inputSampleRate });
+  } else if (offlineRecognizer) {
+    samples.push(silence);
+    sampleCount += silence.length;
+  }
 }
 
 function writeQwenFrame(child: ChildProcessWithoutNullStreams, type: number, payload?: Buffer): void {

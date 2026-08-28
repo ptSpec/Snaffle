@@ -85,7 +85,7 @@ export function Dictation({
       analyser.smoothingTimeConstant = 0.72;
       const source = context.createMediaStreamSource(microphone);
       source.connect(analyser);
-      const processor = context.createScriptProcessor(4096, 1, 1);
+      const processor = context.createScriptProcessor(2048, 1, 1);
       processor.onaudioprocess = (event) => {
         if (recording.current) {
           onAudio(new Float32Array(event.inputBuffer.getChannelData(0)), context.sampleRate);
@@ -183,7 +183,7 @@ export function Dictation({
   const isRecording = status === "recording";
   const shortcut = platform === "darwin" ? "⌘⇧M" : "Ctrl⇧M";
   const label = status === "starting"
-    ? "Requesting microphone access"
+    ? "Starting voice input"
     : status === "stopping" ? "Finishing transcription"
     : isRecording ? `Stop voice input (${shortcut})`
     : status === "error" ? "Microphone unavailable — click to retry"
@@ -221,7 +221,7 @@ export function Dictation({
         </svg>
       </span>
       <span className="dictation-loading" aria-hidden="true">
-        {status === "stopping" ? "Finishing" : "Loading"}<span className="dictation-loading-dots">...</span>
+        {status === "stopping" ? "Finishing" : "Starting"}<span className="dictation-loading-dots">...</span>
       </span>
       <span className="dictation-wave" aria-hidden="true">
         {Array.from({ length: BAR_COUNT }, (_, index) => (
