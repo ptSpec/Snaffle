@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type {
   CodeSelectionInput,
+  CodeSelectionAttachment,
   DesktopWorkspace,
   GitWalkthroughResult,
   GitWalkthroughRunInput,
@@ -46,6 +47,8 @@ export function InspectorPanel({
   onGitDetailOpen,
   onGitRepositoryState,
   onAskSelection,
+  codeSelectionAttachments,
+  onRemovePendingAttachment,
   onGitWalkthrough,
   onOpenGitWalkthrough,
   onCloseGitWalkthrough,
@@ -77,7 +80,9 @@ export function InspectorPanel({
   onNavigateTurn(id: string): void;
   onGitDetailOpen(open: boolean): void;
   onGitRepositoryState(ready: boolean): void;
-  onAskSelection(input: CodeSelectionInput): Promise<void>;
+  onAskSelection(input: CodeSelectionInput): Promise<string>;
+  codeSelectionAttachments: CodeSelectionAttachment[];
+  onRemovePendingAttachment(id: string): Promise<void>;
   onGitWalkthrough(result: GitWalkthroughResult): void;
   onOpenGitWalkthrough(): void;
   onCloseGitWalkthrough(): void;
@@ -243,6 +248,8 @@ export function InspectorPanel({
             onDetailOpen={onGitDetailOpen}
             onRepositoryState={onGitRepositoryState}
             onAskSelection={onAskSelection}
+            codeSelectionAttachments={codeSelectionAttachments}
+            onRemovePendingAttachment={onRemovePendingAttachment}
             onWalkthrough={onGitWalkthrough}
             onOpenWalkthrough={onOpenGitWalkthrough}
             onCloseWalkthrough={onCloseGitWalkthrough}

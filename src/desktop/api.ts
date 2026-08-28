@@ -224,12 +224,15 @@ export type DesktopTerminalExitEvent = {
 
 export type CodeSelectionInput = {
   path: string;
+  note?: string;
   ranges: Array<{
     fromLine: number;
     toLine: number;
     text: string;
   }>;
 };
+
+export type CodeSelectionAttachment = CodeSelectionInput & { id: string };
 
 export type GitWalkthroughRunInput = {
   workspaceId: string;

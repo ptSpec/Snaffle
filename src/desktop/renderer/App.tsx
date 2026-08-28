@@ -15,6 +15,7 @@ import type { ImageUnderstandingProfile } from "../../attachments/vision.js";
 import type { CommandApprovalDecision } from "../../protocol.js";
 import {
   MAX_KEPT_ASIDE_MESSAGES,
+  type CodeSelectionAttachment,
   type CodeSelectionInput,
   type DesktopApi,
   type DesktopRunEvent,
@@ -203,6 +204,7 @@ export function App(): JSX.Element {
   const [task, setTask] = useState("");
   const speechDraft = useRef({ prefix: "", suffix: "" });
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentPreview[]>([]);
+  const [codeSelectionAttachments, setCodeSelectionAttachments] = useState<CodeSelectionAttachment[]>([]);
   const [draggingAttachments, setDraggingAttachments] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1194,13 +1196,16 @@ export function App(): JSX.Element {
     }
   }
 
-  async function attachCodeSelection(input: CodeSelectionInput): Promise<void> {
+  async function attachCodeSelection(input: CodeSelectionInput): Promise<string> {
     if (pendingAttachments.length >= 8) throw new Error("Attach at most 8 files to one message");
-    await addAttachments([await window.desktop.importCodeSelection(input)]);
-    window.setTimeout(() => taskInput.current?.focus(), 0);
+    const attachment = await window.desktop.importCodeSelection(input);
+    const [accepted] = await addAttachments([attachment]);
+    if (!accepted) throw new Error("That selection is already attached");
+    setCodeSelectionAttachments((current) => [...current, { id: accepted.id, ...input }]);
+    return accepted.id;
   }
 
-  async function addAttachments(imported: AttachmentPreview[]): Promise<void> {
+  async function addAttachments(imported: AttachmentPreview[]): Promise<AttachmentPreview[]> {
     const fingerprints = new Set(pendingAttachments.map((attachment) => attachment.fingerprint));
     const unique = imported.filter((attachment) => {
       if (fingerprints.has(attachment.fingerprint)) return false;
@@ -1222,6 +1227,7 @@ export function App(): JSX.Element {
       if (threadId) threadAttachments.current.set(threadId, next);
       return next;
     });
+    return accepted;
   }
 
   async function dropAttachments(event: ReactDragEvent<HTMLFormElement>): Promise<void> {
@@ -1257,7 +1263,7 @@ export function App(): JSX.Element {
     insertTaskText(plain, event.currentTarget);
   }
 
-  async function removeAttachment(attachment: AttachmentPreview): Promise<void> {
+  async function removeAttachment(attachment: Pick<AttachmentPreview, "id">): Promise<void> {
     setPendingAttachments((current) => {
       const next = current.filter((item) => item.id !== attachment.id);
       const threadId = desktopState.activeThreadId;
@@ -2710,6 +2716,9 @@ export function App(): JSX.Element {
               onGitDetailOpen={handleGitDetailOpen}
               onGitRepositoryState={setGitRepositoryReady}
               onAskSelection={attachCodeSelection}
+              codeSelectionAttachments={codeSelectionAttachments.filter((selection) =>
+                pendingAttachments.some((attachment) => attachment.id === selection.id))}
+              onRemovePendingAttachment={(id) => removeAttachment({ id })}
               onGitWalkthrough={(result) => {
                 const workspaceId = desktopState.workspace?.id;
                 if (workspaceId) setGitWalkthrough({ workspaceId, result, open: true });
