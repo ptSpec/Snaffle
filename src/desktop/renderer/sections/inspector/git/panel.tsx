@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   CodeSelectionInput,
+  CodeSelectionAttachment,
   DesktopWorkspace,
   GitChanges,
   GitFileContents,
@@ -26,6 +27,8 @@ export function GitPanel({
   onDetailOpen,
   onRepositoryState,
   onAskSelection,
+  codeSelectionAttachments,
+  onRemovePendingAttachment,
   onWalkthrough,
   onOpenWalkthrough,
   onCloseWalkthrough,
@@ -40,7 +43,9 @@ export function GitPanel({
   walkthroughReasoningEffort: GitWalkthroughRunInput["reasoningEffort"];
   onDetailOpen(open: boolean): void;
   onRepositoryState(ready: boolean): void;
-  onAskSelection(input: CodeSelectionInput): Promise<void>;
+  onAskSelection(input: CodeSelectionInput): Promise<string>;
+  codeSelectionAttachments: CodeSelectionAttachment[];
+  onRemovePendingAttachment(id: string): Promise<void>;
   onWalkthrough(result: GitWalkthroughResult): void;
   onOpenWalkthrough(): void;
   onCloseWalkthrough(): void;
@@ -223,7 +228,7 @@ export function GitPanel({
   async function copyPath(filePath = selectedPath, relative = false): Promise<void> {
     if (!workspace || !filePath) return;
     try {
-      await navigator.clipboard.writeText(relative ? filePath : absoluteWorkspacePath(workspace.path, filePath));
+      await window.desktop.writeClipboardText(relative ? filePath : absoluteWorkspacePath(workspace.path, filePath));
       if (filePath === selectedPath) {
         setPathCopied(true);
         window.setTimeout(() => setPathCopied(false), 1200);
@@ -233,14 +238,14 @@ export function GitPanel({
     }
   }
 
-  async function askSelection(ranges: GitCodeSelection[]): Promise<void> {
-    if (!selectedPath || dirty || saving) return;
+  async function askSelection(ranges: GitCodeSelection[], note: string): Promise<string> {
+    if (!selectedPath || dirty || saving) throw new Error("Save this file before attaching a selection");
     setFailure(null);
     try {
-      await onAskSelection({ path: selectedPath, ranges });
-      setSelectedPath(null);
+      return await onAskSelection({ path: selectedPath, ranges, ...(note ? { note } : {}) });
     } catch (error) {
       setFailure(errorMessage(error));
+      throw error;
     }
   }
 
@@ -338,7 +343,9 @@ export function GitPanel({
                 askDisabled={dirty || saving}
                 onDirty={() => setDirty(true)}
                 onSave={(content) => void save(content)}
-                onAskSelection={(ranges) => void askSelection(ranges)}
+                onAskSelection={askSelection}
+                attachments={codeSelectionAttachments.filter((attachment) => attachment.path === selectedFile.path)}
+                onRemoveAttachment={onRemovePendingAttachment}
               />
             </Suspense>
           ) : failure ? null : <p className="inspector-empty">Loading file…</p>}

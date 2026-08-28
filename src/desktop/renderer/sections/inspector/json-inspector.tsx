@@ -2,14 +2,14 @@ import hljs from "highlight.js/lib/common";
 import { useState } from "react";
 
 export function JsonInspector({ value }: { value: unknown }): JSX.Element {
-  const [raw, setRaw] = useState(false);
+  const [raw, setRaw] = useState(true);
   const [copied, setCopied] = useState(false);
   if (!isJsonContainer(value)) return <pre>{formatJson(value)}</pre>;
   const entries = Object.entries(value);
 
   async function copyJson(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(formatJson(value));
+      await window.desktop.writeClipboardText(formatJson(value));
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
     } catch {
@@ -54,7 +54,7 @@ export function CopyableOutput({
 
   async function copyOutput(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(children);
+      await window.desktop.writeClipboardText(children);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
     } catch {

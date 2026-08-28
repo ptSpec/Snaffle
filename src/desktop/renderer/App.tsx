@@ -15,6 +15,7 @@ import type { ImageUnderstandingProfile } from "../../attachments/vision.js";
 import type { CommandApprovalDecision } from "../../protocol.js";
 import {
   MAX_KEPT_ASIDE_MESSAGES,
+  type CodeSelectionAttachment,
   type CodeSelectionInput,
   type DesktopApi,
   type DesktopRunEvent,
@@ -201,8 +202,9 @@ export function App(): JSX.Element {
   const [selectedProviderConnectionId, setSelectedProviderConnectionId] = useState("openrouter");
   const [providerAllowances, setProviderAllowances] = useState<Record<string, ProviderAllowance | null>>({});
   const [task, setTask] = useState("");
-  const speechDraft = useRef("");
+  const speechDraft = useRef({ prefix: "", suffix: "" });
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentPreview[]>([]);
+  const [codeSelectionAttachments, setCodeSelectionAttachments] = useState<CodeSelectionAttachment[]>([]);
   const [draggingAttachments, setDraggingAttachments] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -283,8 +285,14 @@ export function App(): JSX.Element {
       setError(event.error);
       return;
     }
-    const base = speechDraft.current.trimEnd();
-    setTask([base, event.text.trim()].filter(Boolean).join(base ? " " : ""));
+    const transcript = event.text.trim();
+    if (!transcript) return;
+    const { prefix, suffix } = speechDraft.current;
+    const before = prefix && !/\s$/.test(prefix) ? " " : "";
+    const after = suffix && !/^[\s.,!?;:)\]}]/.test(suffix) ? " " : "";
+    setTask(`${prefix}${before}${transcript}${after}${suffix}`);
+    const caret = prefix.length + before.length + transcript.length;
+    requestAnimationFrame(() => taskInput.current?.setSelectionRange(caret, caret));
   }), []);
 
   async function checkForUpdates(): Promise<void> {
@@ -1188,13 +1196,16 @@ export function App(): JSX.Element {
     }
   }
 
-  async function attachCodeSelection(input: CodeSelectionInput): Promise<void> {
+  async function attachCodeSelection(input: CodeSelectionInput): Promise<string> {
     if (pendingAttachments.length >= 8) throw new Error("Attach at most 8 files to one message");
-    await addAttachments([await window.desktop.importCodeSelection(input)]);
-    window.setTimeout(() => taskInput.current?.focus(), 0);
+    const attachment = await window.desktop.importCodeSelection(input);
+    const [accepted] = await addAttachments([attachment]);
+    if (!accepted) throw new Error("That selection is already attached");
+    setCodeSelectionAttachments((current) => [...current, { id: accepted.id, ...input }]);
+    return accepted.id;
   }
 
-  async function addAttachments(imported: AttachmentPreview[]): Promise<void> {
+  async function addAttachments(imported: AttachmentPreview[]): Promise<AttachmentPreview[]> {
     const fingerprints = new Set(pendingAttachments.map((attachment) => attachment.fingerprint));
     const unique = imported.filter((attachment) => {
       if (fingerprints.has(attachment.fingerprint)) return false;
@@ -1216,6 +1227,7 @@ export function App(): JSX.Element {
       if (threadId) threadAttachments.current.set(threadId, next);
       return next;
     });
+    return accepted;
   }
 
   async function dropAttachments(event: ReactDragEvent<HTMLFormElement>): Promise<void> {
@@ -1251,7 +1263,7 @@ export function App(): JSX.Element {
     insertTaskText(plain, event.currentTarget);
   }
 
-  async function removeAttachment(attachment: AttachmentPreview): Promise<void> {
+  async function removeAttachment(attachment: Pick<AttachmentPreview, "id">): Promise<void> {
     setPendingAttachments((current) => {
       const next = current.filter((item) => item.id !== attachment.id);
       const threadId = desktopState.activeThreadId;
@@ -2129,8 +2141,18 @@ export function App(): JSX.Element {
     }
   }
 
+  function prepareSpeechRecognition(): void {
+    const input = taskInput.current;
+    const draft = input?.value ?? task;
+    const start = Math.min(input?.selectionStart ?? draft.length, draft.length);
+    const end = input?.selectionEnd ?? start;
+    speechDraft.current = {
+      prefix: draft.slice(0, start),
+      suffix: draft.slice(end),
+    };
+  }
+
   async function startSpeechRecognition(): Promise<void> {
-    speechDraft.current = task;
     try {
       setError(null);
       await window.desktop.startSpeechRecognition(
@@ -2646,6 +2668,7 @@ export function App(): JSX.Element {
             onQueue={queueFollowUp}
             onCancelQueued={cancelQueuedFollowUp}
             onSlashCommand={() => setCommandMode("slash")}
+            onVoicePrepare={prepareSpeechRecognition}
             onVoiceStart={startSpeechRecognition}
             onVoiceAudio={(samples, sampleRate) => window.desktop.sendSpeechAudio(samples, sampleRate)}
             onVoiceStop={stopSpeechRecognition}
@@ -2693,6 +2716,9 @@ export function App(): JSX.Element {
               onGitDetailOpen={handleGitDetailOpen}
               onGitRepositoryState={setGitRepositoryReady}
               onAskSelection={attachCodeSelection}
+              codeSelectionAttachments={codeSelectionAttachments.filter((selection) =>
+                pendingAttachments.some((attachment) => attachment.id === selection.id))}
+              onRemovePendingAttachment={(id) => removeAttachment({ id })}
               onGitWalkthrough={(result) => {
                 const workspaceId = desktopState.workspace?.id;
                 if (workspaceId) setGitWalkthrough({ workspaceId, result, open: true });

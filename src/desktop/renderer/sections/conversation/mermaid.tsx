@@ -32,7 +32,7 @@ export function MermaidDiagram({ code, copyIcon }: { code: string; copyIcon: Rea
 
   async function copyCode(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(code);
+      await window.desktop.writeClipboardText(code);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
     } catch {

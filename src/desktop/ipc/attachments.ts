@@ -61,10 +61,11 @@ export function registerAttachmentIpc(
       `## Selection ${index + 1} · lines ${lineLabel(range)}`,
       codeBlock(range.text),
     ].join("\n\n"));
-    return attachments.importText(
-      label,
-      [`Selected code from workspace file \`${selection.path}\`.`, ...sections].join("\n\n"),
-    );
+    return attachments.importText(label, [
+      `Selected code from workspace file \`${selection.path}\`.`,
+      selection.note ? `User note:\n\n${selection.note}` : "",
+      ...sections,
+    ].filter(Boolean).join("\n\n"));
   });
 
   ipcMain.handle("desktop:import-dropped-files", (_event, value: unknown) => {
@@ -76,6 +77,10 @@ export function registerAttachmentIpc(
 
   ipcMain.handle("desktop:read-clipboard-text", () => clipboard.readText());
   ipcMain.handle("desktop:read-clipboard-html", () => clipboard.readHTML());
+  ipcMain.handle("desktop:write-clipboard-text", (_event, value: unknown) => {
+    if (typeof value !== "string") throw new Error("Clipboard content must be text");
+    clipboard.writeText(value);
+  });
   ipcMain.handle("desktop:remove-attachment", (_event, value: unknown) => attachments.remove(id(value, "Attachment")));
 
   ipcMain.handle(
@@ -100,17 +105,21 @@ function id(value: unknown, label: string): string {
 
 type CodeSelection = {
   path: string;
+  note?: string;
   ranges: Array<{ fromLine: number; toLine: number; text: string }>;
 };
 
 function codeSelection(value: unknown): CodeSelection {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid code selection");
-  const input = value as { path?: unknown; ranges?: unknown };
+  const input = value as { path?: unknown; note?: unknown; ranges?: unknown };
   if (typeof input.path !== "string" || !input.path || input.path.length > 1_000) {
     throw new Error("Code selection path must be text");
   }
   if (!Array.isArray(input.ranges) || !input.ranges.length || input.ranges.length > 64) {
     throw new Error("Select between 1 and 64 code ranges");
+  }
+  if (input.note !== undefined && (typeof input.note !== "string" || input.note.length > 4_000)) {
+    throw new Error("Selection note must be text no longer than 4,000 characters");
   }
 
   let characters = 0;
@@ -126,7 +135,8 @@ function codeSelection(value: unknown): CodeSelection {
     return { fromLine: Number(range.fromLine), toLine: Number(range.toLine), text: range.text };
   });
   if (characters > MAX_CODE_SELECTION_CHARS) throw new Error("Selected code is larger than 200,000 characters");
-  return { path: input.path, ranges };
+  const note = typeof input.note === "string" ? input.note.trim() : "";
+  return { path: input.path, ranges, ...(note ? { note } : {}) };
 }
 
 function lineLabel(range: { fromLine: number; toLine: number }): string {
