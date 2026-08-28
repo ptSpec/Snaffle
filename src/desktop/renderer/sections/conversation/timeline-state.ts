@@ -578,8 +578,20 @@ function finishReasoning(items: TimelineItem[], step: number, finalText: string)
 }
 
 function stopActivity(items: TimelineItem[]): TimelineItem[] {
-  return items.flatMap((item) => {
+  return items.flatMap((item): TimelineItem[] => {
     if (item.kind === "tool-preparing") return [];
+    if (item.kind === "activity-group") {
+      return [{ ...item, items: stopActivity(item.items) }];
+    }
+    if (item.kind === "tool" && item.phase === "running") {
+      return [{
+        ...item,
+        phase: "completed",
+        content: "Run ended before Snaffle received the tool's completion result.",
+        isError: true,
+        completedAt: Date.now(),
+      }];
+    }
     if (item.kind === "reasoning" && item.streaming) {
       return item.text.trim() ? [{ ...item, streaming: false }] : [];
     }
