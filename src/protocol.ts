@@ -110,6 +110,7 @@ export type RunEvent =
       model: string;
       providerId: string;
       providerConnectionId: string;
+      output: string;
       usage?: Usage;
       durationMs?: number;
       question?: string;

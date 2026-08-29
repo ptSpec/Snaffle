@@ -22,6 +22,7 @@ export type TimelineItem =
       model: string;
       providerId: string;
       providerConnectionId: string;
+      output?: string;
       usage?: Usage;
       durationMs?: number;
       question?: string;
@@ -88,6 +89,7 @@ export function addRunEvent(
         model: event.model,
         providerId: event.providerId,
         providerConnectionId: event.providerConnectionId,
+        output: event.output,
         ...(event.usage ? { usage: event.usage } : {}),
         ...(event.durationMs === undefined ? {} : { durationMs: event.durationMs }),
         ...(event.question ? { question: event.question } : {}),

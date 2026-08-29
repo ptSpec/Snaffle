@@ -367,6 +367,7 @@ export function registerRunIpc(options: {
         const contextImages = contextImageAttachments([...conversation, currentUser]);
         const projected = await describeImages({
           messages: [...conversation, currentUser],
+          request: input.task,
           profile,
           attachments: options.attachments,
           provider,
@@ -379,6 +380,7 @@ export function registerRunIpc(options: {
             model: activity.model,
             providerId: activity.providerId,
             providerConnectionId: activity.providerConnectionId,
+            output: activity.output,
             ...(activity.usage ? { usage: activity.usage } : {}),
             ...(activity.durationMs === undefined ? {} : { durationMs: activity.durationMs }),
             ...(activity.question ? { question: activity.question } : {}),
@@ -407,6 +409,7 @@ export function registerRunIpc(options: {
                 model: activity.model,
                 providerId: activity.providerId,
                 providerConnectionId: activity.providerConnectionId,
+                output: activity.output,
                 ...(activity.usage ? { usage: activity.usage } : {}),
                 ...(activity.durationMs === undefined ? {} : { durationMs: activity.durationMs }),
                 ...(activity.question ? { question: activity.question } : {}),

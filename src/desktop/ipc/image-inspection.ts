@@ -63,7 +63,7 @@ export function imageInspectionTool(options: {
         normalizedQuestion,
       );
       if (cached) {
-        options.onActivity?.(imageInspectionActivity(options, attachment, question, { cached: true }));
+        options.onActivity?.(imageInspectionActivity(options, attachment, question, { cached: true, output: cached }));
         return { content: imageInspectionContent(attachment, cached, true) };
       }
       if (freshInspections >= MAX_FRESH_IMAGE_INSPECTIONS_PER_RUN) {
@@ -98,6 +98,7 @@ export function imageInspectionTool(options: {
         question,
         {
           cached: false,
+          output: description,
           ...(response.usage ? { usage: response.usage } : {}),
           durationMs: Date.now() - startedAt,
         },
@@ -111,7 +112,7 @@ function imageInspectionActivity(
   options: Parameters<typeof imageInspectionTool>[0],
   attachment: AttachmentRef,
   question: string,
-  details: { cached: boolean; usage?: ImageUnderstandingActivity["usage"]; durationMs?: number },
+  details: { cached: boolean; output: string; usage?: ImageUnderstandingActivity["usage"]; durationMs?: number },
 ): ImageUnderstandingActivity {
   return {
     attachment,
@@ -120,6 +121,7 @@ function imageInspectionActivity(
     model: options.profile.model,
     providerId: options.provider.providerId,
     providerConnectionId: options.provider.connectionId,
+    output: details.output,
     question: question.trim(),
     ...(details.usage ? { usage: details.usage } : {}),
     ...(details.durationMs === undefined ? {} : { durationMs: details.durationMs }),
