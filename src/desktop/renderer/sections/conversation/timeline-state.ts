@@ -524,7 +524,7 @@ function collapseCompletedRuns(items: TimelineItem[]): TimelineItem[] {
   const collapsed: TimelineItem[] = [];
   let run: TimelineItem[] = [];
 
-  function flush(): void {
+  function flush(atUserBoundary: boolean): void {
     if (!run.length) return;
     if (run.some((item) => item.kind === "activity-group")) {
       collapsed.push(...run);
@@ -545,6 +545,8 @@ function collapseCompletedRuns(items: TimelineItem[]): TimelineItem[] {
         { id: newTimelineId(), kind: "activity-group", items: run.slice(0, finalIndex) },
         ...run.slice(finalIndex),
       );
+    } else if (atUserBoundary && finalIndex === -1 && run.some(isWorkActivity)) {
+      collapsed.push({ id: newTimelineId(), kind: "activity-group", items: run });
     } else {
       collapsed.push(...run);
     }
@@ -553,14 +555,20 @@ function collapseCompletedRuns(items: TimelineItem[]): TimelineItem[] {
 
   for (const item of items) {
     if (item.kind === "user") {
-      flush();
+      flush(true);
       collapsed.push(item);
     } else {
       run.push(item);
     }
   }
-  flush();
+  flush(false);
   return collapsed;
+}
+
+function isWorkActivity(item: TimelineItem): boolean {
+  return item.kind === "reasoning" || item.kind === "tool" || item.kind === "tool-preparing" ||
+    item.kind === "retry" || item.kind === "image-understanding" || item.kind === "context" ||
+    item.kind === "approval" || (item.kind === "assistant" && Boolean(item.intermediate));
 }
 
 function streamingAssistantIndex(items: TimelineItem[]): number {

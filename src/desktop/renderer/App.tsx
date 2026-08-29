@@ -143,6 +143,7 @@ const initialState: DesktopState = {
   microsandboxDetail: "Checking Microsandbox…",
   themeId: document.documentElement.dataset.theme ?? DEFAULT_THEME.id,
   animationsEnabled: document.documentElement.dataset.animations !== "off",
+  expandWorkDetails: false,
   interfaceFont: fontById(document.documentElement.dataset.interfaceFont)?.id ?? DEFAULT_FONTS.interface,
   primaryFont: fontById(document.documentElement.dataset.primaryFont)?.id ?? DEFAULT_FONTS.primary,
   secondaryFont: fontById(document.documentElement.dataset.secondaryFont)?.id ?? DEFAULT_FONTS.secondary,
@@ -242,6 +243,8 @@ export function App(): JSX.Element {
   const timelineView = useRef<HTMLDivElement>(null);
   const timelineContent = useRef<HTMLDivElement>(null);
   const timelineScrollTop = useRef(0);
+  const timelineDisclosureActive = useRef(false);
+  const timelineDisclosureTimer = useRef<number | undefined>(undefined);
   const executionMode = useRef<HTMLDetailsElement>(null);
   const composerAdd = useRef<HTMLDetailsElement>(null);
   const searchOpenedAt = useRef(0);
@@ -517,6 +520,7 @@ export function App(): JSX.Element {
     const view = timelineView.current;
     if (view && followTimeline.current) {
       view.scrollTop = view.scrollHeight;
+      timelineScrollTop.current = view.scrollTop;
       setShowJumpToLatest(false);
     }
   }, [timeline]);
@@ -526,8 +530,13 @@ export function App(): JSX.Element {
     const content = timelineContent.current;
     if (view !== "conversation" || !timeline || !content) return;
     const observer = new ResizeObserver(() => {
-      if (!followTimeline.current) return;
+      if (!followTimeline.current) {
+        const distanceFromBottom = timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight;
+        setShowJumpToLatest(distanceFromBottom > timeline.clientHeight * 0.4);
+        return;
+      }
       timeline.scrollTop = timeline.scrollHeight;
+      timelineScrollTop.current = timeline.scrollTop;
       setShowJumpToLatest(false);
     });
     observer.observe(content);
@@ -538,9 +547,12 @@ export function App(): JSX.Element {
     if (view !== "conversation") return;
     const timeline = timelineView.current;
     if (!timeline) return;
-    timeline.scrollTop = followTimeline.current
-      ? timeline.scrollHeight
-      : timelineScrollTop.current;
+    if (followTimeline.current) {
+      timeline.scrollTop = timeline.scrollHeight;
+      timelineScrollTop.current = timeline.scrollTop;
+    } else {
+      timeline.scrollTop = timelineScrollTop.current;
+    }
   }, [view]);
 
   useEffect(() => {
@@ -1669,6 +1681,16 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setExpandWorkDetails(expandWorkDetails: boolean): Promise<void> {
+    try {
+      await window.desktop.setExpandWorkDetails(expandWorkDetails);
+      setDesktopState((state) => ({ ...state, expandWorkDetails }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   async function setMaxSteps(maxSteps: number): Promise<void> {
     try {
       await window.desktop.setMaxSteps(maxSteps);
@@ -1927,6 +1949,7 @@ export function App(): JSX.Element {
       await Promise.all([
         window.desktop.setTheme(DEFAULT_THEME.id),
         window.desktop.setAnimationsEnabled(true),
+        window.desktop.setExpandWorkDetails(false),
         window.desktop.setTypography(DEFAULT_FONTS.interface, DEFAULT_FONTS.primary, DEFAULT_FONTS.secondary, DEFAULT_FONTS.code),
         window.desktop.setTypographyScale("interface", DEFAULT_FONT_SCALE),
         window.desktop.setTypographyScale("conversation", DEFAULT_FONT_SCALE),
@@ -1942,6 +1965,7 @@ export function App(): JSX.Element {
         ...state,
         themeId: DEFAULT_THEME.id,
         animationsEnabled: true,
+        expandWorkDetails: false,
         interfaceFont: DEFAULT_FONTS.interface,
         primaryFont: DEFAULT_FONTS.primary,
         secondaryFont: DEFAULT_FONTS.secondary,
@@ -2410,6 +2434,7 @@ export function App(): JSX.Element {
             page={settingsPage}
             themeId={desktopState.themeId}
             animationsEnabled={desktopState.animationsEnabled}
+            expandWorkDetails={desktopState.expandWorkDetails}
             interfaceFont={desktopState.interfaceFont}
             primaryFont={desktopState.primaryFont}
             secondaryFont={desktopState.secondaryFont}
@@ -2451,6 +2476,7 @@ export function App(): JSX.Element {
             onResetAppearance={() => void resetAppearance()}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
             onAnimationsEnabled={(enabled) => void setAnimationsEnabled(enabled)}
+            onExpandWorkDetails={(enabled) => void setExpandWorkDetails(enabled)}
             onTypography={(interfaceFont, primary, secondary, code) => void setTypography(interfaceFont, primary, secondary, code)}
             onTypographyScale={(role, value) => void setTypographyScale(role, value)}
             onCodeBlockFontSize={(size) => void setCodeBlockFontSize(size)}
@@ -2510,14 +2536,28 @@ export function App(): JSX.Element {
               ref={timelineView}
               className="timeline"
               aria-live="polite"
+              onClickCapture={(event) => {
+                if (!(event.target instanceof Element) || !event.target.closest("[data-timeline-disclosure]")) return;
+                followTimeline.current = false;
+                timelineScrollTop.current = event.currentTarget.scrollTop;
+                timelineDisclosureActive.current = true;
+                if (timelineDisclosureTimer.current !== undefined) {
+                  window.clearTimeout(timelineDisclosureTimer.current);
+                }
+                timelineDisclosureTimer.current = window.setTimeout(() => {
+                  timelineDisclosureActive.current = false;
+                  timelineDisclosureTimer.current = undefined;
+                }, 250);
+              }}
               onScroll={(event) => {
                 const view = event.currentTarget;
                 const scrolledUp = view.scrollTop < timelineScrollTop.current - 1;
                 timelineScrollTop.current = view.scrollTop;
                 const distanceFromBottom = view.scrollHeight - view.scrollTop - view.clientHeight;
-                const following = !scrolledUp && distanceFromBottom < 80;
+                const following = !timelineDisclosureActive.current &&
+                  (distanceFromBottom < 80 || (followTimeline.current && !scrolledUp));
                 followTimeline.current = following;
-                setShowJumpToLatest(distanceFromBottom > view.clientHeight * 0.4);
+                setShowJumpToLatest(!following && distanceFromBottom > view.clientHeight * 0.4);
               }}
             >
               <div ref={timelineContent}>
@@ -2529,6 +2569,7 @@ export function App(): JSX.Element {
                     selectedId={selectedItemId}
                     turnRunning={running && currentTurnItemIds.has(item.id)}
                     activeToolPreviewId={activeToolPreviewId}
+                    expandWorkDetails={desktopState.expandWorkDetails}
                     fileChangeSummary={answerFileChanges.get(item.id)}
                     reasoningModelCalls={reasoningModelCalls}
                     onSelect={(id) => {
@@ -2586,6 +2627,7 @@ export function App(): JSX.Element {
                   followTimeline.current = true;
                   setShowJumpToLatest(false);
                   view.scrollTop = view.scrollHeight;
+                  timelineScrollTop.current = view.scrollTop;
                 }}
               >
                 <svg viewBox="0 0 20 20" aria-hidden="true">

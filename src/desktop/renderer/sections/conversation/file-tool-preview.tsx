@@ -73,6 +73,7 @@ export function FileToolPreview({
   selected,
   turnRunning,
   autoExpanded,
+  defaultExpanded,
   statusClass,
   duration,
   disclosureCommand,
@@ -83,6 +84,7 @@ export function FileToolPreview({
   selected: boolean;
   turnRunning: boolean;
   autoExpanded: boolean;
+  defaultExpanded: boolean;
   statusClass: string;
   duration?: string | undefined;
   disclosureCommand?: { id: number; open: boolean } | null;
@@ -98,7 +100,7 @@ export function FileToolPreview({
       )
     : 1_200;
   const autoReveal = autoExpanded && document.documentElement.dataset.animations !== "off";
-  const [open, setOpen] = useState(autoReveal);
+  const [open, setOpen] = useState(autoReveal || defaultExpanded);
   const manuallyToggled = useRef(false);
 
   useEffect(() => {
@@ -106,6 +108,7 @@ export function FileToolPreview({
   }, [disclosureCommand]);
 
   useEffect(() => {
+    if (defaultExpanded) return;
     if (!autoReveal && document.documentElement.dataset.animations === "off") {
       if (!manuallyToggled.current) setOpen(false);
       return;
@@ -122,7 +125,7 @@ export function FileToolPreview({
     const remaining = Math.max(0, (item.startedAt ?? Date.now()) + minimumVisibleMs - Date.now());
     const timeout = window.setTimeout(() => setOpen(false), remaining);
     return () => window.clearTimeout(timeout);
-  }, [autoReveal, item.startedAt, minimumVisibleMs, turnRunning]);
+  }, [autoReveal, defaultExpanded, item.startedAt, minimumVisibleMs, turnRunning]);
 
   if (!preview) return null;
 
@@ -141,6 +144,7 @@ export function FileToolPreview({
       <button
         className={`tool-row file-tool-row ${statusClass}${selected ? " selected" : ""}`}
         type="button"
+        data-timeline-disclosure=""
         aria-expanded={open}
         title="Inspect tool call and toggle changes"
         onClick={() => {

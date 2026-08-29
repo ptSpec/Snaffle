@@ -47,6 +47,14 @@ export function ExecutionOverview({
   const latestTurnId = turns.at(-1)?.id;
   const threadUsage = sumUsage(turns.map((turn) => turn.usage));
   const completeCacheData = turns.every((turn) => !(turn.usage.inputTokens ?? 0) || turn.cacheAvailable);
+  const totalTokens = threadUsage.totalTokens ?? 0;
+  const cachedTokens = completeCacheData
+    ? Math.min(threadUsage.inputTokens ?? 0, threadUsage.cachedInputTokens ?? 0)
+    : undefined;
+  const usedTokens = Math.max(0, totalTokens - (cachedTokens ?? 0));
+  const cachedPercent = cachedTokens !== undefined && threadUsage.inputTokens
+    ? Math.round((cachedTokens / threadUsage.inputTokens) * 100)
+    : undefined;
 
   useEffect(() => {
     if (running) setDisclosureCommand(null);
@@ -70,14 +78,21 @@ export function ExecutionOverview({
               }))}
               onSelect={onNavigateTurn}
             />
-            <span className="execution-turn-count">
-              <span>{turns.length} turn{turns.length === 1 ? "" : "s"}</span>
-              {threadUsage.totalTokens ? <strong>{compactNumber(threadUsage.totalTokens)} tokens processed</strong> : null}
-              {completeCacheData && threadUsage.inputTokens ? (
-                <strong>{Math.round(((threadUsage.cachedInputTokens ?? 0) / threadUsage.inputTokens) * 100)}% cached</strong>
-              ) : null}
-              {threadUsage.costUsd ? <strong>{formatCost(threadUsage.costUsd)}</strong> : null}
-            </span>
+            {totalTokens || threadUsage.costUsd ? (
+              <div className="execution-token-summary">
+                {totalTokens ? (
+                  <strong title={`${formatNumber(totalTokens)} total tokens processed`}>
+                    {compactNumber(usedTokens)} tokens used
+                  </strong>
+                ) : <span />}
+                <span>
+                  {cachedTokens !== undefined && cachedPercent !== undefined ? (
+                    <strong>{compactNumber(cachedTokens)} cached · {cachedPercent}%</strong>
+                  ) : null}
+                  {threadUsage.costUsd ? <strong>{formatCost(threadUsage.costUsd)}</strong> : null}
+                </span>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -459,6 +474,10 @@ function oneLine(text: string): string {
 
 function compactNumber(value: number): string {
   return value < 1_000 ? String(value) : `${(value / 1_000).toFixed(value < 10_000 ? 1 : 0)}k`;
+}
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat().format(value);
 }
 
 function formatDuration(durationMs: number): string {

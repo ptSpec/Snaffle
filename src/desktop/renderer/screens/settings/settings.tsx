@@ -32,6 +32,7 @@ export function Settings({
   page,
   themeId,
   animationsEnabled,
+  expandWorkDetails,
   interfaceFont,
   primaryFont,
   secondaryFont,
@@ -73,6 +74,7 @@ export function Settings({
   onResetAppearance,
   onSelectTheme,
   onAnimationsEnabled,
+  onExpandWorkDetails,
   onTypography,
   onTypographyScale,
   onCodeBlockFontSize,
@@ -109,6 +111,7 @@ export function Settings({
   page: SettingsPage;
   themeId: string;
   animationsEnabled: boolean;
+  expandWorkDetails: boolean;
   interfaceFont: FontId;
   primaryFont: FontId;
   secondaryFont: FontId;
@@ -150,6 +153,7 @@ export function Settings({
   onResetAppearance: () => void;
   onSelectTheme: (themeId: string) => void;
   onAnimationsEnabled: (enabled: boolean) => void;
+  onExpandWorkDetails: (enabled: boolean) => void;
   onTypography: (interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId) => void;
   onTypographyScale: (role: "interface" | "conversation", value: number) => void;
   onCodeBlockFontSize: (size: number) => void;
@@ -439,6 +443,19 @@ export function Settings({
             type="checkbox"
             checked={animationsEnabled}
             onChange={(event) => onAnimationsEnabled(event.target.checked)}
+          />
+        </label>
+
+        <label className="setting-field">
+          <span>
+            <strong>Expand work details by default</strong>
+            <small>Open thinking, tool calls, and their visual details automatically.</small>
+          </span>
+          <input
+            className="selection-checkbox"
+            type="checkbox"
+            checked={expandWorkDetails}
+            onChange={(event) => onExpandWorkDetails(event.target.checked)}
           />
         </label>
 

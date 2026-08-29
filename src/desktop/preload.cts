@@ -111,6 +111,8 @@ const api: DesktopApi = {
   setTheme: (themeId: string) => ipcRenderer.invoke("desktop:set-theme", themeId),
   setAnimationsEnabled: (enabled: boolean) =>
     ipcRenderer.invoke("desktop:set-animations-enabled", enabled),
+  setExpandWorkDetails: (enabled: boolean) =>
+    ipcRenderer.invoke("desktop:set-expand-work-details", enabled),
   setSpeechSettings: (settings: SpeechSettings) =>
     ipcRenderer.invoke("desktop:set-speech-settings", settings),
   installSpeechModel: (model: SpeechModel) =>
