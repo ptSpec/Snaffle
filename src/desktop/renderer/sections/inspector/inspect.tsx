@@ -29,6 +29,8 @@ export function Inspector({
             : [item.model, item.providerConnectionId, item.durationMs ? formatDuration(item.durationMs) : null]
               .filter(Boolean).join(" · ")}
         </p>
+        {item.output ? <><h4>Output</h4><CopyableOutput>{item.output}</CopyableOutput></> : null}
+        <h4>Metadata</h4>
         <JsonInspector value={{
           image: item.imageName,
           activity: item.activity,
