@@ -6,6 +6,7 @@ export function Dictation({
   disabled,
   platform,
   stopAfterSilence,
+  soundsEnabled,
   onPrepare,
   onError,
   onStart,
@@ -15,6 +16,7 @@ export function Dictation({
   disabled: boolean;
   platform: string;
   stopAfterSilence: boolean;
+  soundsEnabled: boolean;
   onPrepare: () => void;
   onError: (message: string) => void;
   onStart: () => Promise<void>;
@@ -90,7 +92,7 @@ export function Dictation({
       audioContext.current = context;
       await context.resume();
       if (!mounted.current) return;
-      await playCue(context, "start").catch(() => undefined);
+      if (soundsEnabled) await playCue(context, "start").catch(() => undefined);
       if (!mounted.current) return;
       const analyser = context.createAnalyser();
       analyser.fftSize = 128;
@@ -167,11 +169,13 @@ export function Dictation({
   async function finish(): Promise<void> {
     setSilenceCountdown(null);
     setStatus("stopping");
-    const context = release(true);
+    const context = release(soundsEnabled);
     try {
       await Promise.all([
         onStop(),
-        context ? playCue(context, "stop").catch(() => undefined).finally(() => void context.close()) : undefined,
+        context && soundsEnabled
+          ? playCue(context, "stop").catch(() => undefined).finally(() => void context.close())
+          : undefined,
       ]);
       recognitionStarted.current = false;
       if (mounted.current) setStatus("idle");

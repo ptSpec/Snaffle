@@ -16,6 +16,7 @@ export type SavedSettings = {
   onboardingComplete?: unknown;
   themeId?: unknown;
   animationsEnabled?: unknown;
+  soundsEnabled?: unknown;
   expandWorkDetails?: unknown;
   interfaceFont?: unknown;
   primaryFont?: unknown;
@@ -56,6 +57,7 @@ export type SettingsUpdate = {
   onboardingComplete?: boolean;
   themeId?: string;
   animationsEnabled?: boolean;
+  soundsEnabled?: boolean;
   expandWorkDetails?: boolean;
   interfaceFont?: FontId;
   primaryFont?: FontId;

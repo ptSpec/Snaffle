@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AttachmentRef } from "../../../../attachments/types.js";
 import type { CommandApprovalDecision } from "../../../../protocol.js";
 import { MAX_KEPT_ASIDE_MESSAGES, type SandboxAccessInput } from "../../../api.js";
@@ -488,21 +488,7 @@ function ApprovalEntry({
   const [scope, setScope] = useState<SandboxAccessInput["scope"]>("thread");
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [granting, setGranting] = useState(false);
-
-  if (item.decision) {
-    const label = item.decision === "deny"
-      ? "Extra access denied"
-      : item.decision === "once"
-        ? "Extra access allowed once"
-        : item.decision === "response"
-          ? "Unrestricted access allowed for this response"
-        : item.decision === "sandbox"
-          ? item.fileAccess
-            ? "Folder added; file operation retried"
-            : "Folder added; command retried in the sandbox"
-          : "Extra access allowed for this thread";
-    return <div className={`approval-result ${item.decision}`}>{label}</div>;
-  }
+  const card = useRef<HTMLElement>(null);
 
   const networkRequest = item.reason.includes("requests network access");
   const hostHomeRequest = item.reason.includes("references the host home directory");
@@ -543,7 +529,7 @@ function ApprovalEntry({
   const allowShortcut = mac ? "⌘+Enter" : "Ctrl+Enter";
   const denyShortcut = mac ? "⌘+Backspace" : "Ctrl+Backspace";
 
-  function handleShortcut(event: ReactKeyboardEvent<HTMLElement>): void {
+  function handleShortcut(event: KeyboardEvent): void {
     const primary = mac ? event.metaKey : event.ctrlKey;
     if (!primary || event.altKey || event.repeat) return;
     if (event.key === "Enter" && folders.length && canGrantFolders) {
@@ -559,8 +545,37 @@ function ApprovalEntry({
     }
   }
 
+  useEffect(() => {
+    if (item.decision) return;
+    function keydown(event: KeyboardEvent): void {
+      if (event.defaultPrevented) return;
+      const focused = card.current?.contains(document.activeElement) ?? false;
+      const onlyPendingApproval = document.querySelectorAll("[data-pending-approval]").length === 1;
+      if (!focused && !onlyPendingApproval) return;
+      handleShortcut(event);
+    }
+
+    document.addEventListener("keydown", keydown, { capture: true });
+    return () => document.removeEventListener("keydown", keydown, { capture: true });
+  }, [canGrantFolders, folders, granting, item.decision, item.id, mac, onGrantSandboxAccess, onResolve, scope, writable]);
+
+  if (item.decision) {
+    const label = item.decision === "deny"
+      ? "Extra access denied"
+      : item.decision === "once"
+        ? "Extra access allowed once"
+        : item.decision === "response"
+          ? "Unrestricted access allowed for this response"
+        : item.decision === "sandbox"
+          ? item.fileAccess
+            ? "Folder added; file operation retried"
+            : "Folder added; command retried in the sandbox"
+          : "Extra access allowed for this thread";
+    return <div className={`approval-result ${item.decision}`}>{label}</div>;
+  }
+
   return (
-    <section className="approval-card" tabIndex={0} onKeyDown={handleShortcut}>
+    <section ref={card} className="approval-card" tabIndex={0} data-pending-approval>
       <strong>{hostHomeRequest ? "Command requests host home access" : fileRequest ? "File operation needs extra access" : "Command needs extra access"}</strong>
       <code>{item.command}</code>
       <p>{explanation}</p>
