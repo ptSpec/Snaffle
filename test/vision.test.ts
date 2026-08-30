@@ -32,9 +32,11 @@ class VisionProvider implements ModelProvider {
   readonly providerId = "test";
   readonly connectionId = profile.providerConnectionId;
   calls = 0;
+  messages: Message[][] = [];
 
-  async complete(_messages: Message[], _tools: ToolSpec[], _signal: AbortSignal): Promise<ModelResponse> {
+  async complete(messages: Message[], _tools: ToolSpec[], _signal: AbortSignal): Promise<ModelResponse> {
     this.calls += 1;
+    this.messages.push(messages);
     return {
       text: `inspection ${this.calls}`,
       toolCalls: [],
@@ -82,6 +84,7 @@ test("image descriptions identify inspectable images and targeted inspections us
   const activities: ImageUnderstandingActivity[] = [];
   const projected = await describeImages({
     messages: [{ role: "user", content: "What is shown?", attachments: [image] }],
+    request: "What is shown?",
     profile,
     attachments: store,
     provider,
@@ -91,6 +94,8 @@ test("image descriptions identify inspectable images and targeted inspections us
 
   assert.match(projected[0]?.content ?? "", /<image id="image-1"/);
   assert.equal(provider.calls, 1);
+  assert.match(provider.messages[0]?.[0]?.content ?? "", /visual evidence extractor/);
+  assert.match(provider.messages[0]?.[0]?.content ?? "", /User request \(context only\): "What is shown\?"/);
   assert.deepEqual(activities, [{
     attachment: image,
     kind: "description",
@@ -98,12 +103,14 @@ test("image descriptions identify inspectable images and targeted inspections us
     model: profile.model,
     providerId: provider.providerId,
     providerConnectionId: provider.connectionId,
+    output: "inspection 1",
     usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12, cachedInputTokens: 4 },
     durationMs: activities[0]?.durationMs,
   }]);
 
   await describeImages({
     messages: [{ role: "user", content: "What is shown?", attachments: [image] }],
+    request: "What is shown?",
     profile,
     attachments: store,
     provider,
@@ -112,6 +119,7 @@ test("image descriptions identify inspectable images and targeted inspections us
   });
   assert.equal(provider.calls, 1);
   assert.equal(activities[1]?.cached, true);
+  assert.equal(activities[1]?.output, "inspection 1");
   assert.equal(activities[1]?.usage, undefined);
 
   const tool = imageInspectionTool({
@@ -130,6 +138,7 @@ test("image descriptions identify inspectable images and targeted inspections us
   assert.equal(provider.calls, 2);
   assert.equal(activities[2]?.kind, "inspection");
   assert.equal(activities[2]?.cached, false);
+  assert.equal(activities[2]?.output, "inspection 2");
   assert.deepEqual(activities[2]?.usage, { inputTokens: 10, outputTokens: 2, totalTokens: 12, cachedInputTokens: 4 });
 
   const cached = await tool.execute(workspace, {
@@ -140,7 +149,28 @@ test("image descriptions identify inspectable images and targeted inspections us
   assert.match(cached.content, /inspection 2/);
   assert.equal(provider.calls, 2);
   assert.equal(activities[3]?.cached, true);
+  assert.equal(activities[3]?.output, "inspection 2");
   assert.equal(activities[3]?.usage, undefined);
+});
+
+test("automatic image evidence is cached per user request", async (t) => {
+  const { store } = await fixture(t);
+  const provider = new VisionProvider();
+  const describe = (request: string) => describeImages({
+    messages: [{ role: "user" as const, content: request, attachments: [image] }],
+    request,
+    profile,
+    attachments: store,
+    provider,
+    signal: new AbortController().signal,
+  });
+
+  await describe("What color is the status indicator?");
+  await describe("What color is the status indicator?");
+  await describe("Read the error message exactly.");
+
+  assert.equal(provider.calls, 2);
+  assert.match(provider.messages[1]?.[0]?.content ?? "", /Read the error message exactly/);
 });
 
 test("image inspection rejects unrelated images and limits fresh calls per run", async (t) => {

@@ -22,6 +22,7 @@ export type TimelineItem =
       model: string;
       providerId: string;
       providerConnectionId: string;
+      output?: string;
       usage?: Usage;
       durationMs?: number;
       question?: string;
@@ -88,6 +89,7 @@ export function addRunEvent(
         model: event.model,
         providerId: event.providerId,
         providerConnectionId: event.providerConnectionId,
+        output: event.output,
         ...(event.usage ? { usage: event.usage } : {}),
         ...(event.durationMs === undefined ? {} : { durationMs: event.durationMs }),
         ...(event.question ? { question: event.question } : {}),
@@ -522,7 +524,7 @@ function collapseCompletedRuns(items: TimelineItem[]): TimelineItem[] {
   const collapsed: TimelineItem[] = [];
   let run: TimelineItem[] = [];
 
-  function flush(): void {
+  function flush(atUserBoundary: boolean): void {
     if (!run.length) return;
     if (run.some((item) => item.kind === "activity-group")) {
       collapsed.push(...run);
@@ -543,6 +545,8 @@ function collapseCompletedRuns(items: TimelineItem[]): TimelineItem[] {
         { id: newTimelineId(), kind: "activity-group", items: run.slice(0, finalIndex) },
         ...run.slice(finalIndex),
       );
+    } else if (atUserBoundary && finalIndex === -1 && run.some(isWorkActivity)) {
+      collapsed.push({ id: newTimelineId(), kind: "activity-group", items: run });
     } else {
       collapsed.push(...run);
     }
@@ -551,14 +555,20 @@ function collapseCompletedRuns(items: TimelineItem[]): TimelineItem[] {
 
   for (const item of items) {
     if (item.kind === "user") {
-      flush();
+      flush(true);
       collapsed.push(item);
     } else {
       run.push(item);
     }
   }
-  flush();
+  flush(false);
   return collapsed;
+}
+
+function isWorkActivity(item: TimelineItem): boolean {
+  return item.kind === "reasoning" || item.kind === "tool" || item.kind === "tool-preparing" ||
+    item.kind === "retry" || item.kind === "image-understanding" || item.kind === "context" ||
+    item.kind === "approval" || (item.kind === "assistant" && Boolean(item.intermediate));
 }
 
 function streamingAssistantIndex(items: TimelineItem[]): number {
@@ -578,8 +588,20 @@ function finishReasoning(items: TimelineItem[], step: number, finalText: string)
 }
 
 function stopActivity(items: TimelineItem[]): TimelineItem[] {
-  return items.flatMap((item) => {
+  return items.flatMap((item): TimelineItem[] => {
     if (item.kind === "tool-preparing") return [];
+    if (item.kind === "activity-group") {
+      return [{ ...item, items: stopActivity(item.items) }];
+    }
+    if (item.kind === "tool" && item.phase === "running") {
+      return [{
+        ...item,
+        phase: "completed",
+        content: "Run ended before Snaffle received the tool's completion result.",
+        isError: true,
+        completedAt: Date.now(),
+      }];
+    }
     if (item.kind === "reasoning" && item.streaming) {
       return item.text.trim() ? [{ ...item, streaming: false }] : [];
     }

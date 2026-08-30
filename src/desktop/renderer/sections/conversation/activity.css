@@ -798,6 +798,10 @@
   top: 14px;
 }
 
+.activity-group-body.single::before {
+  display: none;
+}
+
 @keyframes activity-group-drop {
   from {
     opacity: 0;

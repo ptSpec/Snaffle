@@ -48,10 +48,6 @@ export const editTool: Tool = {
       },
     },
     required: ["path"],
-    anyOf: [
-      { required: ["oldText", "newText"] },
-      { required: ["edits"] },
-    ],
     additionalProperties: false,
   },
   async execute(workspace, rawInput) {

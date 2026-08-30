@@ -120,17 +120,27 @@
   background: var(--hover-background);
 }
 
-.execution-turn-count {
-  display: grid;
-  justify-items: end;
-  gap: 2px;
+.execution-token-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 12px;
   color: var(--text-faint);
   font-size: calc(12px * var(--interface-font-scale));
 }
 
-.execution-turn-count strong {
+.execution-token-summary > span {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+  gap: 8px;
+}
+
+.execution-token-summary strong {
   color: var(--text-secondary);
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .execution-usage-overview {
@@ -226,23 +236,11 @@
   .execution-overview-heading {
     grid-template-columns: 1fr;
   }
-
-  .execution-turn-count {
-    grid-auto-flow: column;
-    justify-content: end;
-    gap: 8px;
-  }
 }
 
 @container (max-width: 500px) {
   .execution-overview-heading {
     grid-template-columns: 1fr;
-  }
-
-  .execution-turn-count {
-    grid-auto-flow: column;
-    justify-content: end;
-    gap: 8px;
   }
 }
 
@@ -343,6 +341,7 @@
   background: transparent;
   border: 0;
   cursor: pointer;
+  user-select: none;
 }
 
 .execution-turn-copy:hover strong {
@@ -430,7 +429,7 @@
 .execution-events {
   overflow: hidden;
   margin: 0;
-  --execution-tree-background: var(--inspector-background);
+  --execution-tree-background: var(--app-background);
 }
 
 .execution-event.model > .execution-tree-marker {
@@ -447,6 +446,7 @@
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
+  user-select: none;
 }
 
 .execution-event-context {

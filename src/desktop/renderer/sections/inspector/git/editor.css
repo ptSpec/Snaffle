@@ -28,7 +28,80 @@
   filter: brightness(1.08);
 }
 
+.git-editor-remove {
+  position: absolute;
+  z-index: 8;
+  min-height: 28px;
+  padding: 4px 9px;
+  color: var(--text-primary);
+  background: var(--panel);
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 24%);
+  font: 600 calc(12px * var(--interface-font-scale))/1 var(--font-interface);
+}
+
+.git-editor-remove:hover:not(:disabled) {
+  background: var(--hover-background);
+}
+
 .git-editor-ask:disabled {
   cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.git-editor-note {
+  position: absolute;
+  z-index: 9;
+  display: grid;
+  gap: 8px;
+  width: 280px;
+  max-width: calc(100% - 16px);
+  padding: 9px;
+  background: var(--panel);
+  border: 1px solid var(--border-default);
+  border-radius: 9px;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 30%);
+}
+
+.git-editor-note textarea {
+  width: 100%;
+  padding: 7px 8px;
+  resize: none;
+  color: var(--text-primary);
+  background: var(--app-background);
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  outline: none;
+  font: inherit;
+  line-height: 1.35;
+}
+
+.git-editor-note textarea:focus {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 72%, var(--border-focus));
+}
+
+.git-editor-note > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.git-editor-note button {
+  padding: 6px 8px;
+  color: var(--text-primary);
+  background: var(--control-background);
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+}
+
+.git-editor-note button.primary {
+  color: var(--primary-text);
+  background: var(--primary);
+  border-color: var(--primary);
+  font-weight: 600;
+}
+
+.git-editor-note button:disabled {
   opacity: 0.62;
 }

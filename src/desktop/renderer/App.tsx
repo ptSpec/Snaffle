@@ -15,6 +15,7 @@ import type { ImageUnderstandingProfile } from "../../attachments/vision.js";
 import type { CommandApprovalDecision } from "../../protocol.js";
 import {
   MAX_KEPT_ASIDE_MESSAGES,
+  type CodeSelectionAttachment,
   type CodeSelectionInput,
   type DesktopApi,
   type DesktopRunEvent,
@@ -142,6 +143,7 @@ const initialState: DesktopState = {
   microsandboxDetail: "Checking Microsandbox…",
   themeId: document.documentElement.dataset.theme ?? DEFAULT_THEME.id,
   animationsEnabled: document.documentElement.dataset.animations !== "off",
+  expandWorkDetails: false,
   interfaceFont: fontById(document.documentElement.dataset.interfaceFont)?.id ?? DEFAULT_FONTS.interface,
   primaryFont: fontById(document.documentElement.dataset.primaryFont)?.id ?? DEFAULT_FONTS.primary,
   secondaryFont: fontById(document.documentElement.dataset.secondaryFont)?.id ?? DEFAULT_FONTS.secondary,
@@ -201,8 +203,9 @@ export function App(): JSX.Element {
   const [selectedProviderConnectionId, setSelectedProviderConnectionId] = useState("openrouter");
   const [providerAllowances, setProviderAllowances] = useState<Record<string, ProviderAllowance | null>>({});
   const [task, setTask] = useState("");
-  const speechDraft = useRef("");
+  const speechDraft = useRef({ prefix: "", suffix: "" });
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentPreview[]>([]);
+  const [codeSelectionAttachments, setCodeSelectionAttachments] = useState<CodeSelectionAttachment[]>([]);
   const [draggingAttachments, setDraggingAttachments] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -240,6 +243,8 @@ export function App(): JSX.Element {
   const timelineView = useRef<HTMLDivElement>(null);
   const timelineContent = useRef<HTMLDivElement>(null);
   const timelineScrollTop = useRef(0);
+  const timelineDisclosureActive = useRef(false);
+  const timelineDisclosureTimer = useRef<number | undefined>(undefined);
   const executionMode = useRef<HTMLDetailsElement>(null);
   const composerAdd = useRef<HTMLDetailsElement>(null);
   const searchOpenedAt = useRef(0);
@@ -283,8 +288,14 @@ export function App(): JSX.Element {
       setError(event.error);
       return;
     }
-    const base = speechDraft.current.trimEnd();
-    setTask([base, event.text.trim()].filter(Boolean).join(base ? " " : ""));
+    const transcript = event.text.trim();
+    if (!transcript) return;
+    const { prefix, suffix } = speechDraft.current;
+    const before = prefix && !/\s$/.test(prefix) ? " " : "";
+    const after = suffix && !/^[\s.,!?;:)\]}]/.test(suffix) ? " " : "";
+    setTask(`${prefix}${before}${transcript}${after}${suffix}`);
+    const caret = prefix.length + before.length + transcript.length;
+    requestAnimationFrame(() => taskInput.current?.setSelectionRange(caret, caret));
   }), []);
 
   async function checkForUpdates(): Promise<void> {
@@ -509,6 +520,7 @@ export function App(): JSX.Element {
     const view = timelineView.current;
     if (view && followTimeline.current) {
       view.scrollTop = view.scrollHeight;
+      timelineScrollTop.current = view.scrollTop;
       setShowJumpToLatest(false);
     }
   }, [timeline]);
@@ -518,8 +530,13 @@ export function App(): JSX.Element {
     const content = timelineContent.current;
     if (view !== "conversation" || !timeline || !content) return;
     const observer = new ResizeObserver(() => {
-      if (!followTimeline.current) return;
+      if (!followTimeline.current) {
+        const distanceFromBottom = timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight;
+        setShowJumpToLatest(distanceFromBottom > timeline.clientHeight * 0.4);
+        return;
+      }
       timeline.scrollTop = timeline.scrollHeight;
+      timelineScrollTop.current = timeline.scrollTop;
       setShowJumpToLatest(false);
     });
     observer.observe(content);
@@ -530,9 +547,12 @@ export function App(): JSX.Element {
     if (view !== "conversation") return;
     const timeline = timelineView.current;
     if (!timeline) return;
-    timeline.scrollTop = followTimeline.current
-      ? timeline.scrollHeight
-      : timelineScrollTop.current;
+    if (followTimeline.current) {
+      timeline.scrollTop = timeline.scrollHeight;
+      timelineScrollTop.current = timeline.scrollTop;
+    } else {
+      timeline.scrollTop = timelineScrollTop.current;
+    }
   }, [view]);
 
   useEffect(() => {
@@ -1188,13 +1208,16 @@ export function App(): JSX.Element {
     }
   }
 
-  async function attachCodeSelection(input: CodeSelectionInput): Promise<void> {
+  async function attachCodeSelection(input: CodeSelectionInput): Promise<string> {
     if (pendingAttachments.length >= 8) throw new Error("Attach at most 8 files to one message");
-    await addAttachments([await window.desktop.importCodeSelection(input)]);
-    window.setTimeout(() => taskInput.current?.focus(), 0);
+    const attachment = await window.desktop.importCodeSelection(input);
+    const [accepted] = await addAttachments([attachment]);
+    if (!accepted) throw new Error("That selection is already attached");
+    setCodeSelectionAttachments((current) => [...current, { id: accepted.id, ...input }]);
+    return accepted.id;
   }
 
-  async function addAttachments(imported: AttachmentPreview[]): Promise<void> {
+  async function addAttachments(imported: AttachmentPreview[]): Promise<AttachmentPreview[]> {
     const fingerprints = new Set(pendingAttachments.map((attachment) => attachment.fingerprint));
     const unique = imported.filter((attachment) => {
       if (fingerprints.has(attachment.fingerprint)) return false;
@@ -1216,6 +1239,7 @@ export function App(): JSX.Element {
       if (threadId) threadAttachments.current.set(threadId, next);
       return next;
     });
+    return accepted;
   }
 
   async function dropAttachments(event: ReactDragEvent<HTMLFormElement>): Promise<void> {
@@ -1251,7 +1275,7 @@ export function App(): JSX.Element {
     insertTaskText(plain, event.currentTarget);
   }
 
-  async function removeAttachment(attachment: AttachmentPreview): Promise<void> {
+  async function removeAttachment(attachment: Pick<AttachmentPreview, "id">): Promise<void> {
     setPendingAttachments((current) => {
       const next = current.filter((item) => item.id !== attachment.id);
       const threadId = desktopState.activeThreadId;
@@ -1657,6 +1681,16 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setExpandWorkDetails(expandWorkDetails: boolean): Promise<void> {
+    try {
+      await window.desktop.setExpandWorkDetails(expandWorkDetails);
+      setDesktopState((state) => ({ ...state, expandWorkDetails }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   async function setMaxSteps(maxSteps: number): Promise<void> {
     try {
       await window.desktop.setMaxSteps(maxSteps);
@@ -1915,6 +1949,7 @@ export function App(): JSX.Element {
       await Promise.all([
         window.desktop.setTheme(DEFAULT_THEME.id),
         window.desktop.setAnimationsEnabled(true),
+        window.desktop.setExpandWorkDetails(false),
         window.desktop.setTypography(DEFAULT_FONTS.interface, DEFAULT_FONTS.primary, DEFAULT_FONTS.secondary, DEFAULT_FONTS.code),
         window.desktop.setTypographyScale("interface", DEFAULT_FONT_SCALE),
         window.desktop.setTypographyScale("conversation", DEFAULT_FONT_SCALE),
@@ -1930,6 +1965,7 @@ export function App(): JSX.Element {
         ...state,
         themeId: DEFAULT_THEME.id,
         animationsEnabled: true,
+        expandWorkDetails: false,
         interfaceFont: DEFAULT_FONTS.interface,
         primaryFont: DEFAULT_FONTS.primary,
         secondaryFont: DEFAULT_FONTS.secondary,
@@ -2129,8 +2165,18 @@ export function App(): JSX.Element {
     }
   }
 
+  function prepareSpeechRecognition(): void {
+    const input = taskInput.current;
+    const draft = input?.value ?? task;
+    const start = Math.min(input?.selectionStart ?? draft.length, draft.length);
+    const end = input?.selectionEnd ?? start;
+    speechDraft.current = {
+      prefix: draft.slice(0, start),
+      suffix: draft.slice(end),
+    };
+  }
+
   async function startSpeechRecognition(): Promise<void> {
-    speechDraft.current = task;
     try {
       setError(null);
       await window.desktop.startSpeechRecognition(
@@ -2388,6 +2434,7 @@ export function App(): JSX.Element {
             page={settingsPage}
             themeId={desktopState.themeId}
             animationsEnabled={desktopState.animationsEnabled}
+            expandWorkDetails={desktopState.expandWorkDetails}
             interfaceFont={desktopState.interfaceFont}
             primaryFont={desktopState.primaryFont}
             secondaryFont={desktopState.secondaryFont}
@@ -2429,6 +2476,7 @@ export function App(): JSX.Element {
             onResetAppearance={() => void resetAppearance()}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
             onAnimationsEnabled={(enabled) => void setAnimationsEnabled(enabled)}
+            onExpandWorkDetails={(enabled) => void setExpandWorkDetails(enabled)}
             onTypography={(interfaceFont, primary, secondary, code) => void setTypography(interfaceFont, primary, secondary, code)}
             onTypographyScale={(role, value) => void setTypographyScale(role, value)}
             onCodeBlockFontSize={(size) => void setCodeBlockFontSize(size)}
@@ -2488,14 +2536,28 @@ export function App(): JSX.Element {
               ref={timelineView}
               className="timeline"
               aria-live="polite"
+              onClickCapture={(event) => {
+                if (!(event.target instanceof Element) || !event.target.closest("[data-timeline-disclosure]")) return;
+                followTimeline.current = false;
+                timelineScrollTop.current = event.currentTarget.scrollTop;
+                timelineDisclosureActive.current = true;
+                if (timelineDisclosureTimer.current !== undefined) {
+                  window.clearTimeout(timelineDisclosureTimer.current);
+                }
+                timelineDisclosureTimer.current = window.setTimeout(() => {
+                  timelineDisclosureActive.current = false;
+                  timelineDisclosureTimer.current = undefined;
+                }, 250);
+              }}
               onScroll={(event) => {
                 const view = event.currentTarget;
                 const scrolledUp = view.scrollTop < timelineScrollTop.current - 1;
                 timelineScrollTop.current = view.scrollTop;
                 const distanceFromBottom = view.scrollHeight - view.scrollTop - view.clientHeight;
-                const following = !scrolledUp && distanceFromBottom < 80;
+                const following = !timelineDisclosureActive.current &&
+                  (distanceFromBottom < 80 || (followTimeline.current && !scrolledUp));
                 followTimeline.current = following;
-                setShowJumpToLatest(distanceFromBottom > view.clientHeight * 0.4);
+                setShowJumpToLatest(!following && distanceFromBottom > view.clientHeight * 0.4);
               }}
             >
               <div ref={timelineContent}>
@@ -2507,6 +2569,7 @@ export function App(): JSX.Element {
                     selectedId={selectedItemId}
                     turnRunning={running && currentTurnItemIds.has(item.id)}
                     activeToolPreviewId={activeToolPreviewId}
+                    expandWorkDetails={desktopState.expandWorkDetails}
                     fileChangeSummary={answerFileChanges.get(item.id)}
                     reasoningModelCalls={reasoningModelCalls}
                     onSelect={(id) => {
@@ -2564,6 +2627,7 @@ export function App(): JSX.Element {
                   followTimeline.current = true;
                   setShowJumpToLatest(false);
                   view.scrollTop = view.scrollHeight;
+                  timelineScrollTop.current = view.scrollTop;
                 }}
               >
                 <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -2646,6 +2710,7 @@ export function App(): JSX.Element {
             onQueue={queueFollowUp}
             onCancelQueued={cancelQueuedFollowUp}
             onSlashCommand={() => setCommandMode("slash")}
+            onVoicePrepare={prepareSpeechRecognition}
             onVoiceStart={startSpeechRecognition}
             onVoiceAudio={(samples, sampleRate) => window.desktop.sendSpeechAudio(samples, sampleRate)}
             onVoiceStop={stopSpeechRecognition}
@@ -2693,6 +2758,9 @@ export function App(): JSX.Element {
               onGitDetailOpen={handleGitDetailOpen}
               onGitRepositoryState={setGitRepositoryReady}
               onAskSelection={attachCodeSelection}
+              codeSelectionAttachments={codeSelectionAttachments.filter((selection) =>
+                pendingAttachments.some((attachment) => attachment.id === selection.id))}
+              onRemovePendingAttachment={(id) => removeAttachment({ id })}
               onGitWalkthrough={(result) => {
                 const workspaceId = desktopState.workspace?.id;
                 if (workspaceId) setGitWalkthrough({ workspaceId, result, open: true });

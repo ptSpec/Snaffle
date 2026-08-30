@@ -449,13 +449,10 @@ test("tool input healer accepts the legacy top-level edit shape", () => {
   );
 });
 
-test("edit schema advertises single and multiple replacement shapes", () => {
+test("edit schema advertises single and multiple replacement shapes without anyOf", () => {
   const schema = editTool.inputSchema;
   assert.deepEqual(schema.required, ["path"]);
-  assert.deepEqual(schema.anyOf, [
-    { required: ["oldText", "newText"] },
-    { required: ["edits"] },
-  ]);
+  assert.equal(schema.anyOf, undefined);
   assert.ok((schema.properties as Record<string, unknown>).oldText);
   assert.ok((schema.properties as Record<string, unknown>).newText);
   assert.ok((schema.properties as Record<string, unknown>).edits);

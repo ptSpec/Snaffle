@@ -18,6 +18,7 @@ export function ExecutionToolPreview({
   selected,
   turnRunning,
   autoExpanded,
+  defaultExpanded,
   statusClass,
   duration,
   disclosureCommand,
@@ -27,6 +28,7 @@ export function ExecutionToolPreview({
   selected: boolean;
   turnRunning: boolean;
   autoExpanded: boolean;
+  defaultExpanded: boolean;
   statusClass: string;
   duration?: string | undefined;
   disclosureCommand?: { id: number; open: boolean } | null;
@@ -34,7 +36,7 @@ export function ExecutionToolPreview({
 }): JSX.Element | null {
   const preview = previewFor(item);
   const autoReveal = autoExpanded && document.documentElement.dataset.animations !== "off";
-  const [open, setOpen] = useState(autoReveal);
+  const [open, setOpen] = useState(autoReveal || defaultExpanded);
   const manuallyToggled = useRef(false);
 
   useEffect(() => {
@@ -42,6 +44,7 @@ export function ExecutionToolPreview({
   }, [disclosureCommand]);
 
   useEffect(() => {
+    if (defaultExpanded) return;
     if (!autoReveal && document.documentElement.dataset.animations === "off") {
       if (!manuallyToggled.current) setOpen(false);
       return;
@@ -58,7 +61,7 @@ export function ExecutionToolPreview({
     const remaining = Math.max(0, visibleAt + 1_500 - Date.now());
     const timeout = window.setTimeout(() => setOpen(false), remaining);
     return () => window.clearTimeout(timeout);
-  }, [autoReveal, item.completedAt, item.startedAt, turnRunning]);
+  }, [autoReveal, defaultExpanded, item.completedAt, item.startedAt, turnRunning]);
 
   if (!preview) return null;
 
@@ -68,6 +71,7 @@ export function ExecutionToolPreview({
       <button
         className={`tool-row execution-tool-row ${statusClass}${selected ? " selected" : ""}`}
         type="button"
+        data-timeline-disclosure=""
         aria-expanded={open}
         title="Inspect tool call and toggle result"
         onClick={() => {
@@ -156,7 +160,7 @@ function CommandPreview({ preview, running }: { preview: CommandData; running: b
 
   async function copyCommand(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(preview.command);
+      await window.desktop.writeClipboardText(preview.command);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1_200);
     } catch {

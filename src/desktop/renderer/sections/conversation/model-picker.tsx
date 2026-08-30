@@ -196,6 +196,7 @@ export function ModelPicker({
                   type="button"
                   className={providerId === "all" ? "active" : ""}
                   title="All providers"
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() => { setProviderId("all"); setActiveIndex(0); }}
                 >
                   <svg className="all-providers-mark" viewBox="0 0 20 20" aria-hidden="true">
@@ -208,6 +209,7 @@ export function ModelPicker({
                     className={providerId === provider.id ? "active" : ""}
                     title={provider.name}
                     key={provider.id}
+                    onMouseDown={(event) => event.preventDefault()}
                     onClick={() => { setProviderId(provider.id); setActiveIndex(0); }}
                   >
                     <span className={provider.logo ? "provider-filter-mark logo" : "provider-filter-mark"}>

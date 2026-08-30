@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -98,7 +99,7 @@ export function Sidebar({
       setPromotion(null);
       return;
     }
-    if (!threadId || threadId === promotedThreadId) return;
+    if (!threadId || threadId === promotedThreadId || selecting) return;
     const pendingThreadId = threadId;
 
     function promote(): void {
@@ -111,21 +112,29 @@ export function Sidebar({
       setPromotedThreadId(pendingThreadId);
     }
 
+    const sidebar = sidebarRoot.current;
     let promotionTimer: number | undefined;
 
-    function promoteFromOutside(event: Event): void {
-      if (sidebarRoot.current?.contains(event.target as Node) || promotionTimer !== undefined) return;
-      promotionTimer = window.setTimeout(promote, 650);
+    function cancelPromotion(): void {
+      if (promotionTimer === undefined) return;
+      window.clearTimeout(promotionTimer);
+      promotionTimer = undefined;
     }
 
-    document.addEventListener("pointerdown", promoteFromOutside);
-    document.addEventListener("keydown", promoteFromOutside);
+    function schedulePromotion(): void {
+      if (promotionTimer !== undefined) return;
+      promotionTimer = window.setTimeout(promote, 180);
+    }
+
+    sidebar?.addEventListener("pointerleave", schedulePromotion);
+    sidebar?.addEventListener("pointerenter", cancelPromotion);
+    if (!sidebar?.matches(":hover")) schedulePromotion();
     return () => {
-      document.removeEventListener("pointerdown", promoteFromOutside);
-      document.removeEventListener("keydown", promoteFromOutside);
-      if (promotionTimer !== undefined) window.clearTimeout(promotionTimer);
+      sidebar?.removeEventListener("pointerleave", schedulePromotion);
+      sidebar?.removeEventListener("pointerenter", cancelPromotion);
+      cancelPromotion();
     };
-  }, [state.workspace?.id, state.activeThreadId, promotedThreadId]);
+  }, [state.workspace?.id, state.activeThreadId, promotedThreadId, selecting]);
 
   useEffect(() => {
     if (!selecting) return;
@@ -136,6 +145,21 @@ export function Sidebar({
     const frame = window.requestAnimationFrame(() => threadList.current?.focus());
     return () => window.cancelAnimationFrame(frame);
   }, [selecting]);
+
+  useLayoutEffect(() => {
+    if (!selecting) return;
+    const list = threadList.current;
+    const row = list?.querySelector<HTMLElement>(".thread-row.focused");
+    if (!list || !row) return;
+    const listBounds = list.getBoundingClientRect();
+    const rowBounds = row.getBoundingClientRect();
+    const padding = 8;
+    if (rowBounds.top < listBounds.top + padding) {
+      list.scrollTop -= listBounds.top + padding - rowBounds.top;
+    } else if (rowBounds.bottom > listBounds.bottom - padding) {
+      list.scrollTop += rowBounds.bottom - (listBounds.bottom - padding);
+    }
+  }, [cursor, selecting]);
 
   async function chooseWorkspace(): Promise<void> {
     onError(null);
@@ -230,6 +254,14 @@ export function Sidebar({
     }
   }
 
+  async function copyThreadTitle(title: string): Promise<void> {
+    try {
+      await window.desktop.writeClipboardText(title);
+    } catch (cause) {
+      onError(errorMessage(cause));
+    }
+  }
+
   function openThreadMenu(event: ReactMouseEvent, thread: DesktopThread): void {
     if (!state.workspace) return;
     event.preventDefault();
@@ -248,6 +280,7 @@ export function Sidebar({
           label: menu.thread.bookmarked ? "Remove bookmark" : "Bookmark thread",
           action: () => void toggleBookmark(menu.thread.id, !menu.thread.bookmarked),
         },
+        { label: "Copy thread title", action: () => void copyThreadTitle(menu.thread.title) },
         { label: revealWorkspaceLabel(), action: () => void revealWorkspace(menu.workspaceId) },
         {
           label: "Delete thread",
@@ -562,6 +595,7 @@ export function Sidebar({
                         active={thread.id === state.activeThreadId || thread.id === promotedThreadId}
                         selected={thread.id === state.activeThreadId}
                         bridged={thread.id === promotedThreadId}
+                        pinned={!selecting && thread.id === promotedThreadId}
                         promotionDistance={promotion?.id === thread.id ? promotion.distance : 0}
                         demotionDistance={promotion?.previousId === thread.id ? promotion.distance : 0}
                         selecting={selecting}
@@ -714,6 +748,7 @@ function ThreadRow({
   active,
   selected,
   bridged,
+  pinned,
   promotionDistance,
   demotionDistance,
   selecting,
@@ -732,6 +767,7 @@ function ThreadRow({
   active: boolean;
   selected: boolean;
   bridged: boolean;
+  pinned: boolean;
   promotionDistance: number;
   demotionDistance: number;
   selecting: boolean;
@@ -749,6 +785,7 @@ function ThreadRow({
   if (active) className += " active";
   if (selected) className += " selected";
   if (bridged) className += " bridged";
+  if (pinned) className += " pinned";
   if (promotionDistance) className += " promoted";
   if (demotionDistance) className += " demoted";
   if (focused) className += " focused";

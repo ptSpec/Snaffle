@@ -1,9 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export type SidebarContextMenuItem = {
   label: string;
   disabled?: boolean;
   danger?: boolean;
+  separated?: boolean;
   action(): void;
 };
 
@@ -19,6 +21,16 @@ export function SidebarContextMenu({
   onClose(): void;
 }): JSX.Element {
   const element = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ top, left });
+
+  useLayoutEffect(() => {
+    const bounds = element.current?.getBoundingClientRect();
+    if (!bounds) return;
+    setPosition({
+      top: Math.max(6, Math.min(top, window.innerHeight - bounds.height - 6)),
+      left: Math.max(6, Math.min(left, window.innerWidth - bounds.width - 6)),
+    });
+  }, [left, top]);
 
   useEffect(() => {
     function closeOutside(event: PointerEvent): void {
@@ -35,11 +47,11 @@ export function SidebarContextMenu({
     };
   }, [onClose]);
 
-  return (
-    <div className="sidebar-context-menu" ref={element} role="menu" style={{ top, left }}>
+  return createPortal(
+    <div className="sidebar-context-menu" ref={element} role="menu" style={position}>
       {items.map((item) => (
         <button
-          className={item.danger ? "danger" : undefined}
+          className={[item.danger ? "danger" : "", item.separated ? "separated" : ""].filter(Boolean).join(" ") || undefined}
           type="button"
           role="menuitem"
           disabled={item.disabled}
@@ -52,6 +64,7 @@ export function SidebarContextMenu({
           {item.label}
         </button>
       ))}
-    </div>
+    </div>,
+    document.body,
   );
 }

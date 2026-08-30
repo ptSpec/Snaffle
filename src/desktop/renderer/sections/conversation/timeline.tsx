@@ -10,6 +10,7 @@ import {
 } from "./file-tool-preview.js";
 import { ExecutionToolPreview, isExecutionPreviewTool } from "./execution-tool-preview.js";
 import { CopyIcon, MarkdownContent } from "./markdown.js";
+import { SidebarContextMenu as ContextMenu, type SidebarContextMenuItem as ContextMenuItem } from "../sidebar/context-menu.js";
 import {
   toolGeneratingLabel,
   toolStatus,
@@ -27,6 +28,7 @@ export function TimelineEntry({
   selectedId,
   turnRunning = false,
   activeToolPreviewId = null,
+  expandWorkDetails = false,
   activityDisclosureCommand,
   fileChangeSummary,
   reasoningModelCalls,
@@ -52,6 +54,7 @@ export function TimelineEntry({
   selectedId: string | null;
   turnRunning?: boolean;
   activeToolPreviewId?: string | null;
+  expandWorkDetails?: boolean;
   activityDisclosureCommand?: ActivityDisclosureCommand | null;
   fileChangeSummary?: FileChangeSummary | undefined;
   reasoningModelCalls?: ReadonlyMap<string, ModelCallTimelineItem>;
@@ -82,6 +85,7 @@ export function TimelineEntry({
         selectedId={selectedId}
         turnRunning={turnRunning}
         activeToolPreviewId={activeToolPreviewId}
+        defaultExpanded={expandWorkDetails}
         {...(reasoningModelCalls ? { reasoningModelCalls } : {})}
         onSelect={onSelect}
         {...(onOpenFile ? { onOpenFile } : {})}
@@ -98,6 +102,7 @@ export function TimelineEntry({
       <ReasoningEntry
         item={item}
         selected={Boolean(modelCall && modelCall.id === selectedId)}
+        defaultExpanded={expandWorkDetails}
         {...(activityDisclosureCommand !== undefined ? { disclosureCommand: activityDisclosureCommand } : {})}
         {...(modelCall ? {
           durationMs: modelCall.durationMs,
@@ -154,6 +159,7 @@ export function TimelineEntry({
           selected={item.id === selectedId}
           turnRunning={turnRunning}
           autoExpanded={item.id === activeToolPreviewId}
+          defaultExpanded={expandWorkDetails}
           statusClass={status.className}
           duration={item.durationMs ? formatDuration(item.durationMs) : undefined}
           {...(activityDisclosureCommand !== undefined ? { disclosureCommand: activityDisclosureCommand } : {})}
@@ -169,6 +175,7 @@ export function TimelineEntry({
           selected={item.id === selectedId}
           turnRunning={turnRunning}
           autoExpanded={item.id === activeToolPreviewId}
+          defaultExpanded={expandWorkDetails}
           statusClass={status.className}
           duration={item.durationMs ? formatDuration(item.durationMs) : undefined}
           {...(activityDisclosureCommand !== undefined ? { disclosureCommand: activityDisclosureCommand } : {})}
@@ -352,6 +359,7 @@ function ActivityGroup({
   selectedId,
   turnRunning,
   activeToolPreviewId,
+  defaultExpanded,
   reasoningModelCalls,
   onSelect,
   onOpenFile,
@@ -363,6 +371,7 @@ function ActivityGroup({
   selectedId: string | null;
   turnRunning: boolean;
   activeToolPreviewId: string | null;
+  defaultExpanded: boolean;
   reasoningModelCalls?: ReadonlyMap<string, ModelCallTimelineItem>;
   onSelect: (id: string) => void;
   onOpenFile?: (path: string) => void;
@@ -370,7 +379,7 @@ function ActivityGroup({
   onChooseSandboxFolder?: () => Promise<string | null>;
   onGrantSandboxAccess?: (id: string, inputs: SandboxAccessInput[]) => Promise<void>;
 }): JSX.Element {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultExpanded);
   const [disclosureCommand, setDisclosureCommand] = useState<ActivityDisclosureCommand | null>(null);
   const items = item.items.filter(isVisibleActivityItem);
 
@@ -382,7 +391,7 @@ function ActivityGroup({
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
-      <summary className="activity-disclosure-summary">
+      <summary className="activity-disclosure-summary" data-timeline-disclosure="">
         <span className="activity-summary-copy">
           <strong>Work details</strong>
           <small>{activityGroupMetadata(items)}</small>
@@ -390,23 +399,25 @@ function ActivityGroup({
       </summary>
       {open ? (
         <>
-          {!turnRunning ? (
+          {!turnRunning && items.length > 3 ? (
             <div className="activity-group-actions">
               <button
                 type="button"
+                data-timeline-disclosure=""
                 onClick={() => setDisclosureCommand((current) => ({ id: (current?.id ?? 0) + 1, open: true }))}
               >
                 Expand all
               </button>
               <button
                 type="button"
+                data-timeline-disclosure=""
                 onClick={() => setDisclosureCommand((current) => ({ id: (current?.id ?? 0) + 1, open: false }))}
               >
                 Collapse all
               </button>
             </div>
           ) : null}
-          <div className="execution-tree activity-group-body">
+          <div className={`execution-tree activity-group-body${items.length === 1 ? " single" : ""}`}>
             {items.map((child) => {
               const childStatus = activityItemStatus(child);
               return (
@@ -418,6 +429,7 @@ function ActivityGroup({
                       selectedId={selectedId}
                       turnRunning={turnRunning}
                       activeToolPreviewId={activeToolPreviewId}
+                      expandWorkDetails={defaultExpanded}
                       activityDisclosureCommand={disclosureCommand}
                       {...(reasoningModelCalls ? { reasoningModelCalls } : {})}
                       onSelect={onSelect}
@@ -701,20 +713,54 @@ function MessageFooter({
   canKeepAside?: boolean;
   onToggleKeptAside?: () => void;
 }): JSX.Element {
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const [contextMenu, setContextMenu] = useState<{ top: number; left: number; selection: string } | null>(null);
+  const footer = useRef<HTMLElement>(null);
 
-  async function copy(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1200);
-    } catch {
-      setCopied(false);
+  useEffect(() => {
+    const message = footer.current?.closest("article.message");
+    if (!message) return;
+    const messageElement = message;
+    function open(event: Event): void {
+      if (!(event instanceof MouseEvent)) return;
+      event.preventDefault();
+      const selection = window.getSelection();
+      const selectionInside = selection && !selection.isCollapsed && selection.anchorNode && selection.focusNode &&
+        messageElement.contains(selection.anchorNode) && messageElement.contains(selection.focusNode);
+      setContextMenu({ top: event.clientY, left: event.clientX, selection: selectionInside ? selection.toString() : "" });
     }
+    messageElement.addEventListener("contextmenu", open);
+    return () => messageElement.removeEventListener("contextmenu", open);
+  }, []);
+
+  async function copy(value = text): Promise<void> {
+    try {
+      await window.desktop.writeClipboardText(value);
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+    window.setTimeout(() => setCopyState("idle"), 1200);
   }
 
+  const copyLabel = copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy";
+  const contextItems: ContextMenuItem[] = contextMenu ? [
+    ...(contextMenu.selection ? [{ label: "Copy selection", action: () => void copy(contextMenu.selection) }] : []),
+    { label: "Copy entire message", action: () => void copy(), separated: Boolean(contextMenu.selection) },
+    ...(compact
+      ? [
+          ...(onFork ? [{ label: "Fork from here", action: onFork, separated: true }] : []),
+          ...(onEdit ? [{ label: "Edit message", action: onEdit }] : []),
+        ]
+      : [
+          ...(onSave ? [{ label: saved ? "Remove saved message" : "Save message", action: onSave, separated: true }] : []),
+          ...(onToggleKeptAside ? [{ label: keptAside ? "Remove from kept aside" : "Keep aside", action: onToggleKeptAside }] : []),
+          ...(onFork ? [{ label: "Fork from here", action: onFork }] : []),
+        ]),
+  ] : [];
+
   return (
-    <footer className="message-footer">
+    <footer className="message-footer" ref={footer}>
       <span className="message-metadata">{metadata}</span>
       <span className={compact ? "message-actions compact" : "message-actions"}>
         {children}
@@ -723,7 +769,6 @@ function MessageFooter({
             className={saved ? "message-save saved" : "message-save"}
             type="button"
             onClick={onSave}
-            title={saved ? "Remove saved message" : "Save message"}
             aria-label={saved ? "Remove saved message" : "Save message"}
           >
             <BookmarkIcon filled={saved} />
@@ -736,25 +781,29 @@ function MessageFooter({
             type="button"
             disabled={!keptAside && !canKeepAside}
             onClick={onToggleKeptAside}
-            title={keptAside ? "Remove from kept aside" : canKeepAside ? "Keep aside" : `You can keep up to ${MAX_KEPT_ASIDE_MESSAGES} messages aside`}
-            aria-label={keptAside ? "Remove from kept aside" : "Keep aside"}
+            aria-label={keptAside ? "Remove from kept aside" : canKeepAside ? "Keep aside" : `You can keep up to ${MAX_KEPT_ASIDE_MESSAGES} messages aside`}
           >
             <AsideIcon />
             <span className="action-label">{keptAside ? "Kept aside" : "Keep aside"}</span>
           </button>
         ) : null}
         {onFork ? (
-          <button type="button" onClick={onFork} title="Fork from this message" aria-label="Fork from this message">
+          <button type="button" onClick={onFork} aria-label="Fork from this message">
             <ForkIcon />
             <span className="action-label">Fork</span>
           </button>
         ) : null}
-        <button type="button" onClick={() => void copy()} title="Copy message" aria-label="Copy message">
+        <button
+          className={copyState === "failed" ? "copy-failed" : undefined}
+          type="button"
+          onClick={() => void copy()}
+          aria-label={copyState === "idle" ? "Copy message" : copyLabel}
+        >
           <CopyIcon />
-          <span className="action-label">{copied ? "Copied" : "Copy"}</span>
+          <span className="action-label">{copyLabel}</span>
         </button>
         {onEdit ? (
-          <button type="button" onClick={onEdit} title="Edit message" aria-label="Edit message">
+          <button type="button" onClick={onEdit} aria-label="Edit message">
             <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="m3 11.5-.5 2 2-.5 7.7-7.7-1.5-1.5zM9.7 4.8l1.5 1.5" />
             </svg>
@@ -762,6 +811,14 @@ function MessageFooter({
           </button>
         ) : null}
       </span>
+      {contextMenu ? (
+        <ContextMenu
+          top={contextMenu.top}
+          left={contextMenu.left}
+          items={contextItems}
+          onClose={() => setContextMenu(null)}
+        />
+      ) : null}
     </footer>
   );
 }
@@ -829,21 +886,26 @@ function ReasoningEntry({
   item,
   selected,
   durationMs,
+  defaultExpanded,
   disclosureCommand,
   onInspect,
 }: {
   item: Extract<TimelineItem, { kind: "reasoning" }>;
   selected: boolean;
   durationMs?: number | undefined;
+  defaultExpanded: boolean;
   disclosureCommand?: ActivityDisclosureCommand | null;
   onInspect?: () => void;
 }): JSX.Element {
-  const [open, setOpen] = useState(item.streaming);
+  const [open, setOpen] = useState(item.streaming || defaultExpanded);
   const [now, setNow] = useState(Date.now());
   const textRef = useRef<HTMLDivElement>(null);
   const followText = useRef(true);
 
-  useEffect(() => setOpen(item.streaming), [item.streaming]);
+  useEffect(() => {
+    if (item.streaming) setOpen(true);
+    else if (!defaultExpanded) setOpen(false);
+  }, [defaultExpanded, item.streaming]);
   useEffect(() => {
     if (disclosureCommand) setOpen(disclosureCommand.open);
   }, [disclosureCommand]);
@@ -864,6 +926,7 @@ function ReasoningEntry({
       <button
         className="activity-disclosure-summary"
         type="button"
+        data-timeline-disclosure=""
         aria-expanded={open}
         onClick={() => {
           if (onInspect) {
