@@ -2545,6 +2545,7 @@ export function App(): JSX.Element {
             onInstallSpeechModel={(model) => void installSpeechModel(model)}
             onRemoveSpeechModel={(model) => void removeSpeechModel(model)}
             onSaveProvider={saveProviderConnection}
+            onRefreshProviderModels={loadModels}
             onRemoveProvider={removeProviderConnection}
             onTestProvider={(input) => window.desktop.getProviderStatus(input)}
             onMcpEnabled={(enabled) => void setMcpEnabled(enabled)}

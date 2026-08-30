@@ -98,6 +98,7 @@ export function Settings({
   onInstallSpeechModel,
   onRemoveSpeechModel,
   onSaveProvider,
+  onRefreshProviderModels,
   onRemoveProvider,
   onTestProvider,
   onMcpEnabled,
@@ -179,6 +180,7 @@ export function Settings({
   onInstallSpeechModel: (model: SpeechModel) => void;
   onRemoveSpeechModel: (model: SpeechModel) => void;
   onSaveProvider(input: ProviderConnectionInput): Promise<void>;
+  onRefreshProviderModels(): Promise<void>;
   onRemoveProvider(id: string): Promise<void>;
   onTestProvider(input: ProviderConnectionInput): Promise<ProviderStatus>;
   onMcpEnabled(enabled: boolean): void;
@@ -212,6 +214,7 @@ export function Settings({
         loadingCatalogs={loadingProviderModels}
         error={error}
         onSave={onSaveProvider}
+        onRefresh={onRefreshProviderModels}
         onRemove={onRemoveProvider}
         onTest={onTestProvider}
       />
