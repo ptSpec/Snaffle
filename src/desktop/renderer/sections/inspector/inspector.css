@@ -4,7 +4,7 @@
   flex-direction: column;
   min-width: 0;
   container-type: inline-size;
-  padding: 48px 0 14px 8px;
+  padding: var(--panel-header-offset) 0 14px 8px;
   overflow: hidden;
   background: var(--app-background);
 }
@@ -17,10 +17,6 @@
 
 .platform-darwin .sidebar-brand {
   padding: 8px 12px 8px 80px;
-}
-
-.platform-darwin .inspector {
-  padding-top: 8px;
 }
 
 .platform-darwin .panel-reopen {

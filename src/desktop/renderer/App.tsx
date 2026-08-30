@@ -86,6 +86,11 @@ import {
   TimelineEntry,
 } from "./sections/conversation/timeline.js";
 import {
+  playInterfaceSound,
+  setInterfaceSoundsEnabled,
+  soundForRunEvent,
+} from "./interface-sounds.js";
+import {
   fileChangeSummaries,
   latestToolPreviewId,
 } from "./sections/conversation/file-tool-preview.js";
@@ -143,6 +148,7 @@ const initialState: DesktopState = {
   microsandboxDetail: "Checking Microsandbox…",
   themeId: document.documentElement.dataset.theme ?? DEFAULT_THEME.id,
   animationsEnabled: document.documentElement.dataset.animations !== "off",
+  soundsEnabled: true,
   expandWorkDetails: false,
   interfaceFont: fontById(document.documentElement.dataset.interfaceFont)?.id ?? DEFAULT_FONTS.interface,
   primaryFont: fontById(document.documentElement.dataset.primaryFont)?.id ?? DEFAULT_FONTS.primary,
@@ -250,6 +256,7 @@ export function App(): JSX.Element {
   const searchOpenedAt = useRef(0);
   const terminalUnmountTimer = useRef<number | undefined>(undefined);
   const runProviderConnections = useRef<Record<string, string>>({});
+  const userStoppedRuns = useRef(new Set<string>());
 
   const refreshProviderAllowance = useCallback(async (connectionId: string): Promise<void> => {
     try {
@@ -282,6 +289,10 @@ export function App(): JSX.Element {
         : [...current.speechModels, status],
     }));
   }), []);
+
+  useEffect(() => {
+    setInterfaceSoundsEnabled(desktopState.soundsEnabled);
+  }, [desktopState.soundsEnabled]);
 
   useEffect(() => window.desktop.onSpeechTranscript((event) => {
     if (event.error) {
@@ -408,12 +419,14 @@ export function App(): JSX.Element {
   const rightWidthValue = useRef(rightWidth);
   const leftCollapsedValue = useRef(leftCollapsed);
   const activeThreadId = useRef<string | null>(null);
+  const viewValue = useRef<AppView>(view);
   const threadTimelines = useRef(new Map<string, TimelineItem[]>());
   const threadAttachments = useRef(new Map<string, AttachmentPreview[]>());
   const queuedFollowUps = useRef(new Map<string, QueuedFollowUp>());
   rightWidthValue.current = rightWidth;
   leftCollapsedValue.current = leftCollapsed;
   inspectorTabValue.current = inspectorTab;
+  viewValue.current = view;
   const running = desktopState.activeThreadId
     ? desktopState.runningThreadIds.includes(desktopState.activeThreadId)
     : false;
@@ -703,6 +716,23 @@ export function App(): JSX.Element {
         threadTimelines.current.set(threadId, next);
         if (activeThreadId.current === threadId) setTimeline(next);
       });
+
+      if (
+        event.type === "permission.requested" ||
+        event.type === "run.completed" ||
+        event.type === "run.failed"
+      ) {
+        const userStopped = event.type === "run.failed"
+          ? userStoppedRuns.current.delete(threadId)
+          : false;
+        if (event.type === "run.completed") userStoppedRuns.current.delete(threadId);
+        const sound = soundForRunEvent(event.type, {
+          background: !document.hasFocus() || activeThreadId.current !== threadId || viewValue.current !== "conversation",
+          queued: queuedFollowUps.current.has(threadId),
+          userStopped,
+        });
+        if (sound) playInterfaceSound(sound);
+      }
 
       if (event.type === "provider.waiting") {
         setProviderWaits((current) => ({
@@ -1365,9 +1395,11 @@ export function App(): JSX.Element {
     const threadId = desktopState.activeThreadId;
     if (!threadId) return;
 
+    userStoppedRuns.current.add(threadId);
     try {
-      await window.desktop.stopRun(threadId);
+      if (!await window.desktop.stopRun(threadId)) userStoppedRuns.current.delete(threadId);
     } catch (cause) {
+      userStoppedRuns.current.delete(threadId);
       setError(errorMessage(cause));
     }
   }
@@ -1681,6 +1713,16 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setSoundsEnabled(soundsEnabled: boolean): Promise<void> {
+    try {
+      await window.desktop.setSoundsEnabled(soundsEnabled);
+      setDesktopState((state) => ({ ...state, soundsEnabled }));
+      setError(null);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
   async function setExpandWorkDetails(expandWorkDetails: boolean): Promise<void> {
     try {
       await window.desktop.setExpandWorkDetails(expandWorkDetails);
@@ -1949,6 +1991,7 @@ export function App(): JSX.Element {
       await Promise.all([
         window.desktop.setTheme(DEFAULT_THEME.id),
         window.desktop.setAnimationsEnabled(true),
+        window.desktop.setSoundsEnabled(true),
         window.desktop.setExpandWorkDetails(false),
         window.desktop.setTypography(DEFAULT_FONTS.interface, DEFAULT_FONTS.primary, DEFAULT_FONTS.secondary, DEFAULT_FONTS.code),
         window.desktop.setTypographyScale("interface", DEFAULT_FONT_SCALE),
@@ -1965,6 +2008,7 @@ export function App(): JSX.Element {
         ...state,
         themeId: DEFAULT_THEME.id,
         animationsEnabled: true,
+        soundsEnabled: true,
         expandWorkDetails: false,
         interfaceFont: DEFAULT_FONTS.interface,
         primaryFont: DEFAULT_FONTS.primary,
@@ -2166,6 +2210,7 @@ export function App(): JSX.Element {
   }
 
   function prepareSpeechRecognition(): void {
+    setError(null);
     const input = taskInput.current;
     const draft = input?.value ?? task;
     const start = Math.min(input?.selectionStart ?? draft.length, draft.length);
@@ -2434,6 +2479,7 @@ export function App(): JSX.Element {
             page={settingsPage}
             themeId={desktopState.themeId}
             animationsEnabled={desktopState.animationsEnabled}
+            soundsEnabled={desktopState.soundsEnabled}
             expandWorkDetails={desktopState.expandWorkDetails}
             interfaceFont={desktopState.interfaceFont}
             primaryFont={desktopState.primaryFont}
@@ -2476,6 +2522,7 @@ export function App(): JSX.Element {
             onResetAppearance={() => void resetAppearance()}
             onSelectTheme={(themeId) => void selectTheme(themeId)}
             onAnimationsEnabled={(enabled) => void setAnimationsEnabled(enabled)}
+            onSoundsEnabled={(enabled) => void setSoundsEnabled(enabled)}
             onExpandWorkDetails={(enabled) => void setExpandWorkDetails(enabled)}
             onTypography={(interfaceFont, primary, secondary, code) => void setTypography(interfaceFont, primary, secondary, code)}
             onTypographyScale={(role, value) => void setTypographyScale(role, value)}
@@ -2498,6 +2545,7 @@ export function App(): JSX.Element {
             onInstallSpeechModel={(model) => void installSpeechModel(model)}
             onRemoveSpeechModel={(model) => void removeSpeechModel(model)}
             onSaveProvider={saveProviderConnection}
+            onRefreshProviderModels={loadModels}
             onRemoveProvider={removeProviderConnection}
             onTestProvider={(input) => window.desktop.getProviderStatus(input)}
             onMcpEnabled={(enabled) => void setMcpEnabled(enabled)}
@@ -2684,6 +2732,7 @@ export function App(): JSX.Element {
             queuedMessage={queuedFollowUp?.request.task ?? null}
             voiceEnabled={desktopState.speech.enabled}
             voiceAutoStopOnSilence={desktopState.speech.autoStopOnSilence}
+            soundsEnabled={desktopState.soundsEnabled}
             voiceReady={desktopState.speechModels.some(
               (model) => model.id === desktopState.speech.localModel && model.phase === "ready",
             )}
@@ -2711,6 +2760,7 @@ export function App(): JSX.Element {
             onCancelQueued={cancelQueuedFollowUp}
             onSlashCommand={() => setCommandMode("slash")}
             onVoicePrepare={prepareSpeechRecognition}
+            onVoiceError={setError}
             onVoiceStart={startSpeechRecognition}
             onVoiceAudio={(samples, sampleRate) => window.desktop.sendSpeechAudio(samples, sampleRate)}
             onVoiceStop={stopSpeechRecognition}

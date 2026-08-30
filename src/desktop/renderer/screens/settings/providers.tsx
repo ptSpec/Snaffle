@@ -16,6 +16,7 @@ export function ProviderSettings({
   loadingCatalogs,
   error,
   onSave,
+  onRefresh,
   onRemove,
   onTest,
 }: {
@@ -24,6 +25,7 @@ export function ProviderSettings({
   loadingCatalogs: boolean;
   error: string | null;
   onSave(input: ProviderConnectionInput): Promise<void>;
+  onRefresh(): Promise<void>;
   onRemove(id: string): Promise<void>;
   onTest(input: ProviderConnectionInput): Promise<ProviderStatus>;
 }): JSX.Element {
@@ -206,6 +208,7 @@ export function ProviderSettings({
               isNew={selectedId === NEW_CONNECTION}
               loading={loadingCatalogs}
               catalog={catalog}
+              onRefresh={onRefresh}
             />
 
             {selectedId !== NEW_CONNECTION ? <div className="setting-field provider-models-setting">
@@ -409,16 +412,18 @@ function DiscoveryStatus({
   isNew,
   loading,
   catalog,
+  onRefresh,
 }: {
   isNew: boolean;
   loading: boolean;
   catalog: ProviderCatalog | undefined;
+  onRefresh(): Promise<void>;
 }): JSX.Element {
   let title = "Model discovery has not run";
   let detail = "Save this provider to check its model catalog.";
   let tone = "pending";
 
-  if (!isNew && loading && !catalog) {
+  if (!isNew && loading) {
     title = "Checking model discovery…";
     detail = "Snaffle is asking this connection for its available models.";
   } else if (catalog?.error) {
@@ -442,10 +447,31 @@ function DiscoveryStatus({
   }
 
   return (
-    <div className={`provider-discovery ${tone}`} role="status">
+    <div className={`provider-discovery ${tone}`}>
       <span className="provider-discovery-dot" aria-hidden="true" />
-      <span><strong>{title}</strong><small>{detail}</small></span>
+      <span role="status"><strong>{title}</strong><small>{detail}</small></span>
+      {!isNew ? (
+        <button
+          className="provider-discovery-refresh"
+          type="button"
+          disabled={loading}
+          onClick={() => void onRefresh()}
+          aria-label="Refresh discovered models"
+          title="Refresh models from saved connections"
+        >
+          <RefreshIcon />
+        </button>
+      ) : null}
     </div>
+  );
+}
+
+function RefreshIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M13.5 6A5.5 5.5 0 1 0 14 10" />
+      <path d="M14 2v4h-4" />
+    </svg>
   );
 }
 

@@ -69,6 +69,7 @@ export function Composer({
   voiceEnabled,
   voiceReady,
   voiceAutoStopOnSilence,
+  soundsEnabled,
   onTask,
   onSubmit,
   onDragging,
@@ -93,6 +94,7 @@ export function Composer({
   onCancelQueued,
   onSlashCommand,
   onVoicePrepare,
+  onVoiceError,
   onVoiceStart,
   onVoiceAudio,
   onVoiceStop,
@@ -560,7 +562,9 @@ export function Composer({
               disabled={preparing || !voiceReady}
               platform={platform}
               stopAfterSilence={voiceAutoStopOnSilence}
+              soundsEnabled={soundsEnabled}
               onPrepare={onVoicePrepare}
+              onError={onVoiceError}
               onStart={onVoiceStart}
               onAudio={onVoiceAudio}
               onStop={onVoiceStop}
@@ -806,6 +810,7 @@ type ComposerProps = {
   voiceEnabled: boolean;
   voiceReady: boolean;
   voiceAutoStopOnSilence: boolean;
+  soundsEnabled: boolean;
   onTask(value: string): void;
   onSubmit(event: FormEvent<HTMLFormElement>): void;
   onDragging(value: boolean): void;
@@ -830,6 +835,7 @@ type ComposerProps = {
   onCancelQueued(): void;
   onSlashCommand(): void;
   onVoicePrepare(): void;
+  onVoiceError(message: string): void;
   onVoiceStart(): Promise<void>;
   onVoiceAudio(samples: Float32Array, sampleRate: number): void;
   onVoiceStop(): Promise<void>;

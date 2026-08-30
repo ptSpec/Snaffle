@@ -139,6 +139,7 @@ const mcpManager = new McpManager();
 let configuredMcpServers: McpServerConfig[] = [];
 let activeTheme: Theme = DEFAULT_THEME;
 let animationsEnabled = true;
+let soundsEnabled = true;
 let expandWorkDetails = false;
 let interfaceFont: FontId = DEFAULT_FONTS.interface;
 let primaryFont: FontId = DEFAULT_FONTS.primary;
@@ -193,6 +194,7 @@ async function start(): Promise<void> {
       ? themeById(settings.themeId) ?? DEFAULT_THEME
       : DEFAULT_THEME;
   animationsEnabled = settings.animationsEnabled !== false;
+  soundsEnabled = settings.soundsEnabled !== false;
   expandWorkDetails = settings.expandWorkDetails === true;
   speech = supportedSpeechSettings(settings.speech);
   interfaceFont = fontById(settings.interfaceFont)?.id ?? DEFAULT_FONTS.interface;
@@ -518,6 +520,12 @@ function registerIpc(): void {
     if (typeof value !== "boolean") throw new Error("Animations must be enabled or disabled");
     animationsEnabled = value;
     saveSettings({ animationsEnabled });
+  });
+
+  ipcMain.handle("desktop:set-sounds-enabled", (_event, value: unknown): void => {
+    if (typeof value !== "boolean") throw new Error("Sounds must be enabled or disabled");
+    soundsEnabled = value;
+    saveSettings({ soundsEnabled });
   });
 
   ipcMain.handle("desktop:set-expand-work-details", (_event, value: unknown): void => {
@@ -897,6 +905,7 @@ async function desktopState(includeConversation = true): Promise<DesktopState> {
     microsandboxDetail: microsandbox.detail,
     themeId: activeTheme.id,
     animationsEnabled,
+    soundsEnabled,
     expandWorkDetails,
     interfaceFont,
     primaryFont,
