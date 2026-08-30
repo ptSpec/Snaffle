@@ -1063,13 +1063,15 @@ export function App(): JSX.Element {
     const active = activeThreadId.current === request.threadId;
 
     if (active) followTimeline.current = true;
-    appendUserMessage(request.threadId, request.task, attachments);
-    if (active) {
-      setTask("");
-      setPendingAttachments([]);
-      setExplicitlyActiveTools([]);
+    if (!request.resume) {
+      appendUserMessage(request.threadId, request.task, attachments);
+      if (active) {
+        setTask("");
+        setPendingAttachments([]);
+        setExplicitlyActiveTools([]);
+      }
+      threadAttachments.current.delete(request.threadId);
     }
-    threadAttachments.current.delete(request.threadId);
     setDesktopState((state) => ({
       ...state,
       runningThreadIds: [...new Set([...state.runningThreadIds, request.threadId])],
@@ -1087,16 +1089,42 @@ export function App(): JSX.Element {
         ...state,
         runningThreadIds: state.runningThreadIds.filter((id) => id !== request.threadId),
       }));
-      if (active) {
+      if (active && !request.resume) {
         setTask(request.task);
         setPendingAttachments(attachments);
         setExplicitlyActiveTools(request.explicitlyActiveTools ?? []);
       }
-      threadAttachments.current.set(request.threadId, attachments);
+      if (!request.resume) threadAttachments.current.set(request.threadId, attachments);
       setError(errorMessage(cause));
       return false;
     }
     return true;
+  }
+
+  async function retryInterruptedRun(errorId: string): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId || running || preparing) return;
+    if (!desktopState.workspace || !selectedModel || !selectedCatalog || !selectedProviderModel) {
+      setError("Select an available model before retrying.");
+      return;
+    }
+    if (selectedCatalog.error && selectedCatalog.models.length === 0) {
+      setError("The selected provider connection is unavailable.");
+      return;
+    }
+    if (selectedProviderModel.toolUseUnavailableReason) {
+      setError(selectedProviderModel.toolUseUnavailableReason);
+      return;
+    }
+
+    setError(null);
+    const followUp = prepareRunRequest(threadId, "", [], []);
+    followUp.request.resume = true;
+    if (!await submitPreparedTask(followUp)) return;
+    const current = threadTimelines.current.get(threadId) ?? timeline;
+    const next = current.filter((item) => item.id !== errorId);
+    threadTimelines.current.set(threadId, next);
+    if (activeThreadId.current === threadId) setTimeline(next);
   }
 
   function queueFollowUp(): void {
@@ -2650,6 +2678,9 @@ export function App(): JSX.Element {
                         input?.setSelectionRange(text.length, text.length);
                       });
                     }}
+                    {...(!running && item.kind === "error"
+                      ? { onRetry: () => void retryInterruptedRun(item.id) }
+                      : {})}
                     {...(!running ? { onRestore: (sequence) => void restoreThread(sequence) } : {})}
                     {...(!running ? { onRegenerate: (sequence) => void regenerateResponse(sequence) } : {})}
                     {...(!running ? { onFork: (sequence) => void forkThread(sequence) } : {})}

@@ -628,10 +628,13 @@ html[data-appearance="dark"] .jump-to-latest {
 }
 
 .markdown-content :not(pre) > code {
-  padding: 2px 5px;
+  padding: 1px 4px;
   color: var(--text-strong);
-  background: var(--card-background);
-  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-radius: 3px;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 55%, transparent);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
   font: 0.9em var(--font-code);
 }
 
@@ -924,23 +927,83 @@ html[data-appearance="dark"] .markdown-content .code-block {
 }
 
 .message.error {
-  color: var(--status-danger-text);
-  background: var(--message-danger-background);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--status-danger-text) 5%, var(--card-background));
+  border: 1px solid color-mix(in srgb, var(--status-danger-text) 28%, var(--border-default));
+  border-left: 3px solid color-mix(in srgb, var(--status-danger-text) 72%, var(--border-default));
 }
 
-.restore-thread {
+.message-error-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 9px;
+}
+
+.message-error-heading > span:last-child {
+  display: grid;
+  gap: 1px;
+}
+
+.message-error-heading strong {
+  color: var(--text-strong);
+  font-size: calc(14px * var(--interface-font-scale));
+}
+
+.message-error-heading small {
+  color: var(--text-muted);
+  font-size: calc(11px * var(--interface-font-scale));
+}
+
+.message-error-mark {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--status-danger-text);
+  border: 1px solid color-mix(in srgb, var(--status-danger-text) 58%, transparent);
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.message.error > p {
+  color: var(--text-secondary);
+  font-size: calc(13px * var(--interface-font-scale));
+}
+
+.message-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
   margin-top: 12px;
+}
+
+.message-error-actions button {
   padding: 7px 10px;
-  border: 1px solid currentColor;
-  border-radius: 8px;
-  color: inherit;
+  color: var(--text-secondary);
   background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
   font: inherit;
   cursor: pointer;
 }
 
-.restore-thread:hover {
-  background: color-mix(in srgb, currentColor 10%, transparent);
+.message-error-actions .retry-thread {
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.message-error-actions button:hover {
+  filter: brightness(1.05);
+}
+
+.message-error-actions .restore-thread:hover {
+  color: var(--text-primary);
+  background: var(--hover-background);
 }
 
 .message-label {

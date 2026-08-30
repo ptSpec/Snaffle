@@ -376,6 +376,7 @@ export function addRunEvent(
 
   if (event.type === "run.failed") {
     setTimeline((items) => {
+      if (event.stopped) return stopActivity(items);
       const restoreSequence = [...items].reverse().find((item) => item.kind === "user")?.sequence;
       return [
         ...stopActivity(items),
