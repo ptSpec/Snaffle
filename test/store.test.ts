@@ -199,6 +199,17 @@ test("forking a thread copies history through one message and preserves its sour
     "first answer",
   ]);
   assert.equal((await store.messages(sourceThreadId)).length, 5);
+
+  await store.setThreadBranchLabel(forkThreadId, "Try a smaller parser");
+  const renamed = (await store.state()).workspaces[0]!.threads.find(
+    (thread) => thread.id === forkThreadId,
+  )!;
+  assert.equal(renamed.title, "Try a smaller parser");
+  assert.equal(renamed.branchLabel, "Try a smaller parser");
+  assert.equal(
+    await store.setGeneratedThreadTitle(forkThreadId, renamed.title, "Generated replacement"),
+    false,
+  );
 });
 
 test("conversation search finds prefixes and follows updated messages", async (t) => {

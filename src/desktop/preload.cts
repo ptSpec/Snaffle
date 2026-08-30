@@ -47,6 +47,8 @@ const api: DesktopApi = {
     ipcRenderer.invoke("desktop:set-thread-subagent-mode", threadId, mode),
   restoreThread: (threadId: string, sequence: number) =>
     ipcRenderer.invoke("desktop:restore-thread", threadId, sequence),
+  setThreadBranchLabel: (threadId: string, label: string) =>
+    ipcRenderer.invoke("desktop:set-thread-branch-label", threadId, label),
   setThreadBookmarked: (threadId: string, bookmarked: boolean) =>
     ipcRenderer.invoke("desktop:set-thread-bookmarked", threadId, bookmarked),
   deleteThreads: (threadIds: string[]) =>

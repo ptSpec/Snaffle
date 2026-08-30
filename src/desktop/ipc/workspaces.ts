@@ -78,6 +78,15 @@ export function registerWorkspaceIpc(options: {
     if (typeof draft !== "string") throw new Error("Draft must be text");
     await store.setDraft(id(threadId, "Thread"), draft);
   });
+  ipcMain.handle("desktop:set-thread-branch-label", async (
+    _event,
+    threadValue: unknown,
+    labelValue: unknown,
+  ): Promise<DesktopState> => {
+    const label = branchLabel(labelValue);
+    await store.setThreadBranchLabel(id(threadValue, "Thread"), label);
+    return state(false);
+  });
   ipcMain.handle("desktop:set-thread-subagent-mode", async (
     _event,
     threadValue: unknown,
@@ -119,6 +128,14 @@ export function registerWorkspaceIpc(options: {
 function id(value: unknown, label: string): string {
   if (typeof value !== "string" || !value) throw new Error(`${label} ID must be text`);
   return value;
+}
+
+function branchLabel(value: unknown): string {
+  if (typeof value !== "string") throw new Error("Branch label must be text");
+  const label = value.trim();
+  if (!label) throw new Error("Branch label cannot be empty");
+  if (label.length > 120) throw new Error("Branch label must be 120 characters or fewer");
+  return label;
 }
 
 function ids(value: unknown): string[] {

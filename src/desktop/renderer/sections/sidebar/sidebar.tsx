@@ -12,6 +12,7 @@ import type { DesktopState, DesktopThread, DesktopUpdateState, DesktopWorkspace 
 import type { BookmarksPage } from "../../screens/bookmarks/bookmarks.js";
 import { ThinkingOrb } from "../../components/thinking-orb.js";
 import { SidebarContextMenu, type SidebarContextMenuItem } from "./context-menu.js";
+import { buildThreadTreeRows } from "./thread-tree.js";
 
 export type AppView = "conversation" | "saved" | "search" | "settings";
 export type SettingsPage = "appearance" | "providers" | "editor" | "voice" | "agent" | "model" | "context" | "web" | "mcp" | "updates";
@@ -61,6 +62,7 @@ export function Sidebar({
 }): JSX.Element {
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [collapsedThreadIds, setCollapsedThreadIds] = useState<Set<string>>(new Set());
   const [cursor, setCursor] = useState(0);
   const [anchor, setAnchor] = useState(0);
   const [promotedThreadId, setPromotedThreadId] = useState(state.activeThreadId);
@@ -78,10 +80,8 @@ export function Sidebar({
   const isRunning = (threadId: string): boolean => runningThreadIds.includes(threadId);
   const updatePending = ["available", "downloading", "ready"].includes(updateState.status);
   const threads = state.workspace?.threads ?? [];
-  const promotedThread = threads.find((thread) => thread.id === promotedThreadId);
-  const orderedThreads = promotedThread
-    ? [promotedThread, ...threads.filter((thread) => thread.id !== promotedThread.id)]
-    : threads;
+  const treeRows = buildThreadTreeRows(threads, collapsedThreadIds, promotedThreadId);
+  const orderedThreads = treeRows.map(({ thread }) => thread);
   const inactiveWorkspaces = state.workspaces.filter(
     (workspace) => workspace.id !== state.workspace?.id,
   );
@@ -89,6 +89,10 @@ export function Sidebar({
     setSelecting(false);
     setSelectedIds([]);
   }, [state.workspace?.id, state.activeThreadId]);
+
+  useEffect(() => {
+    setCollapsedThreadIds(new Set());
+  }, [state.workspace?.id]);
 
   useEffect(() => {
     const workspaceId = state.workspace?.id;
@@ -212,6 +216,25 @@ export function Sidebar({
     }
   }
 
+  async function renameBranch(thread: DesktopThread): Promise<void> {
+    const label = window.prompt("Branch name", thread.branchLabel ?? thread.title);
+    if (label === null || label.trim() === thread.title) return;
+    try {
+      onUpdate(await window.desktop.setThreadBranchLabel(thread.id, label));
+    } catch (cause) {
+      onError(errorMessage(cause));
+    }
+  }
+
+  function toggleThreadBranch(threadId: string): void {
+    setCollapsedThreadIds((current) => {
+      const next = new Set(current);
+      if (next.has(threadId)) next.delete(threadId);
+      else next.add(threadId);
+      return next;
+    });
+  }
+
   async function deleteThreads(ids: string[]): Promise<void> {
     if (ids.length === 0) return;
     if (ids.some(isRunning)) {
@@ -276,6 +299,21 @@ export function Sidebar({
   const menuItems: SidebarContextMenuItem[] = menu?.kind === "thread"
     ? [
         { label: "Open thread", action: () => void selectThread(menu.thread.id) },
+        ...(menu.thread.sourceThreadId && menu.thread.sourceEntryId
+          ? [sourceThreadExists(menu.thread.sourceThreadId)
+            ? {
+                label: "Open source message",
+                action: () => onOpenThreadSource(menu.thread),
+              }
+            : {
+                label: "Source thread deleted",
+                disabled: true,
+                action: () => {},
+              }]
+          : []),
+        ...(menu.thread.sourceThreadId
+          ? [{ label: "Rename branch", action: () => void renameBranch(menu.thread) }]
+          : []),
         {
           label: menu.thread.bookmarked ? "Remove bookmark" : "Bookmark thread",
           action: () => void toggleBookmark(menu.thread.id, !menu.thread.bookmarked),
@@ -306,6 +344,12 @@ export function Sidebar({
           },
         ]
       : [];
+
+  function sourceThreadExists(threadId: string): boolean {
+    return state.workspaces.some((workspace) =>
+      workspace.threads.some((thread) => thread.id === threadId)
+    );
+  }
 
   function handleThreadKeys(event: ReactKeyboardEvent<HTMLDivElement>): void {
     if (!selecting) return;
@@ -587,10 +631,14 @@ export function Sidebar({
                   aria-label={selecting ? "Manage threads" : undefined}
                 >
                   <div className="thread-list">
-                    {orderedThreads.map((thread, index) => (
+                    {treeRows.map(({ thread, depth, hasChildren, inPreferredPath }, index) => (
                       <ThreadRow
                         key={thread.id}
                         thread={thread}
+                        depth={depth}
+                        hasChildren={hasChildren}
+                        collapsed={collapsedThreadIds.has(thread.id)}
+                        inActivePath={inPreferredPath}
                         sourceTitle={threads.find((candidate) => candidate.id === thread.sourceThreadId)?.title}
                         active={thread.id === state.activeThreadId || thread.id === promotedThreadId}
                         selected={thread.id === state.activeThreadId}
@@ -603,9 +651,7 @@ export function Sidebar({
                         focused={selecting && index === cursor}
                         running={isRunning(thread.id)}
                         onSelect={() => void selectThread(thread.id)}
-                        {...(thread.sourceThreadId && thread.sourceEntryId
-                          ? { onOpenSource: () => onOpenThreadSource(thread) }
-                          : {})}
+                        onToggleBranch={() => toggleThreadBranch(thread.id)}
                         onToggleSelected={() => {
                           setCursor(index);
                           setAnchor(index);
@@ -744,6 +790,10 @@ export function Sidebar({
 
 function ThreadRow({
   thread,
+  depth,
+  hasChildren,
+  collapsed,
+  inActivePath,
   sourceTitle,
   active,
   selected,
@@ -756,13 +806,17 @@ function ThreadRow({
   focused,
   running,
   onSelect,
-  onOpenSource,
+  onToggleBranch,
   onToggleSelected,
   onToggleBookmark,
   onDelete,
   onContextMenu,
 }: {
   thread: DesktopThread;
+  depth: number;
+  hasChildren: boolean;
+  collapsed: boolean;
+  inActivePath: boolean;
   sourceTitle: string | undefined;
   active: boolean;
   selected: boolean;
@@ -775,7 +829,7 @@ function ThreadRow({
   focused: boolean;
   running: boolean;
   onSelect: () => void;
-  onOpenSource?: () => void;
+  onToggleBranch: () => void;
   onToggleSelected: () => void;
   onToggleBookmark: () => void;
   onDelete: () => void;
@@ -789,15 +843,24 @@ function ThreadRow({
   if (promotionDistance) className += " promoted";
   if (demotionDistance) className += " demoted";
   if (focused) className += " focused";
+  if (depth > 0) className += " tree-child";
+  if (hasChildren) className += " tree-parent";
+  if (collapsed) className += " tree-collapsed";
+  if (inActivePath) className += " tree-active-path";
 
   const motionDistance = promotionDistance || demotionDistance;
+  const style = {
+    "--thread-depth": depth,
+    ...(motionDistance ? { "--thread-rise-distance": `${motionDistance}px` } : {}),
+  } as CSSProperties;
 
   return (
     <div
       className={className}
-      style={motionDistance ? { "--thread-rise-distance": `${motionDistance}px` } as CSSProperties : undefined}
+      style={style}
       onContextMenu={onContextMenu}
     >
+      {depth > 0 ? <span className="thread-tree-guide" aria-hidden="true" /> : null}
       {selecting ? (
         <input
           className="selection-checkbox"
@@ -808,15 +871,16 @@ function ThreadRow({
           aria-label={`Select ${thread.title}`}
         />
       ) : null}
-      {!selecting && onOpenSource ? (
+      {hasChildren && !selecting ? (
         <button
-          className="thread-fork-marker"
+          className="thread-tree-toggle"
           type="button"
-          onClick={onOpenSource}
-          title={`Open source: ${sourceTitle ?? "source thread"}`}
-          aria-label={`Open source thread ${sourceTitle ?? ""}`.trim()}
+          onClick={onToggleBranch}
+          aria-label={`${collapsed ? "Expand" : "Collapse"} branches from ${thread.title}`}
+          aria-expanded={!collapsed}
+          title={collapsed ? "Expand branches" : "Collapse branches"}
         >
-          <ThreadForkIcon />
+          <ChevronIcon />
         </button>
       ) : null}
       <button
@@ -883,13 +947,10 @@ function ArchiveIcon(): JSX.Element {
   );
 }
 
-function ThreadForkIcon(): JSX.Element {
+function ChevronIcon(): JSX.Element {
   return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <circle cx="4" cy="3" r="1.5" />
-      <circle cx="12" cy="5" r="1.5" />
-      <circle cx="12" cy="12" r="1.5" />
-      <path d="M4 4.5v2.25A5.25 5.25 0 0 0 9.25 12H10.5M4 6.5A5.5 5.5 0 0 1 9.5 5H10.5" />
+    <svg viewBox="0 0 12 12" fill="none" aria-hidden="true">
+      <path d="m3.5 4.5 2.5 2.5 2.5-2.5" />
     </svg>
   );
 }

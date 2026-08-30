@@ -278,6 +278,7 @@ export interface DesktopApi {
   setThreadDraft(threadId: string, draft: string): Promise<void>;
   setThreadSubagentMode(threadId: string, mode: ThreadSubagentMode): Promise<DesktopState>;
   restoreThread(threadId: string, sequence: number): Promise<DesktopState>;
+  setThreadBranchLabel(threadId: string, label: string): Promise<DesktopState>;
   setThreadBookmarked(threadId: string, bookmarked: boolean): Promise<DesktopState>;
   deleteThreads(threadIds: string[]): Promise<DesktopState>;
   removeWorkspace(workspaceId: string): Promise<DesktopState>;
