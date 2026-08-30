@@ -166,6 +166,7 @@ export type DesktopState = {
   microsandboxDetail: string;
   themeId: string;
   animationsEnabled: boolean;
+  soundsEnabled: boolean;
   expandWorkDetails: boolean;
   interfaceFont: FontId;
   primaryFont: FontId;
@@ -319,6 +320,7 @@ export interface DesktopApi {
   resolveCommandApproval(id: string, decision: CommandApprovalDecision): Promise<DesktopState>;
   setTheme(themeId: string): Promise<void>;
   setAnimationsEnabled(enabled: boolean): Promise<void>;
+  setSoundsEnabled(enabled: boolean): Promise<void>;
   setExpandWorkDetails(enabled: boolean): Promise<void>;
   setSpeechSettings(settings: SpeechSettings): Promise<DesktopState>;
   installSpeechModel(model: SpeechModel): Promise<SpeechModelStatus[]>;

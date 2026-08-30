@@ -311,6 +311,16 @@ textarea:disabled {
   overflow: hidden;
 }
 
+.app-shell {
+  --native-titlebar-height: env(titlebar-area-height, 40px);
+  --panel-header-offset: calc(var(--native-titlebar-height) + 4px);
+}
+
+.app-shell.platform-darwin {
+  --native-titlebar-height: 0px;
+  --panel-header-offset: 8px;
+}
+
 .workspace-shell {
   --terminal-height: min(32vh, 300px);
 
@@ -483,6 +493,10 @@ body.resizing-columns .workspace-shell {
   -webkit-app-region: drag;
 }
 
+.platform-linux .sidebar-brand {
+  padding-left: max(18px, calc(env(titlebar-area-x, 0px) + 8px));
+}
+
 .brand-wordmark {
   display: inline-flex;
   align-items: center;
@@ -636,7 +650,7 @@ body.resizing-columns .workspace-shell {
 .panel-reopen {
   position: absolute;
   z-index: 21;
-  top: 48px;
+  top: var(--panel-header-offset);
 }
 
 .panel-reopen.left {

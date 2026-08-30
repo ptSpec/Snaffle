@@ -548,6 +548,11 @@
   font-size: calc(12px * var(--interface-font-scale));
 }
 
+.approval-card:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
 .approval-card > code {
   display: block;
   max-height: 110px;

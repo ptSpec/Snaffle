@@ -32,6 +32,7 @@ export function Settings({
   page,
   themeId,
   animationsEnabled,
+  soundsEnabled,
   expandWorkDetails,
   interfaceFont,
   primaryFont,
@@ -74,6 +75,7 @@ export function Settings({
   onResetAppearance,
   onSelectTheme,
   onAnimationsEnabled,
+  onSoundsEnabled,
   onExpandWorkDetails,
   onTypography,
   onTypographyScale,
@@ -96,6 +98,7 @@ export function Settings({
   onInstallSpeechModel,
   onRemoveSpeechModel,
   onSaveProvider,
+  onRefreshProviderModels,
   onRemoveProvider,
   onTestProvider,
   onMcpEnabled,
@@ -111,6 +114,7 @@ export function Settings({
   page: SettingsPage;
   themeId: string;
   animationsEnabled: boolean;
+  soundsEnabled: boolean;
   expandWorkDetails: boolean;
   interfaceFont: FontId;
   primaryFont: FontId;
@@ -153,6 +157,7 @@ export function Settings({
   onResetAppearance: () => void;
   onSelectTheme: (themeId: string) => void;
   onAnimationsEnabled: (enabled: boolean) => void;
+  onSoundsEnabled: (enabled: boolean) => void;
   onExpandWorkDetails: (enabled: boolean) => void;
   onTypography: (interfaceFont: FontId, primary: FontId, secondary: FontId, code: FontId) => void;
   onTypographyScale: (role: "interface" | "conversation", value: number) => void;
@@ -175,6 +180,7 @@ export function Settings({
   onInstallSpeechModel: (model: SpeechModel) => void;
   onRemoveSpeechModel: (model: SpeechModel) => void;
   onSaveProvider(input: ProviderConnectionInput): Promise<void>;
+  onRefreshProviderModels(): Promise<void>;
   onRemoveProvider(id: string): Promise<void>;
   onTestProvider(input: ProviderConnectionInput): Promise<ProviderStatus>;
   onMcpEnabled(enabled: boolean): void;
@@ -208,6 +214,7 @@ export function Settings({
         loadingCatalogs={loadingProviderModels}
         error={error}
         onSave={onSaveProvider}
+        onRefresh={onRefreshProviderModels}
         onRemove={onRemoveProvider}
         onTest={onTestProvider}
       />
@@ -444,6 +451,18 @@ export function Settings({
                 type="checkbox"
                 checked={animationsEnabled}
                 onChange={(event) => onAnimationsEnabled(event.target.checked)}
+              />
+            </label>
+            <label className="setting-field">
+              <span>
+                <strong>Sounds</strong>
+                <small>Play cues for voice input, attention, background completion, and failures.</small>
+              </span>
+              <input
+                className="selection-checkbox"
+                type="checkbox"
+                checked={soundsEnabled}
+                onChange={(event) => onSoundsEnabled(event.target.checked)}
               />
             </label>
             <label className="setting-field">

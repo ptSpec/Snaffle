@@ -488,21 +488,7 @@ function ApprovalEntry({
   const [scope, setScope] = useState<SandboxAccessInput["scope"]>("thread");
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [granting, setGranting] = useState(false);
-
-  if (item.decision) {
-    const label = item.decision === "deny"
-      ? "Extra access denied"
-      : item.decision === "once"
-        ? "Extra access allowed once"
-        : item.decision === "response"
-          ? "Unrestricted access allowed for this response"
-        : item.decision === "sandbox"
-          ? item.fileAccess
-            ? "Folder added; file operation retried"
-            : "Folder added; command retried in the sandbox"
-          : "Extra access allowed for this thread";
-    return <div className={`approval-result ${item.decision}`}>{label}</div>;
-  }
+  const card = useRef<HTMLElement>(null);
 
   const networkRequest = item.reason.includes("requests network access");
   const hostHomeRequest = item.reason.includes("references the host home directory");
@@ -539,9 +525,57 @@ function ApprovalEntry({
   }
 
   const canGrantFolders = !networkRequest && !hostHomeRequest && Boolean(onChooseSandboxFolder && onGrantSandboxAccess);
+  const mac = window.desktop.platform === "darwin";
+  const allowShortcut = mac ? "⌘+Enter" : "Ctrl+Enter";
+  const denyShortcut = mac ? "⌘+Backspace" : "Ctrl+Backspace";
+
+  function handleShortcut(event: KeyboardEvent): void {
+    const primary = mac ? event.metaKey : event.ctrlKey;
+    if (!primary || event.altKey || event.repeat) return;
+    if (event.key === "Enter" && folders.length && canGrantFolders) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!granting) void grantFolders();
+      return;
+    }
+    if (event.key === "Backspace") {
+      event.preventDefault();
+      event.stopPropagation();
+      onResolve?.(item.id, "deny");
+    }
+  }
+
+  useEffect(() => {
+    if (item.decision) return;
+    function keydown(event: KeyboardEvent): void {
+      if (event.defaultPrevented) return;
+      const focused = card.current?.contains(document.activeElement) ?? false;
+      const onlyPendingApproval = document.querySelectorAll("[data-pending-approval]").length === 1;
+      if (!focused && !onlyPendingApproval) return;
+      handleShortcut(event);
+    }
+
+    document.addEventListener("keydown", keydown, { capture: true });
+    return () => document.removeEventListener("keydown", keydown, { capture: true });
+  }, [canGrantFolders, folders, granting, item.decision, item.id, mac, onGrantSandboxAccess, onResolve, scope, writable]);
+
+  if (item.decision) {
+    const label = item.decision === "deny"
+      ? "Extra access denied"
+      : item.decision === "once"
+        ? "Extra access allowed once"
+        : item.decision === "response"
+          ? "Unrestricted access allowed for this response"
+        : item.decision === "sandbox"
+          ? item.fileAccess
+            ? "Folder added; file operation retried"
+            : "Folder added; command retried in the sandbox"
+          : "Extra access allowed for this thread";
+    return <div className={`approval-result ${item.decision}`}>{label}</div>;
+  }
 
   return (
-    <section className="approval-card">
+    <section ref={card} className="approval-card" tabIndex={0} data-pending-approval>
       <strong>{hostHomeRequest ? "Command requests host home access" : fileRequest ? "File operation needs extra access" : "Command needs extra access"}</strong>
       <code>{item.command}</code>
       <p>{explanation}</p>
@@ -552,8 +586,14 @@ function ApprovalEntry({
       ) : null}
       <div className="approval-actions">
         {folders.length && canGrantFolders ? (
-          <button type="button" className="primary" disabled={granting} onClick={() => void grantFolders()}>
-            {granting ? "Adding…" : fileRequest ? "Allow folder" : "Add to sandbox"}
+          <button
+            type="button"
+            className="primary"
+            disabled={granting}
+            aria-keyshortcuts={mac ? "Meta+Enter" : "Control+Enter"}
+            onClick={() => void grantFolders()}
+          >
+            {granting ? "Adding…" : `${fileRequest ? "Allow folder" : "Add to sandbox"} (${allowShortcut})`}
           </button>
         ) : null}
         {canGrantFolders && !folders.length ? (
@@ -565,7 +605,11 @@ function ApprovalEntry({
         {!networkRequest ? (
           <button type="button" aria-expanded={optionsOpen} onClick={() => setOptionsOpen((open) => !open)}>Options</button>
         ) : null}
-        <button type="button" onClick={() => onResolve?.(item.id, "deny")}>Deny</button>
+        <button
+          type="button"
+          aria-keyshortcuts={mac ? "Meta+Backspace" : "Control+Backspace"}
+          onClick={() => onResolve?.(item.id, "deny")}
+        >Deny ({denyShortcut})</button>
         {networkRequest ? (
           <>
             <button type="button" onClick={() => onResolve?.(item.id, "once")}>Allow once</button>

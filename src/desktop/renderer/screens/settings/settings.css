@@ -1135,8 +1135,10 @@
   border-bottom: 1px solid var(--border-default);
 }
 
-.provider-discovery > span:last-child {
+.provider-discovery > span[role="status"] {
   display: grid;
+  min-width: 0;
+  flex: 1;
   gap: 3px;
 }
 
@@ -1159,6 +1161,44 @@
 
 .provider-discovery.error .provider-discovery-dot {
   background: var(--status-danger-text);
+}
+
+.provider-discovery-refresh {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  padding: 0;
+  place-items: center;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+}
+
+.provider-discovery-refresh:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
+.provider-discovery-refresh svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.provider-discovery-refresh:disabled svg {
+  animation: provider-refresh-spin 900ms linear infinite;
+}
+
+@keyframes provider-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .sr-only {
