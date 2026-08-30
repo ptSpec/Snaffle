@@ -28,6 +28,7 @@ export function TimelineEntry({
   selectedId,
   turnRunning = false,
   activeToolPreviewId = null,
+  expandWorkDetails = false,
   activityDisclosureCommand,
   fileChangeSummary,
   reasoningModelCalls,
@@ -53,6 +54,7 @@ export function TimelineEntry({
   selectedId: string | null;
   turnRunning?: boolean;
   activeToolPreviewId?: string | null;
+  expandWorkDetails?: boolean;
   activityDisclosureCommand?: ActivityDisclosureCommand | null;
   fileChangeSummary?: FileChangeSummary | undefined;
   reasoningModelCalls?: ReadonlyMap<string, ModelCallTimelineItem>;
@@ -83,6 +85,7 @@ export function TimelineEntry({
         selectedId={selectedId}
         turnRunning={turnRunning}
         activeToolPreviewId={activeToolPreviewId}
+        defaultExpanded={expandWorkDetails}
         {...(reasoningModelCalls ? { reasoningModelCalls } : {})}
         onSelect={onSelect}
         {...(onOpenFile ? { onOpenFile } : {})}
@@ -99,6 +102,7 @@ export function TimelineEntry({
       <ReasoningEntry
         item={item}
         selected={Boolean(modelCall && modelCall.id === selectedId)}
+        defaultExpanded={expandWorkDetails}
         {...(activityDisclosureCommand !== undefined ? { disclosureCommand: activityDisclosureCommand } : {})}
         {...(modelCall ? {
           durationMs: modelCall.durationMs,
@@ -155,6 +159,7 @@ export function TimelineEntry({
           selected={item.id === selectedId}
           turnRunning={turnRunning}
           autoExpanded={item.id === activeToolPreviewId}
+          defaultExpanded={expandWorkDetails}
           statusClass={status.className}
           duration={item.durationMs ? formatDuration(item.durationMs) : undefined}
           {...(activityDisclosureCommand !== undefined ? { disclosureCommand: activityDisclosureCommand } : {})}
@@ -170,6 +175,7 @@ export function TimelineEntry({
           selected={item.id === selectedId}
           turnRunning={turnRunning}
           autoExpanded={item.id === activeToolPreviewId}
+          defaultExpanded={expandWorkDetails}
           statusClass={status.className}
           duration={item.durationMs ? formatDuration(item.durationMs) : undefined}
           {...(activityDisclosureCommand !== undefined ? { disclosureCommand: activityDisclosureCommand } : {})}
@@ -353,6 +359,7 @@ function ActivityGroup({
   selectedId,
   turnRunning,
   activeToolPreviewId,
+  defaultExpanded,
   reasoningModelCalls,
   onSelect,
   onOpenFile,
@@ -364,6 +371,7 @@ function ActivityGroup({
   selectedId: string | null;
   turnRunning: boolean;
   activeToolPreviewId: string | null;
+  defaultExpanded: boolean;
   reasoningModelCalls?: ReadonlyMap<string, ModelCallTimelineItem>;
   onSelect: (id: string) => void;
   onOpenFile?: (path: string) => void;
@@ -371,7 +379,7 @@ function ActivityGroup({
   onChooseSandboxFolder?: () => Promise<string | null>;
   onGrantSandboxAccess?: (id: string, inputs: SandboxAccessInput[]) => Promise<void>;
 }): JSX.Element {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultExpanded);
   const [disclosureCommand, setDisclosureCommand] = useState<ActivityDisclosureCommand | null>(null);
   const items = item.items.filter(isVisibleActivityItem);
 
@@ -383,7 +391,7 @@ function ActivityGroup({
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
-      <summary className="activity-disclosure-summary">
+      <summary className="activity-disclosure-summary" data-timeline-disclosure="">
         <span className="activity-summary-copy">
           <strong>Work details</strong>
           <small>{activityGroupMetadata(items)}</small>
@@ -395,12 +403,14 @@ function ActivityGroup({
             <div className="activity-group-actions">
               <button
                 type="button"
+                data-timeline-disclosure=""
                 onClick={() => setDisclosureCommand((current) => ({ id: (current?.id ?? 0) + 1, open: true }))}
               >
                 Expand all
               </button>
               <button
                 type="button"
+                data-timeline-disclosure=""
                 onClick={() => setDisclosureCommand((current) => ({ id: (current?.id ?? 0) + 1, open: false }))}
               >
                 Collapse all
@@ -419,6 +429,7 @@ function ActivityGroup({
                       selectedId={selectedId}
                       turnRunning={turnRunning}
                       activeToolPreviewId={activeToolPreviewId}
+                      expandWorkDetails={defaultExpanded}
                       activityDisclosureCommand={disclosureCommand}
                       {...(reasoningModelCalls ? { reasoningModelCalls } : {})}
                       onSelect={onSelect}
@@ -875,21 +886,26 @@ function ReasoningEntry({
   item,
   selected,
   durationMs,
+  defaultExpanded,
   disclosureCommand,
   onInspect,
 }: {
   item: Extract<TimelineItem, { kind: "reasoning" }>;
   selected: boolean;
   durationMs?: number | undefined;
+  defaultExpanded: boolean;
   disclosureCommand?: ActivityDisclosureCommand | null;
   onInspect?: () => void;
 }): JSX.Element {
-  const [open, setOpen] = useState(item.streaming);
+  const [open, setOpen] = useState(item.streaming || defaultExpanded);
   const [now, setNow] = useState(Date.now());
   const textRef = useRef<HTMLDivElement>(null);
   const followText = useRef(true);
 
-  useEffect(() => setOpen(item.streaming), [item.streaming]);
+  useEffect(() => {
+    if (item.streaming) setOpen(true);
+    else if (!defaultExpanded) setOpen(false);
+  }, [defaultExpanded, item.streaming]);
   useEffect(() => {
     if (disclosureCommand) setOpen(disclosureCommand.open);
   }, [disclosureCommand]);
@@ -910,6 +926,7 @@ function ReasoningEntry({
       <button
         className="activity-disclosure-summary"
         type="button"
+        data-timeline-disclosure=""
         aria-expanded={open}
         onClick={() => {
           if (onInspect) {
