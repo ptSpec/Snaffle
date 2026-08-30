@@ -240,6 +240,12 @@
   border-radius: 0 0 0 8px;
 }
 
+.workspace-navigation .thread-row.pinned {
+  position: sticky;
+  z-index: 4;
+  top: 0;
+}
+
 .workspace-navigation .thread-row.bridged::before {
   position: absolute;
   top: 0;

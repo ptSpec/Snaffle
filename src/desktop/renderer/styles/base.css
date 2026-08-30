@@ -457,7 +457,8 @@ body.resizing-columns .workspace-shell {
   bottom: var(--terminal-height);
 }
 
-.workspace-shell > .settings {
+.workspace-shell > .settings,
+.workspace-shell > .bookmarks {
   overflow-x: hidden;
   overflow-y: auto;
 }

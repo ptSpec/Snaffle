@@ -431,33 +431,35 @@ export function Settings({
               onChange={onEditorFontSize}
             />
           </section>
+
+          <section className="typography-card">
+            <h2>Behavior</h2>
+            <label className="setting-field">
+              <span>
+                <strong>Animations</strong>
+                <small>Animate interface transitions and active processing indicators.</small>
+              </span>
+              <input
+                className="selection-checkbox"
+                type="checkbox"
+                checked={animationsEnabled}
+                onChange={(event) => onAnimationsEnabled(event.target.checked)}
+              />
+            </label>
+            <label className="setting-field">
+              <span>
+                <strong>Expand work details by default</strong>
+                <small>Open thinking, tool calls, and their visual details automatically.</small>
+              </span>
+              <input
+                className="selection-checkbox"
+                type="checkbox"
+                checked={expandWorkDetails}
+                onChange={(event) => onExpandWorkDetails(event.target.checked)}
+              />
+            </label>
+          </section>
         </div>
-
-        <label className="setting-field">
-          <span>
-            <strong>Animations</strong>
-            <small>Animate interface transitions and active processing indicators.</small>
-          </span>
-          <input
-            className="selection-checkbox"
-            type="checkbox"
-            checked={animationsEnabled}
-            onChange={(event) => onAnimationsEnabled(event.target.checked)}
-          />
-        </label>
-
-        <label className="setting-field">
-          <span>
-            <strong>Expand work details by default</strong>
-            <small>Open thinking, tool calls, and their visual details automatically.</small>
-          </span>
-          <input
-            className="selection-checkbox"
-            type="checkbox"
-            checked={expandWorkDetails}
-            onChange={(event) => onExpandWorkDetails(event.target.checked)}
-          />
-        </label>
 
         <section className="setup-again">
           <span>
