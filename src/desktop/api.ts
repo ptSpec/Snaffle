@@ -205,6 +205,7 @@ export type StartRunInput = {
   reasoningEffort?: ReasoningEffort;
   contextLength: number;
   imageInputSupported: boolean;
+  resume?: boolean;
   attachments?: AttachmentRef[];
   explicitlyActiveTools?: string[];
 };

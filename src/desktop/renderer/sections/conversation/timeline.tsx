@@ -45,6 +45,7 @@ export function TimelineEntry({
   canKeepAside = true,
   onToggleKeptAside,
   onToggleAttachmentContext,
+  onRetry,
   onRestore,
   onRegenerate,
   onFork,
@@ -74,6 +75,7 @@ export function TimelineEntry({
     item: Extract<TimelineItem, { kind: "user" }>,
     attachment: AttachmentRef,
   ) => void;
+  onRetry?: () => void;
   onRestore?: (sequence: number) => void;
   onRegenerate?: (sequence: number) => void;
   onFork?: (sequence: number) => void;
@@ -271,12 +273,32 @@ export function TimelineEntry({
 
   return (
     <article className={`message ${item.kind}`}>
-      {item.kind === "error" ? <span className="message-label">Run failed</span> : null}
+      {item.kind === "error" ? (
+        <div className="message-error-heading">
+          <span className="message-error-mark" aria-hidden="true">!</span>
+          <span>
+            <strong>Run interrupted</strong>
+            <small>Completed work remains in context.</small>
+          </span>
+        </div>
+      ) : null}
       <p>{item.text}</p>
-      {item.kind === "error" && item.restoreSequence !== undefined && onRestore ? (
-        <button className="restore-thread" type="button" onClick={() => onRestore(item.restoreSequence!)}>
-          Restore previous context
-        </button>
+      {item.kind === "error" && (onRetry || (item.restoreSequence !== undefined && onRestore)) ? (
+        <div className="message-error-actions">
+          {onRetry ? (
+            <button className="retry-thread" type="button" onClick={onRetry}>Retry from here</button>
+          ) : null}
+          {item.restoreSequence !== undefined && onRestore ? (
+            <button
+              className="restore-thread"
+              type="button"
+              onClick={() => onRestore(item.restoreSequence!)}
+              title="Remove this run and return its original request to the composer"
+            >
+              Edit original request
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </article>
   );

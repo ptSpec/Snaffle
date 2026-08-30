@@ -293,6 +293,7 @@ export function registerRunIpc(options: {
       }
       const lastSequence = await options.store.lastSequence(threadId);
       if (lastSequence < 0) {
+        if (input.resume) throw new Error("There is no previous context to retry");
         const initial = initialMessages(input.task, input.attachments, settings.systemPrompt);
         await options.store.appendMessage(threadId, 0, initial[0]!);
         await options.store.appendMessage(threadId, 1, initial[1]!);
@@ -315,23 +316,25 @@ export function registerRunIpc(options: {
           projection = projectContext(entries, checkpoint, toolSpecs);
         }
         conversation = projection.messages;
-        const userMessage: Message = {
-          role: "user",
-          content: input.task,
-          ...(input.attachments?.length ? { attachments: input.attachments } : {}),
-        };
         nextSequence = lastSequence + 1;
-        await options.store.appendMessage(threadId, nextSequence, userMessage);
-        nextSequence += 1;
-        if (checkpoint) {
-          const injectedCharacters = estimateContextCharacters([...conversation, userMessage], toolSpecs);
-          await options.store.context.markApplied(checkpoint.id, injectedCharacters, lastSequence);
-          options.sendEvent(threadId, {
-            type: "context.applied",
-            id: checkpoint.id,
-            injectedCharacters,
-            estimatedTokens: estimateContextTokens(injectedCharacters),
-          });
+        if (!input.resume) {
+          const userMessage: Message = {
+            role: "user",
+            content: input.task,
+            ...(input.attachments?.length ? { attachments: input.attachments } : {}),
+          };
+          await options.store.appendMessage(threadId, nextSequence, userMessage);
+          nextSequence += 1;
+          if (checkpoint) {
+            const injectedCharacters = estimateContextCharacters([...conversation, userMessage], toolSpecs);
+            await options.store.context.markApplied(checkpoint.id, injectedCharacters, lastSequence);
+            options.sendEvent(threadId, {
+              type: "context.applied",
+              id: checkpoint.id,
+              injectedCharacters,
+              estimatedTokens: estimateContextTokens(injectedCharacters),
+            });
+          }
         }
       }
     } catch (error) {
@@ -359,14 +362,15 @@ export function registerRunIpc(options: {
           ),
           connection.requestLimit,
         );
-        const currentUser: Message = {
+        const currentUser: Message | undefined = input.resume ? undefined : {
           role: "user",
           content: input.task,
           ...(input.attachments?.length ? { attachments: input.attachments } : {}),
         };
-        const contextImages = contextImageAttachments([...conversation, currentUser]);
+        const messagesWithCurrent = currentUser ? [...conversation, currentUser] : conversation;
+        const contextImages = contextImageAttachments(messagesWithCurrent);
         const projected = await describeImages({
-          messages: [...conversation, currentUser],
+          messages: messagesWithCurrent,
           request: input.task,
           profile,
           attachments: options.attachments,
@@ -386,11 +390,16 @@ export function registerRunIpc(options: {
             ...(activity.question ? { question: activity.question } : {}),
           }),
         });
-        const projectedUser = projected.at(-1)!;
-        if (projectedUser.role !== "user") throw new Error("Image interpretation lost the current user message");
-        conversation = projected.slice(0, -1);
-        modelTask = projectedUser.content;
-        modelAttachments = projectedUser.attachments;
+        if (input.resume) {
+          conversation = projected;
+          modelAttachments = undefined;
+        } else {
+          const projectedUser = projected.at(-1)!;
+          if (projectedUser.role !== "user") throw new Error("Image interpretation lost the current user message");
+          conversation = projected.slice(0, -1);
+          modelTask = projectedUser.content;
+          modelAttachments = projectedUser.attachments;
+        }
         capabilities = activeCapabilities([
           ...capabilities.tools,
           {
@@ -430,7 +439,7 @@ export function registerRunIpc(options: {
       }
     }
 
-    if (initialPlan) modelTask = withRecoveredPlan(modelTask, initialPlan);
+    if (initialPlan && !input.resume) modelTask = withRecoveredPlan(modelTask, initialPlan);
 
     let mainRoute: ProviderRoute;
     try {
@@ -473,6 +482,7 @@ export function registerRunIpc(options: {
       ...(modelAttachments?.length ? { attachments: modelAttachments } : {}),
       maxSteps: settings.maxSteps,
       ...(initialPlan ? { initialPlan } : {}),
+      ...(input.resume ? { resume: true } : {}),
       onPlan: (items) => options.store.setActivePlan(threadId, items),
       sequenceStart: nextSequence,
       onMessage: (message, sequence) => options.store.appendMessage(threadId, sequence, message),
@@ -853,6 +863,7 @@ function parseStartRunInput(input: unknown): StartRunInput {
     : 128_000;
   const attachments = Array.isArray(value.attachments) ? value.attachments.map(parseAttachment) : [];
   const imageInputSupported = value.imageInputSupported !== false;
+  const resume = value.resume === true;
   const explicitlyActiveTools = Array.isArray(value.explicitlyActiveTools)
     ? [...new Set(value.explicitlyActiveTools.filter((name): name is string => name === "use_skill"))]
     : [];
@@ -860,7 +871,8 @@ function parseStartRunInput(input: unknown): StartRunInput {
     ? value.reasoningEffort
     : undefined;
   if (attachments.length > MAX_ATTACHMENTS) throw new Error(`Attach at most ${MAX_ATTACHMENTS} files`);
-  if (!task && attachments.length === 0) throw new Error("Enter a task or attach a file before starting a run");
+  if (!resume && !task && attachments.length === 0) throw new Error("Enter a task or attach a file before starting a run");
+  if (resume && attachments.length) throw new Error("Retry cannot add attachments");
   if (task.length > 30000) throw new Error("Task is too long");
   if (!providerConnectionId) throw new Error("Choose a provider before starting a run");
   if (!model) throw new Error("Choose a model before starting a run");
@@ -873,6 +885,7 @@ function parseStartRunInput(input: unknown): StartRunInput {
     model,
     contextLength,
     imageInputSupported,
+    ...(resume ? { resume: true } : {}),
     ...(reasoningEffort ? { reasoningEffort } : {}),
     ...(attachments.length ? { attachments } : {}),
     ...(explicitlyActiveTools.length ? { explicitlyActiveTools } : {}),
