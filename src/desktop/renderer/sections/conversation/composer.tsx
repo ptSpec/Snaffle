@@ -93,6 +93,7 @@ export function Composer({
   onCancelQueued,
   onSlashCommand,
   onVoicePrepare,
+  onVoiceError,
   onVoiceStart,
   onVoiceAudio,
   onVoiceStop,
@@ -561,6 +562,7 @@ export function Composer({
               platform={platform}
               stopAfterSilence={voiceAutoStopOnSilence}
               onPrepare={onVoicePrepare}
+              onError={onVoiceError}
               onStart={onVoiceStart}
               onAudio={onVoiceAudio}
               onStop={onVoiceStop}
@@ -830,6 +832,7 @@ type ComposerProps = {
   onCancelQueued(): void;
   onSlashCommand(): void;
   onVoicePrepare(): void;
+  onVoiceError(message: string): void;
   onVoiceStart(): Promise<void>;
   onVoiceAudio(samples: Float32Array, sampleRate: number): void;
   onVoiceStop(): Promise<void>;

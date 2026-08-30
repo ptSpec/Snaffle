@@ -7,6 +7,7 @@ export function Dictation({
   platform,
   stopAfterSilence,
   onPrepare,
+  onError,
   onStart,
   onAudio,
   onStop,
@@ -15,6 +16,7 @@ export function Dictation({
   platform: string;
   stopAfterSilence: boolean;
   onPrepare: () => void;
+  onError: (message: string) => void;
   onStart: () => Promise<void>;
   onAudio: (samples: Float32Array, sampleRate: number) => void;
   onStop: () => Promise<void>;
@@ -52,8 +54,9 @@ export function Dictation({
     onPrepare();
     setSilenceCountdown(null);
     setStatus("starting");
+    let microphone: MediaStream;
     try {
-      const microphone = await navigator.mediaDevices.getUserMedia({
+      microphone = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
           echoCancellation: true,
@@ -61,6 +64,15 @@ export function Dictation({
           autoGainControl: true,
         },
       });
+    } catch (cause) {
+      if (mounted.current) {
+        setStatus("error");
+        onError(microphoneErrorMessage(cause));
+      }
+      return;
+    }
+
+    try {
       if (!mounted.current) {
         microphone.getTracks().forEach((track) => track.stop());
         return;
@@ -249,6 +261,20 @@ export function Dictation({
       </span>
     </button>
   );
+}
+
+function microphoneErrorMessage(cause: unknown): string {
+  const name = cause instanceof DOMException ? cause.name : "";
+  if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+    return "No microphone was found. Connect or enable an input device, then try again.";
+  }
+  if (name === "NotAllowedError" || name === "PermissionDeniedError" || name === "SecurityError") {
+    return "Microphone access was denied. Allow Snaffle to use the microphone in system settings, then try again.";
+  }
+  if (name === "NotReadableError" || name === "TrackStartError") {
+    return "The microphone could not be opened. It may be in use by another application.";
+  }
+  return "Voice input could not access the microphone. Check the input device and try again.";
 }
 
 function playCue(context: AudioContext, cue: "start" | "stop"): Promise<void> {

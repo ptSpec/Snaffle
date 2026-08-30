@@ -2166,6 +2166,7 @@ export function App(): JSX.Element {
   }
 
   function prepareSpeechRecognition(): void {
+    setError(null);
     const input = taskInput.current;
     const draft = input?.value ?? task;
     const start = Math.min(input?.selectionStart ?? draft.length, draft.length);
@@ -2711,6 +2712,7 @@ export function App(): JSX.Element {
             onCancelQueued={cancelQueuedFollowUp}
             onSlashCommand={() => setCommandMode("slash")}
             onVoicePrepare={prepareSpeechRecognition}
+            onVoiceError={setError}
             onVoiceStart={startSpeechRecognition}
             onVoiceAudio={(samples, sampleRate) => window.desktop.sendSpeechAudio(samples, sampleRate)}
             onVoiceStop={stopSpeechRecognition}
