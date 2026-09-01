@@ -47,6 +47,7 @@ export const PROVIDER_PROFILES: ProviderProfile[] = [
     defaultRequestLimit: 8,
     defaultContextLength: 1_000_000,
     sendParallelToolCalls: false,
+    providesAllowance: true,
   },
   {
     id: "opencode-go",

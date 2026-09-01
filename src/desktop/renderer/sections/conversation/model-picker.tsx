@@ -242,7 +242,7 @@ export function ModelPicker({
         <FloatingMenu anchor={root} align="left" className="provider-allowance-menu">
           <div className="provider-allowance-heading">
             <strong>{selectedProvider.name} allowance</strong>
-            <small>Current usage across this connection&apos;s limits.</small>
+            <small>Current limits and available balance for this connection.</small>
           </div>
           {allowance === undefined ? <p>Checking allowance…</p> : null}
           {allowance === null ? <p>Allowance is currently unavailable.</p> : null}

@@ -489,7 +489,10 @@ test("DeepSeek uses the shared model catalog and adds account balance", async (t
       ? JSON.stringify({ data: [{ id: "deepseek-v4-flash", owned_by: "deepseek" }] })
       : JSON.stringify({
         is_available: true,
-        balance_infos: [{ currency: "USD", total_balance: "12.50" }],
+        balance_infos: [
+          { currency: "USD", total_balance: "12.50" },
+          { currency: "CNY", total_balance: "88.00" },
+        ],
       }));
   });
 
@@ -513,9 +516,19 @@ test("DeepSeek uses the shared model catalog and adds account balance", async (t
   assert.equal(catalog.models[0]?.id, "deepseek-v4-flash");
   assert.equal(catalog.discoveredModelCount, 1);
   assert.equal(catalog.models[0]?.contextLength, 1_000_000);
+  assert.equal(providerProfile("deepseek").providesAllowance, true);
   assert.deepEqual(await providerStatus(connection), {
     message: "Connected",
-    details: [{ label: "USD balance", value: "12.50" }],
+    details: [
+      { label: "USD balance", value: "12.50" },
+      { label: "CNY balance", value: "88.00" },
+    ],
+    allowance: {
+      items: [
+        { label: "USD balance", remaining: "$12.50 available" },
+        { label: "CNY balance", remaining: "¥88.00 available" },
+      ],
+    },
   });
   const completion = await createProvider(connection, "deepseek-v4-flash", {}).complete(
     [{ role: "user", content: "Hello" }],
