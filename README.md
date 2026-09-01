@@ -6,14 +6,14 @@
 
 <p align="center">
   <strong>A coding harness with two first-class citizens.</strong><br>
-  Models get a clear workspace. You get full transparency.
+  Models get a small, predictable surface, while Snaffle gives you full transparency and control.
 </p>
 
 <p align="center">
   <img src="screenshots/hero_two_tone.png" alt="Snaffle conversation, sandbox controls, provider usage, and execution inspector" width="1200">
 </p>
 
-Snaffle is built for smaller models without making the experience smaller. It gives the model a compact, predictable surface while keeping you in the loop.
+Inspired by [Pi](https://pi.dev/)'s small model-surface philosophy, Snaffle starts with five focused coding tools plus planning inside a full-featured desktop app. Optional capabilities stay under your control, while built-in sandboxing, rich inspection, and deep customization keep the experience powerful and safe.
 
 <table>
   <tr>
