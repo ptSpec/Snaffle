@@ -105,10 +105,13 @@ export function createProvider(
   return providerDefinition(connection.providerId).create(connection, modelId, options);
 }
 
-export async function providerCatalog(connection: ResolvedProviderConnection): Promise<ProviderCatalog> {
+export async function providerCatalog(
+  connection: ResolvedProviderConnection,
+  signal?: AbortSignal,
+): Promise<ProviderCatalog> {
   const publicConnection = withoutSecret(connection);
   try {
-    const discovered = await providerDefinition(connection.providerId).listModels?.(connection) ?? [];
+    const discovered = await providerDefinition(connection.providerId).listModels?.(connection, signal) ?? [];
     return {
       connection: publicConnection,
       models: mergeModels(discovered, connection.manualModels),

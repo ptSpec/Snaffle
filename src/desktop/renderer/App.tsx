@@ -95,6 +95,11 @@ import {
   latestToolPreviewId,
 } from "./sections/conversation/file-tool-preview.js";
 import {
+  mergeModelCatalogRefresh,
+  readModelCatalogCache,
+  writeModelCatalogCache,
+} from "./model-catalog-cache.js";
+import {
   addRunEvent,
   findTimelineItem,
   modelCallsForReasoning,
@@ -813,7 +818,7 @@ export function App(): JSX.Element {
         setSelectedProviderConnectionId(selection.providerConnectionId);
         setSelectedReasoningEffort(selection.reasoningEffort);
         setOnboardingOpen(!state.onboardingComplete);
-        void loadModels();
+        void loadModels(state.providerConnections);
       })
       .catch((cause: unknown) => setError(errorMessage(cause)))
       .finally(() => setStateLoaded(true));
@@ -979,12 +984,22 @@ export function App(): JSX.Element {
     }
   }
 
-  async function loadModels(): Promise<void> {
+  async function loadModels(
+    connections = desktopState.providerConnections,
+  ): Promise<void> {
     setError(null);
-    setLoadingModels(true);
+    const cached = readModelCatalogCache(connections);
+    const previous = models.length ? models : cached;
+    if (!models.length && cached.length) setModels(cached);
+    setLoadingModels(previous.length === 0);
 
     try {
-      setModels(await window.desktop.listProviderModels());
+      const refreshed = mergeModelCatalogRefresh(
+        previous,
+        await window.desktop.listProviderModels(),
+      );
+      setModels(refreshed);
+      writeModelCatalogCache(refreshed);
     } catch (cause) {
       setError(errorMessage(cause));
     } finally {
