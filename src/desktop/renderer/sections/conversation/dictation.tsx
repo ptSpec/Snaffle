@@ -223,6 +223,7 @@ export function Dictation({
   return (
     <button
       className={`dictation-button ${status}`}
+      data-shortcut-layout={platform === "darwin" ? "compact" : "wide"}
       type="button"
       disabled={disabled || status === "starting" || status === "stopping"}
       aria-label={label}
