@@ -80,6 +80,10 @@
   color: var(--accent);
 }
 
+.dictation-button.recording[data-shortcut-layout="wide"] {
+  width: 110px;
+}
+
 .dictation-button.recording::before {
   --dictation-fill: color-mix(in srgb, var(--hover-background) 90%, white);
 }
@@ -207,6 +211,10 @@
   opacity: 0;
   transform: translateX(7px);
   transition: opacity 150ms ease, transform 180ms ease;
+}
+
+.dictation-button[data-shortcut-layout="wide"] .dictation-shortcut {
+  width: 58px;
 }
 
 .dictation-button.recording .dictation-shortcut {

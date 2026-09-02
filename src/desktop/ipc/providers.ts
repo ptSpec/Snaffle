@@ -11,6 +11,8 @@ import type {
 import type { DesktopState } from "../api.js";
 import type { ProviderConnections } from "../provider-connections.js";
 
+const MODEL_DISCOVERY_TIMEOUT_MS = 15_000;
+
 export function registerProviderIpc(options: {
   connections: ProviderConnections;
   state(includeConversation?: boolean): Promise<DesktopState>;
@@ -23,7 +25,10 @@ export function registerProviderIpc(options: {
       .filter((connection) => connection.enabled)
       .map(async (connection) => {
         try {
-          return await providerCatalog(options.connections.resolve(connection.id));
+          return await providerCatalog(
+            options.connections.resolve(connection.id),
+            AbortSignal.timeout(MODEL_DISCOVERY_TIMEOUT_MS),
+          );
         } catch (error) {
           return {
             connection,

@@ -40,14 +40,26 @@ export async function getDeepSeekStatus(
   if (!response.ok) throw new Error(`DeepSeek balance request failed (${response.status})`);
 
   const body = await response.json() as DeepSeekBalanceResponse;
-  const details = (body.balance_infos ?? []).map((balance) => ({
+  const balances = body.balance_infos ?? [];
+  const details = balances.map((balance) => ({
     label: `${balance.currency} balance`,
     value: balance.total_balance,
+  }));
+  const items = balances.map((balance) => ({
+    label: `${balance.currency} balance`,
+    remaining: availableBalance(balance.currency, balance.total_balance),
   }));
   return {
     message: body.is_available === false ? "Connected · insufficient balance" : "Connected",
     ...(details.length ? { details } : {}),
+    ...(items.length ? { allowance: { items } } : {}),
   };
+}
+
+function availableBalance(currency: string, balance: string): string {
+  if (currency === "USD") return `$${balance} available`;
+  if (currency === "CNY") return `¥${balance} available`;
+  return `${balance} ${currency} available`;
 }
 
 type DeepSeekBalanceResponse = {

@@ -35,6 +35,7 @@ export type RunAgentOptions = {
   systemPrompt?: string;
   initialPlan?: PlanItem[];
   onPlan?: (items: PlanItem[] | null) => void | Promise<void>;
+  resume?: boolean;
 };
 
 export type AgentResult = {
@@ -48,9 +49,11 @@ export const DEFAULT_MAX_STEPS = 50;
 export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
   const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
   const tools = options.capabilities.tools.map(({ tool }) => tool);
+  if (options.resume && !options.history?.length) throw new Error("Cannot resume without conversation history");
   let messages = withSystemPrompt(
-    withoutMalformedToolCalls(options.history?.length
-      ? [
+    withoutMalformedToolCalls(options.resume
+      ? [...options.history!]
+      : options.history?.length ? [
           ...options.history,
           {
             role: "user" as const,
@@ -244,7 +247,11 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
 
     throw new Error(`Agent exceeded the ${maxSteps}-step limit`);
   } catch (error) {
-    await emit(options, { type: "run.failed", message: errorMessage(error) });
+    await emit(options, {
+      type: "run.failed",
+      message: errorMessage(error),
+      ...(options.signal.aborted ? { stopped: true } : {}),
+    });
     throw error;
   }
 }

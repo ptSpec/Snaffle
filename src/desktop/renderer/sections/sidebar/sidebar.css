@@ -593,9 +593,86 @@ html[data-accented-theme="true"] .workspace-row.active .workspace-icon {
 
 .thread-row {
   --thread-row-fill: var(--hover-background);
+  --thread-indent: calc(var(--thread-depth, 0) * 12px);
 
   position: relative;
+  width: calc(100% - var(--thread-indent));
+  margin-left: var(--thread-indent);
   transition: filter 180ms ease;
+}
+
+.workspace-navigation .thread-row.active {
+  width: calc(100% - var(--thread-indent));
+}
+
+.thread-tree-guide {
+  --thread-tree-line: color-mix(in srgb, var(--text-faint) 26%, transparent);
+
+  position: absolute;
+  top: -13px;
+  bottom: -1px;
+  left: calc(var(--thread-indent) * -1);
+  width: var(--thread-indent);
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent 11px,
+    var(--thread-tree-line) 11px,
+    var(--thread-tree-line) 12px
+  );
+}
+
+.thread-tree-guide::after {
+  position: absolute;
+  top: 50%;
+  right: -7px;
+  width: 7px;
+  content: "";
+  border-top: 1px solid var(--thread-tree-line);
+}
+
+.thread-row.tree-active-path .thread-tree-guide {
+  --thread-tree-line: color-mix(in srgb, var(--primary) 38%, transparent);
+}
+
+.thread-tree-toggle {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: -10px;
+  width: 17px;
+  height: 24px;
+  transform: translateY(-50%);
+}
+
+.thread-tree-toggle {
+  display: grid;
+  padding: 0;
+  place-items: center;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+}
+
+.thread-tree-toggle:hover {
+  color: var(--text-primary);
+  background: var(--hover-background);
+}
+
+.thread-tree-toggle svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 140ms ease;
+}
+
+.thread-row.tree-collapsed .thread-tree-toggle svg {
+  transform: rotate(-90deg);
 }
 
 .thread-row.active {
@@ -693,38 +770,6 @@ html[data-accented-theme="true"] .thread-row.selected .thread-item {
   min-width: 0;
   align-items: center;
   padding-left: 6px;
-}
-
-.thread-fork-marker {
-  display: inline-grid;
-  width: 15px;
-  height: 15px;
-  flex: 0 0 15px;
-  margin-left: 5px;
-  padding: 0;
-  place-items: center;
-  color: var(--text-muted);
-  background: transparent;
-  border: 0;
-  border-radius: 4px;
-}
-
-.thread-fork-marker:hover {
-  color: var(--text-primary);
-  background: var(--hover-background);
-}
-
-.thread-fork-marker svg {
-  width: 15px;
-  height: 15px;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.35;
-}
-
-html[data-accented-theme="true"] .thread-row.selected .thread-fork-marker {
-  color: var(--primary);
 }
 
 .thread-title-text {

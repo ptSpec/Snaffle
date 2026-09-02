@@ -95,6 +95,11 @@ import {
   latestToolPreviewId,
 } from "./sections/conversation/file-tool-preview.js";
 import {
+  mergeModelCatalogRefresh,
+  readModelCatalogCache,
+  writeModelCatalogCache,
+} from "./model-catalog-cache.js";
+import {
   addRunEvent,
   findTimelineItem,
   modelCallsForReasoning,
@@ -813,7 +818,7 @@ export function App(): JSX.Element {
         setSelectedProviderConnectionId(selection.providerConnectionId);
         setSelectedReasoningEffort(selection.reasoningEffort);
         setOnboardingOpen(!state.onboardingComplete);
-        void loadModels();
+        void loadModels(state.providerConnections);
       })
       .catch((cause: unknown) => setError(errorMessage(cause)))
       .finally(() => setStateLoaded(true));
@@ -979,12 +984,22 @@ export function App(): JSX.Element {
     }
   }
 
-  async function loadModels(): Promise<void> {
+  async function loadModels(
+    connections = desktopState.providerConnections,
+  ): Promise<void> {
     setError(null);
-    setLoadingModels(true);
+    const cached = readModelCatalogCache(connections);
+    const previous = models.length ? models : cached;
+    if (!models.length && cached.length) setModels(cached);
+    setLoadingModels(previous.length === 0);
 
     try {
-      setModels(await window.desktop.listProviderModels());
+      const refreshed = mergeModelCatalogRefresh(
+        previous,
+        await window.desktop.listProviderModels(),
+      );
+      setModels(refreshed);
+      writeModelCatalogCache(refreshed);
     } catch (cause) {
       setError(errorMessage(cause));
     } finally {
@@ -1063,13 +1078,15 @@ export function App(): JSX.Element {
     const active = activeThreadId.current === request.threadId;
 
     if (active) followTimeline.current = true;
-    appendUserMessage(request.threadId, request.task, attachments);
-    if (active) {
-      setTask("");
-      setPendingAttachments([]);
-      setExplicitlyActiveTools([]);
+    if (!request.resume) {
+      appendUserMessage(request.threadId, request.task, attachments);
+      if (active) {
+        setTask("");
+        setPendingAttachments([]);
+        setExplicitlyActiveTools([]);
+      }
+      threadAttachments.current.delete(request.threadId);
     }
-    threadAttachments.current.delete(request.threadId);
     setDesktopState((state) => ({
       ...state,
       runningThreadIds: [...new Set([...state.runningThreadIds, request.threadId])],
@@ -1087,16 +1104,42 @@ export function App(): JSX.Element {
         ...state,
         runningThreadIds: state.runningThreadIds.filter((id) => id !== request.threadId),
       }));
-      if (active) {
+      if (active && !request.resume) {
         setTask(request.task);
         setPendingAttachments(attachments);
         setExplicitlyActiveTools(request.explicitlyActiveTools ?? []);
       }
-      threadAttachments.current.set(request.threadId, attachments);
+      if (!request.resume) threadAttachments.current.set(request.threadId, attachments);
       setError(errorMessage(cause));
       return false;
     }
     return true;
+  }
+
+  async function retryInterruptedRun(errorId: string): Promise<void> {
+    const threadId = desktopState.activeThreadId;
+    if (!threadId || running || preparing) return;
+    if (!desktopState.workspace || !selectedModel || !selectedCatalog || !selectedProviderModel) {
+      setError("Select an available model before retrying.");
+      return;
+    }
+    if (selectedCatalog.error && selectedCatalog.models.length === 0) {
+      setError("The selected provider connection is unavailable.");
+      return;
+    }
+    if (selectedProviderModel.toolUseUnavailableReason) {
+      setError(selectedProviderModel.toolUseUnavailableReason);
+      return;
+    }
+
+    setError(null);
+    const followUp = prepareRunRequest(threadId, "", [], []);
+    followUp.request.resume = true;
+    if (!await submitPreparedTask(followUp)) return;
+    const current = threadTimelines.current.get(threadId) ?? timeline;
+    const next = current.filter((item) => item.id !== errorId);
+    threadTimelines.current.set(threadId, next);
+    if (activeThreadId.current === threadId) setTimeline(next);
   }
 
   function queueFollowUp(): void {
@@ -2650,6 +2693,9 @@ export function App(): JSX.Element {
                         input?.setSelectionRange(text.length, text.length);
                       });
                     }}
+                    {...(!running && item.kind === "error"
+                      ? { onRetry: () => void retryInterruptedRun(item.id) }
+                      : {})}
                     {...(!running ? { onRestore: (sequence) => void restoreThread(sequence) } : {})}
                     {...(!running ? { onRegenerate: (sequence) => void regenerateResponse(sequence) } : {})}
                     {...(!running ? { onFork: (sequence) => void forkThread(sequence) } : {})}

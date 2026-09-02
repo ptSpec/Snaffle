@@ -171,6 +171,37 @@ test("agent loop carries conversation history into a follow-up", async (t) => {
   ]);
 });
 
+test("agent loop resumes persisted tool results without adding another user message", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "agent-resume-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const provider = new DirectProvider("Continued after the completed tool.");
+  const history: Message[] = [
+    { role: "user", content: "Inspect the project." },
+    {
+      role: "assistant",
+      content: "",
+      toolCalls: [{ id: "call-1", name: "read", input: { path: "README.md" } }],
+    },
+    { role: "tool", toolCallId: "call-1", content: "Project details" },
+  ];
+
+  await runAgent({
+    task: "",
+    history,
+    resume: true,
+    provider,
+    capabilities: builtInCapabilities(defaultTools()),
+    workspace: new LocalWorkspace(root, "disabled"),
+    trace: new MemoryTrace(),
+    signal: new AbortController().signal,
+  });
+
+  assert.deepEqual(
+    provider.messages.filter((message) => message.role !== "system"),
+    history,
+  );
+});
+
 test("agent loop rejects a response stopped by its output limit", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "agent-output-limit-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));

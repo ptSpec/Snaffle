@@ -28,6 +28,18 @@ test("finishing a run closes orphaned running tools", () => {
   assert.match(tool.content ?? "", /completion result/);
 });
 
+test("an intentional stop closes activity without showing a failure", () => {
+  let timeline: TimelineItem[] = [{ id: "user-1", kind: "user", text: "Start", sequence: 0 }];
+  const apply = (update: (items: TimelineItem[]) => TimelineItem[]): void => {
+    timeline = update(timeline);
+  };
+
+  addRunEvent({ type: "model.started", step: 1 }, apply);
+  addRunEvent({ type: "run.failed", message: "Stopped", stopped: true }, apply);
+
+  assert.equal(timeline.some((item) => item.kind === "error"), false);
+});
+
 test("reasoning blocks map to their model calls across a collapsed activity group", () => {
   const timeline: TimelineItem[] = [
     {

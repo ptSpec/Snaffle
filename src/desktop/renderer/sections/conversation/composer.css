@@ -499,9 +499,19 @@ html[data-appearance="light"] .model-provider-mark.logo.allowance-critical::afte
   transform: none;
 }
 
+.model-provider-mark.logo:has(.opencode-go-mark) {
+  flex-basis: 34px;
+  width: 34px;
+}
+
+.model-provider-mark.logo .opencode-go-mark {
+  width: 34px;
+}
+
 .model-provider-mark.logo .opencode-go-mark,
 .provider-filter-mark .opencode-go-mark {
   object-fit: cover;
+  object-position: 47% center;
 }
 
 .model-provider-mark svg {
@@ -881,6 +891,10 @@ html[data-appearance="light"] .model-provider-mark.logo.allowance-critical::afte
 .provider-filter-mark.logo {
   width: 26px;
   height: 26px;
+}
+
+.provider-filter-mark.logo:has(.opencode-go-mark) {
+  width: 34px;
 }
 
 .provider-filter-mark svg,

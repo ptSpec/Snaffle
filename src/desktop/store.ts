@@ -426,6 +426,15 @@ export class DesktopStore {
     if (result.rowsAffected === 0) throw new Error("Thread no longer exists");
   }
 
+  async setThreadBranchLabel(threadId: string, label: string): Promise<void> {
+    const result = await this.database.execute({
+      sql: `UPDATE threads SET title = ?, branch_label = ?
+        WHERE id = ? AND source_thread_id IS NOT NULL`,
+      args: [label, label, threadId],
+    });
+    if (result.rowsAffected === 0) throw new Error("Fork no longer exists");
+  }
+
   async setDraft(threadId: string, draft: string): Promise<void> {
     const result = await this.database.execute({
       sql: "UPDATE threads SET draft = ? WHERE id = ?",
@@ -617,7 +626,7 @@ export class DesktopStore {
 
   async setGeneratedThreadTitle(threadId: string, currentTitle: string, title: string): Promise<boolean> {
     const result = await this.database.execute({
-      sql: "UPDATE threads SET title = ? WHERE id = ? AND title = ?",
+      sql: "UPDATE threads SET title = ? WHERE id = ? AND title = ? AND branch_label IS NULL",
       args: [title, threadId, currentTitle],
     });
     return result.rowsAffected > 0;
